@@ -1,0 +1,7 @@
+/* src/styles/Sidebar.css */
+.Sidebar {
+    width: 300px;
+    padding: 20px;
+    background-color: #f4f4f4;
+    flex-shrink: 0; /* Prevent Sidebar from shrinking */
+  }
