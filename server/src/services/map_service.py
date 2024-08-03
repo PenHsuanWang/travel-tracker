@@ -14,9 +14,9 @@ MAP_LAYERS = {
 }
 
 
-def create_base_map(start_coords=(23.6978, 120.9605)):
+def create_base_map(start_coords=(24.7515, 121.2792)):
     """Create a base map with no layers."""
-    return folium.Map(location=start_coords, zoom_start=8, tiles=None)
+    return folium.Map(location=start_coords, zoom_start=16, tiles=None)
 
 
 def add_tile_layer(map_object, layer='openstreetmap'):

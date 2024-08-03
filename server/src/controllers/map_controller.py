@@ -21,6 +21,6 @@ def generate_map(layer: str):
     if layer not in MAP_LAYERS:
         return HTMLResponse(content="<h1>Layer not found</h1>", status_code=404)
 
-    m = folium.Map(location=(23.6978, 120.9605), zoom_start=8, tiles=None)
+    m = folium.Map(location=(24.7553, 121.2906), zoom_start=15, tiles=None)
     folium.TileLayer(tiles=MAP_LAYERS[layer]['url'], attr=MAP_LAYERS[layer]['attr']).add_to(m)
     return HTMLResponse(content=m._repr_html_())
