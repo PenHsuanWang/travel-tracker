@@ -1,6 +1,7 @@
 # utils/mongodb_adapter.py
 
 from pymongo import MongoClient
+from typing import Mapping, Any, Optional
 from src.utils.dbbutler.storage_adapter import StorageAdapter
 
 
@@ -22,7 +23,7 @@ class MongoDBAdapter(StorageAdapter):
         self.db = self.client[db_name]
         self.collection = self.db[collection_name]
 
-    def save_data(self, key: str, value: dict) -> None:
+    def save_data(self, key: str, value: Mapping[str, Any], **kwargs) -> None:
         """
         Save data to MongoDB.
 
@@ -31,7 +32,7 @@ class MongoDBAdapter(StorageAdapter):
         """
         self.collection.update_one({'_id': key}, {'$set': value}, upsert=True)
 
-    def load_data(self, key: str) -> dict:
+    def load_data(self, key: str, **kwargs) -> Optional[Mapping[str, Any]]:
         """
         Load data from MongoDB.
 
@@ -41,7 +42,7 @@ class MongoDBAdapter(StorageAdapter):
         document = self.collection.find_one({'_id': key})
         return document if document else None
 
-    def delete_data(self, key: str) -> None:
+    def delete_data(self, key: str, **kwargs) -> None:
         """
         Delete data from MongoDB.
 
@@ -49,7 +50,7 @@ class MongoDBAdapter(StorageAdapter):
         """
         self.collection.delete_one({'_id': key})
 
-    def save_batch_data(self, data: dict) -> None:
+    def save_batch_data(self, data: Mapping[str, Mapping[str, Any]], **kwargs) -> None:
         """
         Save multiple data items to MongoDB.
 
@@ -58,7 +59,7 @@ class MongoDBAdapter(StorageAdapter):
         for key, value in data.items():
             self.save_data(key, value)
 
-    def load_batch_data(self, keys: list) -> dict:
+    def load_batch_data(self, keys: list, **kwargs) -> Mapping[str, Optional[Mapping[str, Any]]]:
         """
         Load multiple data items from MongoDB.
 
@@ -67,7 +68,7 @@ class MongoDBAdapter(StorageAdapter):
         """
         return {key: self.load_data(key) for key in keys}
 
-    def delete_batch_data(self, keys: list) -> None:
+    def delete_batch_data(self, keys: list, **kwargs) -> None:
         """
         Delete multiple data items from MongoDB.
 
@@ -76,7 +77,7 @@ class MongoDBAdapter(StorageAdapter):
         for key in keys:
             self.delete_data(key)
 
-    def exists(self, key: str) -> bool:
+    def exists(self, key: str, **kwargs) -> bool:
         """
         Check if a key exists in MongoDB.
 
@@ -85,7 +86,7 @@ class MongoDBAdapter(StorageAdapter):
         """
         return self.collection.find_one({'_id': key}) is not None
 
-    def list_keys(self, prefix: str = "") -> list:
+    def list_keys(self, prefix: str = "", **kwargs) -> list:
         """
         List keys in MongoDB matching a prefix.
 
@@ -93,4 +94,3 @@ class MongoDBAdapter(StorageAdapter):
         :return: List of keys.
         """
         return [doc['_id'] for doc in self.collection.find({'_id': {'$regex': f'^{prefix}'}})]
-

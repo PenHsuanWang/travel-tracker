@@ -1,6 +1,6 @@
 # utils/redis_adapter.py
 
-import redis
+import aioredis
 from typing import Any
 from src.utils.dbbutler.storage_adapter import StorageAdapter
 
@@ -18,85 +18,85 @@ class RedisAdapter(StorageAdapter):
         :param port: The Redis server port.
         :param db: The Redis database number.
         """
-        self.client = redis.StrictRedis(host=host, port=port, db=db)
+        self.client = aioredis.from_url(f"redis://{host}:{port}/{db}")
 
-    def save_data(self, key: str, value: str) -> None:
+    async def save_data(self, key: str, value: str, **kwargs) -> None:
         """
         Save data to Redis.
 
         :param key: The key under which the data is to be saved.
         :param value: The data to be saved.
         """
-        self.client.set(key, value)
+        await self.client.set(key, value)
 
-    def load_data(self, key: str) -> str:
+    async def load_data(self, key: str, **kwargs) -> str:
         """
         Load data from Redis.
 
         :param key: The key for the data to be loaded.
         :return: The loaded data.
         """
-        data = self.client.get(key)
+        data = await self.client.get(key)
         return data.decode('utf-8') if data else None
 
-    def delete_data(self, key: str) -> None:
+    async def delete_data(self, key: str, **kwargs) -> None:
         """
         Delete data from Redis.
 
         :param key: The key for the data to be deleted.
         """
-        self.client.delete(key)
+        await self.client.delete(key)
 
-    def save_batch_data(self, data: dict) -> None:
+    async def save_batch_data(self, data: dict, **kwargs) -> None:
         """
         Save multiple data items to Redis.
 
         :param data: Dictionary of key-value pairs to be saved.
         """
-        with self.client.pipeline() as pipe:
+        async with self.client.pipeline() as pipe:
             for key, value in data.items():
-                pipe.set(key, value)
-            pipe.execute()
+                await pipe.set(key, value)
+            await pipe.execute()
 
-    def load_batch_data(self, keys: list) -> dict:
+    async def load_batch_data(self, keys: list, **kwargs) -> dict:
         """
         Load multiple data items from Redis.
 
         :param keys: List of keys for the data to be loaded.
         :return: Dictionary of key-value pairs.
         """
-        with self.client.pipeline() as pipe:
+        async with self.client.pipeline() as pipe:
             for key in keys:
-                pipe.get(key)
-            results = pipe.execute()
+                await pipe.get(key)
+            results = await pipe.execute()
         return {key: result.decode('utf-8') if result else None for key, result in zip(keys, results)}
 
-    def delete_batch_data(self, keys: list) -> None:
+    async def delete_batch_data(self, keys: list, **kwargs) -> None:
         """
         Delete multiple data items from Redis.
 
         :param keys: List of keys for the data to be deleted.
         """
-        with self.client.pipeline() as pipe:
+        async with self.client.pipeline() as pipe:
             for key in keys:
-                pipe.delete(key)
-            pipe.execute()
+                await pipe.delete(key)
+            await pipe.execute()
 
-    def exists(self, key: str) -> bool:
+    async def exists(self, key: str, **kwargs) -> bool:
         """
         Check if a key exists in Redis.
 
         :param key: The key to check for existence.
         :return: True if the key exists, False otherwise.
         """
-        return self.client.exists(key)
+        return await self.client.exists(key)
 
-    def list_keys(self, prefix: str = "*") -> list:
+    async def list_keys(self, prefix: str = "*", **kwargs) -> list:
         """
         List keys in Redis matching a prefix.
 
         :param prefix: The prefix to match keys.
         :return: List of keys.
         """
-        return [key.decode('utf-8') for key in self.client.keys(prefix)]
-
+        keys = await self.client.keys(prefix)
+        return [key.decode('utf-8') for key in keys]

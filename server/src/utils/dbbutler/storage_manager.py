@@ -1,6 +1,6 @@
 # utils/storage_manager.py
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Mapping
 from src.utils.dbbutler.storage_adapter import StorageAdapter
 
 
@@ -34,7 +34,7 @@ class StorageManager:
         for adapter in self.adapters.values():
             adapter.save_data(key, value, **kwargs)
 
-    def load_data(self, name: str, key: str, **kwargs) -> Any:
+    def load_data(self, name: str, key: str, **kwargs) -> Optional[Any]:
         """
         Load data from a specific storage adapter.
 
@@ -65,7 +65,7 @@ class StorageManager:
         for adapter in self.adapters.values():
             adapter.save_batch_data(data, **kwargs)
 
-    def load_batch_data(self, name: str, keys: list, **kwargs) -> dict:
+    def load_batch_data(self, name: str, keys: list, **kwargs) -> Mapping[str, Optional[Any]]:
         """
         Load multiple data items from a specific storage adapter.
 
