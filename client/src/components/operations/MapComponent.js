@@ -1,42 +1,41 @@
 import React, { useEffect, useState } from 'react';
+import { getMapLayers, generateMap } from '../../services/api';
 
 const MapComponent = () => {
   const [mapHtml, setMapHtml] = useState('');
   const [layers, setLayers] = useState([]);
-  const [selectedLayer, setSelectedLayer] = useState('openstreetmap'); // Default layer
+  const [selectedLayer, setSelectedLayer] = useState('openstreetmap');
 
   useEffect(() => {
-    fetch('http://localhost:5002/api/map/layers')
-      .then(response => response.json())
-      .then(data => {
+    const fetchLayers = async () => {
+      try {
+        const data = await getMapLayers();
         if (Array.isArray(data)) {
           setLayers(data);
           if (data.length > 0 && !selectedLayer) {
-            setSelectedLayer(data[0]); // Set default to the first layer if not already set
+            setSelectedLayer(data[0]);
           }
         } else {
           console.error('Expected array but received:', data);
         }
-      })
-      .catch(error => console.error('Error fetching layers:', error));
-  }, []);
+      } catch (error) {
+        console.error('Error fetching layers:', error);
+      }
+    };
+    fetchLayers();
+  }, [selectedLayer]);
 
   useEffect(() => {
     if (selectedLayer) {
-      const requestBody = {
-        layer: selectedLayer, // Use the selected layer
+      const fetchMap = async () => {
+        try {
+          const html = await generateMap(selectedLayer);
+          setMapHtml(html);
+        } catch (error) {
+          console.error('Error fetching map:', error);
+        }
       };
-
-      fetch('http://localhost:5002/api/map/generate_map', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      })
-        .then(response => response.text())
-        .then(data => setMapHtml(data))
-        .catch(error => console.error('Error fetching map:', error));
+      fetchMap();
     }
   }, [selectedLayer]);
 
@@ -53,7 +52,10 @@ const MapComponent = () => {
           </option>
         ))}
       </select>
-      <div dangerouslySetInnerHTML={{ __html: mapHtml }} style={{ height: '100%', width: '100%' }} />
+      <div
+        dangerouslySetInnerHTML={{ __html: mapHtml }}
+        style={{ height: '100%', width: '100%' }}
+      />
     </div>
   );
 };

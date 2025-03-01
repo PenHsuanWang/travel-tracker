@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../../services/api';
 
 function DataListComponent() {
   const [dataList, setDataList] = useState([]);
 
   useEffect(() => {
-    axios.get('/api/data')
-      .then(response => setDataList(response.data))
-      .catch(error => console.error(error));
+    const fetchDataList = async () => {
+      try {
+        const response = await apiClient.get('/data'); // Adjust endpoint as needed.
+        setDataList(response.data);
+      } catch (error) {
+        console.error('Error fetching data list:', error);
+      }
+    };
+
+    fetchDataList();
   }, []);
 
   return (
@@ -23,6 +30,6 @@ function DataListComponent() {
       </ul>
     </div>
   );
-};
+}
 
 export default DataListComponent;
