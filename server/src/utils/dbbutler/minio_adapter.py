@@ -35,10 +35,14 @@ class MinIOAdapter(StorageAdapter):
 
         try:
             value_stream = BytesIO(value)
+            print("Trying to upload data to minio")
             self.client.put_object(bucket, key, value_stream, length=len(value))
         except S3Error as e:
             if e.code == 'NoSuchBucket':
                 raise ValueError(f"Bucket '{bucket}' does not exist")
+            raise
+        except Exception as e:
+            print(e)
             raise
 
     def load_data(self, key: str, **kwargs) -> bytes:
