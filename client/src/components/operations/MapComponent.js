@@ -4,63 +4,53 @@ import {
   generateMap,
   getMapLayers,
   getUploadedData,
-  listGpxFiles, // Make sure this is exported in api.js
+  listGpxFiles,
+  fetchGpxFile,
 } from '../../services/api';
 
-const MapComponent = () => {
+function MapComponent() {
   const [mapHtml, setMapHtml] = useState('');
   const [layers, setLayers] = useState([]);
   const [selectedLayer, setSelectedLayer] = useState('openstreetmap');
 
-  // 1) For "Uploaded Data" drop-down
+  // "Uploaded Data" dropdown
   const [uploadedData, setUploadedData] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // 2) For GPX files drop-down
+  // GPX dropdown
   const [gpxFiles, setGpxFiles] = useState([]);
   const [showGpxDropdown, setShowGpxDropdown] = useState(false);
 
-  // Fetch map layers on mount
   useEffect(() => {
     const fetchLayers = async () => {
       try {
         const data = await getMapLayers();
-        if (Array.isArray(data)) {
-          setLayers(data);
-          if (data.length > 0 && !selectedLayer) {
-            setSelectedLayer(data[0]);
-          }
-        } else {
-          console.error('Expected array but received:', data);
-        }
+        setLayers(data);
       } catch (error) {
         console.error('Error fetching layers:', error);
       }
     };
     fetchLayers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Generate map whenever selectedLayer changes
+  // Generate default map on mount
   useEffect(() => {
     if (selectedLayer) {
-      const fetchMap = async () => {
-        try {
-          const html = await generateMap(selectedLayer);
-          setMapHtml(html);
-        } catch (error) {
-          console.error('Error fetching map:', error);
-        }
-      };
-      fetchMap();
+      generateDefaultMap();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLayer]);
 
-  const handleLayerChange = (event) => {
-    setSelectedLayer(event.target.value);
+  const generateDefaultMap = async () => {
+    try {
+      const html = await generateMap(selectedLayer, null); // no center
+      setMapHtml(html);
+    } catch (error) {
+      console.error('Error generating default map:', error);
+    }
   };
 
-  // Toggle for "uploaded data" drop-down
+  // Toggle "uploaded data"
   const handleToggleDropdown = async () => {
     if (!showDropdown) {
       try {
@@ -73,24 +63,60 @@ const MapComponent = () => {
     setShowDropdown(!showDropdown);
   };
 
-  // Toggle for GPX files drop-down
+  // Toggle "GPX files"
   const handleToggleGpxDropdown = async () => {
     if (!showGpxDropdown) {
       try {
-        // Pass 'gps-data' bucket if your backend expects it
         const files = await listGpxFiles('gps-data');
         setGpxFiles(files);
       } catch (error) {
-        console.error('Error fetching GPX files:', error);
+        console.error('Error listing GPX files:', error);
       }
     }
     setShowGpxDropdown(!showGpxDropdown);
   };
 
+  // Parse the first lat/lon from GPX
+  const parseFirstLatLonFromGpx = (arrayBuffer) => {
+    const decoder = new TextDecoder('utf-8');
+    const gpxText = decoder.decode(arrayBuffer);
+
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(gpxText, 'application/xml');
+    const trkpt = xmlDoc.querySelector('trkpt');
+    if (!trkpt) return null;
+
+    const lat = parseFloat(trkpt.getAttribute('lat'));
+    const lon = parseFloat(trkpt.getAttribute('lon'));
+    if (isNaN(lat) || isNaN(lon)) return null;
+
+    return [lat, lon];
+  };
+
+  // When user clicks a GPX filename
+  const handleGpxClick = async (filename) => {
+    try {
+      const arrayBuffer = await fetchGpxFile(filename, 'gps-data');
+      const firstLatLon = parseFirstLatLonFromGpx(arrayBuffer);
+
+      if (!firstLatLon) {
+        console.warn('No valid track point found in GPX file:', filename);
+        return;
+      }
+
+      // Re-generate map with new center
+      const html = await generateMap(selectedLayer, firstLatLon);
+      setMapHtml(html);
+
+    } catch (error) {
+      console.error('Error fetching/centering on GPX file:', error);
+    }
+  };
+
   return (
     <div className="map-container" style={{ position: 'relative', height: '100%', width: '100%' }}>
-      {/* LAYER SELECTOR (TOP-LEFT) */}
-      <select onChange={handleLayerChange} value={selectedLayer}>
+      {/* LAYER SELECTOR */}
+      <select value={selectedLayer} onChange={(e) => setSelectedLayer(e.target.value)}>
         {layers.map((layer) => (
           <option key={layer} value={layer}>
             {layer}
@@ -98,7 +124,7 @@ const MapComponent = () => {
         ))}
       </select>
 
-      {/* 1) "UPLOADED DATA" TOGGLE & DROPDOWN (TOP-RIGHT) */}
+      {/* 1) UPLOADED DATA DROPDOWN */}
       <button
         style={{
           position: 'absolute',
@@ -111,7 +137,6 @@ const MapComponent = () => {
       >
         {showDropdown ? 'Hide Uploaded Data' : 'Show Uploaded Data'}
       </button>
-
       {showDropdown && (
         <div
           style={{
@@ -141,7 +166,7 @@ const MapComponent = () => {
         </div>
       )}
 
-      {/* 2) "GPX FILES" TOGGLE & DROPDOWN (SHIFTED LOWER) */}
+      {/* 2) GPX FILES DROPDOWN */}
       <button
         style={{
           position: 'absolute',
@@ -154,7 +179,6 @@ const MapComponent = () => {
       >
         {showGpxDropdown ? 'Hide GPX Files' : 'Show GPX Files'}
       </button>
-
       {showGpxDropdown && (
         <div
           style={{
@@ -175,7 +199,11 @@ const MapComponent = () => {
               <li>No GPX files found.</li>
             ) : (
               gpxFiles.map((filename, index) => (
-                <li key={index} style={{ margin: '5px 0' }}>
+                <li
+                  key={index}
+                  style={{ margin: '5px 0', cursor: 'pointer' }}
+                  onClick={() => handleGpxClick(filename)}
+                >
                   {filename}
                 </li>
               ))
@@ -184,13 +212,13 @@ const MapComponent = () => {
         </div>
       )}
 
-      {/* RENDER THE MAP HTML */}
+      {/* Render the map HTML from the backend */}
       <div
         dangerouslySetInnerHTML={{ __html: mapHtml }}
         style={{ height: '100%', width: '100%' }}
       />
     </div>
   );
-};
+}
 
 export default MapComponent;
