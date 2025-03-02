@@ -1,33 +1,35 @@
+// client/src/components/lists/DataListComponent.js
 import React, { useState, useEffect } from 'react';
-import apiClient from '../../services/api';
+import { listGpxFiles } from '../../services/api';
 
 function DataListComponent() {
-  const [dataList, setDataList] = useState([]);
+  const [gpxList, setGpxList] = useState([]);
 
+  // On component mount, fetch the list of GPX files from MinIO
   useEffect(() => {
-    const fetchDataList = async () => {
+    const fetchGpxFiles = async () => {
       try {
-        const response = await apiClient.get('/data'); // Adjust endpoint as needed.
-        setDataList(response.data);
+        const files = await listGpxFiles();
+        setGpxList(files);
       } catch (error) {
-        console.error('Error fetching data list:', error);
+        console.error('Error fetching GPX files:', error);
       }
     };
-
-    fetchDataList();
+    fetchGpxFiles();
   }, []);
 
   return (
     <div>
-      <h2>Data List</h2>
-      <ul>
-        {dataList.map((item, index) => (
-          <li key={index}>
-            <input type="checkbox" />
-            {item.name}
-          </li>
-        ))}
-      </ul>
+      <h2>List of Uploaded GPX Files</h2>
+      {gpxList.length === 0 ? (
+        <p>No GPX files found in MinIO bucket.</p>
+      ) : (
+        <ul>
+          {gpxList.map((filename, index) => (
+            <li key={index}>{filename}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

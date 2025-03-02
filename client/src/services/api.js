@@ -1,3 +1,5 @@
+// client/src/services/api.js
+
 import axios from 'axios';
 
 const apiClient = axios.create({
@@ -28,12 +30,24 @@ export const generateMap = async (layer) => {
   return response.data;
 };
 
-// NEW: Fetch list of uploaded data items
+// Existing function to get "uploaded data" from your older endpoint
 export const getUploadedData = async () => {
-  // For example, if your backend exposes an endpoint like GET /api/data
-  // that returns an array of data items:
   const response = await apiClient.get('/data');
   return response.data;
 };
+
+// (Optional) If you have a search endpoint
+export const searchLocations = async (query) => {
+  const response = await apiClient.get('/map/search', { params: { q: query } });
+  return response.data;
+};
+
+// List GPX files from MinIO (bucket = "gps-data" by default)
+export const listGpxFiles = async () => {
+  // calls the new route that lists keys in `gps-data`
+  const response = await apiClient.get('/list-files'); 
+  return response.data;  // array of file names, e.g. ["track1.gpx", "track2.gpx"]
+};
+
 
 export default apiClient;
