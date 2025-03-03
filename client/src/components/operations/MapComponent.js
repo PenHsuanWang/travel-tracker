@@ -21,6 +21,9 @@ function MapComponent() {
   const [gpxFiles, setGpxFiles] = useState([]);
   const [showGpxDropdown, setShowGpxDropdown] = useState(false);
 
+  // NEW: Track which GPX file is currently selected (clicked)
+  const [selectedGpxFile, setSelectedGpxFile] = useState(null);
+
   useEffect(() => {
     const fetchLayers = async () => {
       try {
@@ -33,7 +36,7 @@ function MapComponent() {
     fetchLayers();
   }, []);
 
-  // Generate default map on mount
+  // Generate default map on mount (or whenever layer changes)
   useEffect(() => {
     if (selectedLayer) {
       generateDefaultMap();
@@ -43,7 +46,7 @@ function MapComponent() {
 
   const generateDefaultMap = async () => {
     try {
-      const html = await generateMap(selectedLayer, null); // no center
+      const html = await generateMap(selectedLayer, null); // no center override
       setMapHtml(html);
     } catch (error) {
       console.error('Error generating default map:', error);
@@ -76,7 +79,7 @@ function MapComponent() {
     setShowGpxDropdown(!showGpxDropdown);
   };
 
-  // Parse the first lat/lon from GPX
+  // Minimal parser to get first lat/lon (example only)
   const parseFirstLatLonFromGpx = (arrayBuffer) => {
     const decoder = new TextDecoder('utf-8');
     const gpxText = decoder.decode(arrayBuffer);
@@ -89,16 +92,21 @@ function MapComponent() {
     const lat = parseFloat(trkpt.getAttribute('lat'));
     const lon = parseFloat(trkpt.getAttribute('lon'));
     if (isNaN(lat) || isNaN(lon)) return null;
-
     return [lat, lon];
   };
 
   // When user clicks a GPX filename
   const handleGpxClick = async (filename) => {
     try {
-      const arrayBuffer = await fetchGpxFile(filename, 'gps-data');
-      const firstLatLon = parseFirstLatLonFromGpx(arrayBuffer);
+      // Highlight the selected file
+      setSelectedGpxFile(filename);
 
+      // (Optional) fetch the file bytes if you want to do further processing
+      const arrayBuffer = await fetchGpxFile(filename, 'gps-data');
+      console.log('Fetched file:', filename, 'Size:', arrayBuffer.byteLength);
+
+      // Example: parse first lat/lon and re-center the map
+      const firstLatLon = parseFirstLatLonFromGpx(arrayBuffer);
       if (!firstLatLon) {
         console.warn('No valid track point found in GPX file:', filename);
         return;
@@ -107,7 +115,6 @@ function MapComponent() {
       // Re-generate map with new center
       const html = await generateMap(selectedLayer, firstLatLon);
       setMapHtml(html);
-
     } catch (error) {
       console.error('Error fetching/centering on GPX file:', error);
     }
@@ -137,6 +144,7 @@ function MapComponent() {
       >
         {showDropdown ? 'Hide Uploaded Data' : 'Show Uploaded Data'}
       </button>
+
       {showDropdown && (
         <div
           style={{
@@ -179,6 +187,7 @@ function MapComponent() {
       >
         {showGpxDropdown ? 'Hide GPX Files' : 'Show GPX Files'}
       </button>
+
       {showGpxDropdown && (
         <div
           style={{
@@ -201,8 +210,14 @@ function MapComponent() {
               gpxFiles.map((filename, index) => (
                 <li
                   key={index}
-                  style={{ margin: '5px 0', cursor: 'pointer' }}
                   onClick={() => handleGpxClick(filename)}
+                  style={{
+                    margin: '5px 0',
+                    cursor: 'pointer',
+                    // Highlight if this file is selected
+                    backgroundColor: selectedGpxFile === filename ? '#e0e0e0' : 'transparent',
+                    fontWeight: selectedGpxFile === filename ? 'bold' : 'normal',
+                  }}
                 >
                   {filename}
                 </li>
@@ -222,3 +237,4 @@ function MapComponent() {
 }
 
 export default MapComponent;
+  
