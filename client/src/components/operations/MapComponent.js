@@ -1,61 +1,240 @@
+// client/src/components/operations/MapComponent.js
 import React, { useEffect, useState } from 'react';
+import {
+  generateMap,
+  getMapLayers,
+  getUploadedData,
+  listGpxFiles,
+  fetchGpxFile,
+} from '../../services/api';
 
-const MapComponent = () => {
+function MapComponent() {
   const [mapHtml, setMapHtml] = useState('');
   const [layers, setLayers] = useState([]);
-  const [selectedLayer, setSelectedLayer] = useState('openstreetmap'); // Default layer
+  const [selectedLayer, setSelectedLayer] = useState('openstreetmap');
+
+  // "Uploaded Data" dropdown
+  const [uploadedData, setUploadedData] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  // GPX dropdown
+  const [gpxFiles, setGpxFiles] = useState([]);
+  const [showGpxDropdown, setShowGpxDropdown] = useState(false);
+
+  // NEW: Track which GPX file is currently selected (clicked)
+  const [selectedGpxFile, setSelectedGpxFile] = useState(null);
 
   useEffect(() => {
-    fetch('http://localhost:5002/api/map/layers')
-      .then(response => response.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setLayers(data);
-          if (data.length > 0 && !selectedLayer) {
-            setSelectedLayer(data[0]); // Set default to the first layer if not already set
-          }
-        } else {
-          console.error('Expected array but received:', data);
-        }
-      })
-      .catch(error => console.error('Error fetching layers:', error));
+    const fetchLayers = async () => {
+      try {
+        const data = await getMapLayers();
+        setLayers(data);
+      } catch (error) {
+        console.error('Error fetching layers:', error);
+      }
+    };
+    fetchLayers();
   }, []);
 
+  // Generate default map on mount (or whenever layer changes)
   useEffect(() => {
     if (selectedLayer) {
-      const requestBody = {
-        layer: selectedLayer, // Use the selected layer
-      };
-
-      fetch('http://localhost:5002/api/map/generate_map', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      })
-        .then(response => response.text())
-        .then(data => setMapHtml(data))
-        .catch(error => console.error('Error fetching map:', error));
+      generateDefaultMap();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLayer]);
 
-  const handleLayerChange = (event) => {
-    setSelectedLayer(event.target.value);
+  const generateDefaultMap = async () => {
+    try {
+      const html = await generateMap(selectedLayer, null); // no center override
+      setMapHtml(html);
+    } catch (error) {
+      console.error('Error generating default map:', error);
+    }
+  };
+
+  // Toggle "uploaded data"
+  const handleToggleDropdown = async () => {
+    if (!showDropdown) {
+      try {
+        const data = await getUploadedData();
+        setUploadedData(data);
+      } catch (error) {
+        console.error('Error fetching uploaded data:', error);
+      }
+    }
+    setShowDropdown(!showDropdown);
+  };
+
+  // Toggle "GPX files"
+  const handleToggleGpxDropdown = async () => {
+    if (!showGpxDropdown) {
+      try {
+        const files = await listGpxFiles('gps-data');
+        setGpxFiles(files);
+      } catch (error) {
+        console.error('Error listing GPX files:', error);
+      }
+    }
+    setShowGpxDropdown(!showGpxDropdown);
+  };
+
+  // Minimal parser to get first lat/lon (example only)
+  const parseFirstLatLonFromGpx = (arrayBuffer) => {
+    const decoder = new TextDecoder('utf-8');
+    const gpxText = decoder.decode(arrayBuffer);
+
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(gpxText, 'application/xml');
+    const trkpt = xmlDoc.querySelector('trkpt');
+    if (!trkpt) return null;
+
+    const lat = parseFloat(trkpt.getAttribute('lat'));
+    const lon = parseFloat(trkpt.getAttribute('lon'));
+    if (isNaN(lat) || isNaN(lon)) return null;
+    return [lat, lon];
+  };
+
+  // When user clicks a GPX filename
+  const handleGpxClick = async (filename) => {
+    try {
+      // Highlight the selected file
+      setSelectedGpxFile(filename);
+
+      // (Optional) fetch the file bytes if you want to do further processing
+      const arrayBuffer = await fetchGpxFile(filename, 'gps-data');
+      console.log('Fetched file:', filename, 'Size:', arrayBuffer.byteLength);
+
+      // Example: parse first lat/lon and re-center the map
+      const firstLatLon = parseFirstLatLonFromGpx(arrayBuffer);
+      if (!firstLatLon) {
+        console.warn('No valid track point found in GPX file:', filename);
+        return;
+      }
+
+      // Re-generate map with new center
+      const html = await generateMap(selectedLayer, firstLatLon);
+      setMapHtml(html);
+    } catch (error) {
+      console.error('Error fetching/centering on GPX file:', error);
+    }
   };
 
   return (
-    <div>
-      <select onChange={handleLayerChange} value={selectedLayer}>
+    <div className="map-container" style={{ position: 'relative', height: '100%', width: '100%' }}>
+      {/* LAYER SELECTOR */}
+      <select value={selectedLayer} onChange={(e) => setSelectedLayer(e.target.value)}>
         {layers.map((layer) => (
           <option key={layer} value={layer}>
             {layer}
           </option>
         ))}
       </select>
-      <div dangerouslySetInnerHTML={{ __html: mapHtml }} style={{ height: '100%', width: '100%' }} />
+
+      {/* 1) UPLOADED DATA DROPDOWN */}
+      <button
+        style={{
+          position: 'absolute',
+          top: '10px',
+          right: '10px',
+          zIndex: 1000,
+          padding: '8px 12px',
+        }}
+        onClick={handleToggleDropdown}
+      >
+        {showDropdown ? 'Hide Uploaded Data' : 'Show Uploaded Data'}
+      </button>
+
+      {showDropdown && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50px',
+            right: '10px',
+            zIndex: 1000,
+            backgroundColor: '#fff',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            width: '200px',
+            maxHeight: '200px',
+            overflowY: 'auto',
+          }}
+        >
+          <ul style={{ listStyle: 'none', margin: 0, padding: '10px' }}>
+            {uploadedData.length === 0 ? (
+              <li>No uploaded data found.</li>
+            ) : (
+              uploadedData.map((item, index) => (
+                <li key={index} style={{ margin: '5px 0' }}>
+                  {item.name}
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      )}
+
+      {/* 2) GPX FILES DROPDOWN */}
+      <button
+        style={{
+          position: 'absolute',
+          top: '100px',
+          right: '10px',
+          zIndex: 1000,
+          padding: '8px 12px',
+        }}
+        onClick={handleToggleGpxDropdown}
+      >
+        {showGpxDropdown ? 'Hide GPX Files' : 'Show GPX Files'}
+      </button>
+
+      {showGpxDropdown && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '140px',
+            right: '10px',
+            zIndex: 1000,
+            backgroundColor: '#fff',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            width: '200px',
+            maxHeight: '200px',
+            overflowY: 'auto',
+          }}
+        >
+          <ul style={{ listStyle: 'none', margin: 0, padding: '10px' }}>
+            {gpxFiles.length === 0 ? (
+              <li>No GPX files found.</li>
+            ) : (
+              gpxFiles.map((filename, index) => (
+                <li
+                  key={index}
+                  onClick={() => handleGpxClick(filename)}
+                  style={{
+                    margin: '5px 0',
+                    cursor: 'pointer',
+                    // Highlight if this file is selected
+                    backgroundColor: selectedGpxFile === filename ? '#e0e0e0' : 'transparent',
+                    fontWeight: selectedGpxFile === filename ? 'bold' : 'normal',
+                  }}
+                >
+                  {filename}
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      )}
+
+      {/* Render the map HTML from the backend */}
+      <div
+        dangerouslySetInnerHTML={{ __html: mapHtml }}
+        style={{ height: '100%', width: '100%' }}
+      />
     </div>
   );
-};
+}
 
 export default MapComponent;
+  

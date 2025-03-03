@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { uploadFile } from '../../services/api';
 
 function UploadComponent() {
   const [gpsFile, setGpsFile] = useState(null);
@@ -13,13 +13,14 @@ function UploadComponent() {
     setImageFile(event.target.files[0]);
   };
 
-  const handleUpload = (file, type) => {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    axios.post(`/api/upload/${type}`, formData)
-      .then(response => console.log(response.data))
-      .catch(error => console.error(error));
+  const handleUpload = async (file) => {
+    if (!file) return;
+    try {
+      const data = await uploadFile(file);
+      console.log('File uploaded successfully:', data);
+    } catch (error) {
+      console.error('Error uploading file:', error);
+    }
   };
 
   return (
@@ -27,11 +28,11 @@ function UploadComponent() {
       <h2>Upload Data</h2>
       <div>
         <input type="file" onChange={handleGpsFileChange} />
-        <button onClick={() => handleUpload(gpsFile, 'gps')}>Upload GPS Data</button>
+        <button onClick={() => handleUpload(gpsFile)}>Upload GPS Data</button>
       </div>
       <div>
         <input type="file" onChange={handleImageFileChange} />
-        <button onClick={() => handleUpload(imageFile, 'image')}>Upload Image</button>
+        <button onClick={() => handleUpload(imageFile)}>Upload Image</button>
       </div>
     </div>
   );
