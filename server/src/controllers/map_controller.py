@@ -1,4 +1,5 @@
 # server/src/controllers/map_controller.py
+
 from fastapi.responses import HTMLResponse
 import folium
 import pickle
@@ -17,15 +18,16 @@ MAP_LAYERS = {
     },
 }
 
-
 def get_layers():
+    """
+    Return a list of available base layers.
+    """
     return list(MAP_LAYERS.keys())
 
 def generate_map_endpoint(layer: str, center=None):
     """
-    Generate a basic map using folium.
+    Generate a basic map using folium and return an HTMLResponse.
     """
-    # Default center if none is provided
     if center is None:
         center = (24.7553, 121.2906)
 
@@ -42,7 +44,8 @@ def generate_map_endpoint(layer: str, center=None):
 
 def get_river_names():
     """
-    Load the GIS pickle file from the MinIO bucket "gis-data" and return the list of river names.
+    Load the GIS pickle file from the MinIO bucket 'gis-data' 
+    and return the list of river names.
     """
     from src.utils.dbbutler.storage_manager import StorageManager
     from src.utils.dbbutler.minio_adapter import MinIOAdapter
@@ -58,6 +61,15 @@ def get_river_names():
 
     file_bytes = storage_manager.load_data('minio', "taiwan-river.pickle", bucket="gis-data")
     river_shapes = pickle.loads(file_bytes)
-    # Filter out any None or non-string keys
     valid_keys = [k for k in river_shapes.keys() if isinstance(k, str) and k]
     return valid_keys
+
+def get_map_metadata():
+    """
+    Provide metadata about this map setup so the front end can handle advanced UI or 
+    partial updates without regenerating an entire HTML map each time.
+    """
+    return {
+        "availableLayers": list(MAP_LAYERS.keys()),
+        "defaultCenter": (24.7553, 121.2906)  # a consistent default center
+    }
