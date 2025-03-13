@@ -34,6 +34,7 @@ export const generateMap = async (layer, center = null) => {
 };
 
 export const getUploadedData = async () => {
+  // Hypothetical endpoint if you store uploaded data info
   const response = await apiClient.get('/data');
   return response.data;
 };
@@ -71,6 +72,12 @@ export const generateGisMap = async (layer, center = null, selectedRivers = []) 
   };
   const response = await apiClient.post('/gis/generate_gis_map', requestBody);
   return response.data; // HTML string
+};
+
+// NEW: fetch map metadata (layers, default center) from /api/map/metadata
+export const getMapMetadata = async () => {
+  const response = await apiClient.get('/map/metadata');
+  return response.data; // e.g. { availableLayers: [...], defaultCenter: [lat, lon] }
 };
 
 export default apiClient;
