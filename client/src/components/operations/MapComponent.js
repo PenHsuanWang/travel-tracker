@@ -1,4 +1,3 @@
-// client/src/components/operations/MapComponent.js
 import React, { useEffect, useState } from 'react';
 import { generateMap, listGpxFiles, fetchGpxFile } from '../../services/api';
 
@@ -12,8 +11,8 @@ function MapComponent({
   const [showGpxDropdown, setShowGpxDropdown] = useState(false);
   const [selectedGpxFile, setSelectedGpxFile] = useState(null);
 
+  // Generate the default map whenever user changes the layer
   useEffect(() => {
-    // Generate default map whenever user changes the layer
     const generateDefaultMap = async () => {
       try {
         const html = await generateMap(selectedLayer, null);
@@ -26,6 +25,7 @@ function MapComponent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLayer]);
 
+  // Toggle the GPX dropdown
   const handleToggleGpxDropdown = async () => {
     if (!showGpxDropdown) {
       try {
@@ -38,6 +38,7 @@ function MapComponent({
     setShowGpxDropdown(!showGpxDropdown);
   };
 
+  // Minimal parser to get first lat/lon from a GPX file
   const parseFirstLatLonFromGpx = (arrayBuffer) => {
     const decoder = new TextDecoder('utf-8');
     const gpxText = decoder.decode(arrayBuffer);
@@ -51,6 +52,7 @@ function MapComponent({
     return [lat, lon];
   };
 
+  // When user clicks a GPX file
   const handleGpxClick = async (filename) => {
     try {
       setSelectedGpxFile(filename);
@@ -78,6 +80,7 @@ function MapComponent({
       >
         <option value="openstreetmap">openstreetmap</option>
         <option value="rudy map">rudy map</option>
+        <option value="mapbox">mapbox</option>
       </select>
 
       {/* SHOW GPX FILES (top-right) */}
@@ -93,17 +96,19 @@ function MapComponent({
       >
         {showGpxDropdown ? 'Hide GPX Files' : 'Show GPX Files'}
       </button>
+
+      {/* GPX DROPDOWN (offset at top: 60px so it’s below the button) */}
       {showGpxDropdown && (
         <div
           style={{
             position: 'absolute',
-            top: '50px',
+            top: '60px',        // <--- This offset prevents overlap with the button
             right: '10px',
             zIndex: 1000,
             backgroundColor: '#fff',
             border: '1px solid #ccc',
             borderRadius: '4px',
-            width: '200px',
+            width: '220px',
             maxHeight: '200px',
             overflowY: 'auto',
             padding: '10px',
@@ -132,7 +137,7 @@ function MapComponent({
         </div>
       )}
 
-      {/* Render the Folium map HTML */}
+      {/* RENDER THE FOLIUM MAP HTML */}
       <div
         dangerouslySetInnerHTML={{ __html: mapHtml }}
         style={{ height: '100%', width: '100%' }}
