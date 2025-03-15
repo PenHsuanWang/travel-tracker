@@ -1,3 +1,4 @@
+# server/src/services/map_service.py
 import folium
 import pickle
 from shapely.geometry import mapping
@@ -30,8 +31,7 @@ def add_tile_layer(map_object, layer='openstreetmap'):
 def inject_custom_js(map_object, script_content):
     """
     Optionally inject custom JavaScript into the Folium map.
-    This allows advanced front-end interactions with the Leaflet instance
-    (since Folium is built on Leaflet).
+    Allows advanced front-end interactions with the Leaflet instance.
     """
     from folium import Element
     map_object.get_root().html.add_child(Element(script_content))
@@ -39,15 +39,15 @@ def inject_custom_js(map_object, script_content):
 def generate_map(layer: str, center=None, custom_js=None):
     """
     Generate a basic folium map with the given tile layer.
-    Optional 'custom_js' allows injecting script logic for advanced interactivity.
+    Optional 'custom_js' to inject advanced logic for the front end.
     """
     if center is None:
         center = (24.7553, 121.2906)
-    m = folium.Map(location=center, zoom_start=15, tiles=None)
 
+    m = folium.Map(location=center, zoom_start=15, tiles=None)
     tile_layer = MAP_LAYERS.get(layer)
     if not tile_layer:
-        raise Exception("Layer not found")
+        raise Exception(f"Layer '{layer}' not found")
 
     folium.TileLayer(
         tiles=tile_layer['url'],
@@ -62,8 +62,8 @@ def generate_map(layer: str, center=None, custom_js=None):
 
 def generate_gis_map(layer: str, center=None, selected_rivers=None):
     """
-    Generate a folium map that overlays river shapes (loaded from a pickle file 
-    in the MinIO bucket 'gis-data'). The user may select a subset of rivers to display.
+    Generate a folium map that overlays river shapes from a pickle file in MinIO.
+    The user may select a subset of rivers to display.
     """
     if center is None:
         center = (24.7553, 121.2906)
@@ -94,7 +94,7 @@ def generate_gis_map(layer: str, center=None, selected_rivers=None):
     except Exception as e:
         raise Exception("Error loading GIS data: " + str(e))
 
-    # For each river or only the selected ones, add a FeatureGroup with a GeoJSON overlay
+    # For each river or only selected ones, add a FeatureGroup with GeoJSON overlay
     for river, geom in river_shapes.items():
         if selected_rivers and river not in selected_rivers:
             continue

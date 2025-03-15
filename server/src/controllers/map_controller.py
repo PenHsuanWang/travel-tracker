@@ -1,5 +1,4 @@
 # server/src/controllers/map_controller.py
-
 from fastapi.responses import HTMLResponse
 import folium
 import pickle
@@ -44,8 +43,7 @@ def generate_map_endpoint(layer: str, center=None):
 
 def get_river_names():
     """
-    Load the GIS pickle file from the MinIO bucket 'gis-data' 
-    and return the list of river names.
+    Load the GIS pickle file from the MinIO bucket 'gis-data' and return the list of river names.
     """
     from src.utils.dbbutler.storage_manager import StorageManager
     from src.utils.dbbutler.minio_adapter import MinIOAdapter
@@ -61,6 +59,7 @@ def get_river_names():
 
     file_bytes = storage_manager.load_data('minio', "taiwan-river.pickle", bucket="gis-data")
     river_shapes = pickle.loads(file_bytes)
+    # Filter out any None or non-string keys
     valid_keys = [k for k in river_shapes.keys() if isinstance(k, str) and k]
     return valid_keys
 
@@ -71,5 +70,46 @@ def get_map_metadata():
     """
     return {
         "availableLayers": list(MAP_LAYERS.keys()),
-        "defaultCenter": (24.7553, 121.2906)  # a consistent default center
+        "defaultCenter": (24.7553, 121.2906)
     }
+
+def get_river_data_as_geojson() -> dict:
+    """
+    Return a JSON-friendly dict {riverName: geojsonObject}, for toggling on the front end.
+    """
+    from src.utils.dbbutler.storage_manager import StorageManager
+    from src.utils.dbbutler.minio_adapter import MinIOAdapter
+
+    storage_manager = StorageManager()
+    minio_adapter = MinIOAdapter(
+        endpoint="localhost:9000",
+        access_key="your-access-key",
+        secret_key="your-secret-key",
+        secure=False
+    )
+    storage_manager.add_adapter('minio', minio_adapter)
+
+    file_bytes = storage_manager.load_data('minio', "taiwan-river.pickle", bucket="gis-data")
+    river_shapes = pickle.loads(file_bytes)
+
+    result = {}
+    from shapely.geometry import mapping
+    for name, shape_obj in river_shapes.items():
+        if isinstance(shape_obj, list):
+            # multiple geometries
+            geoms = [mapping(g) for g in shape_obj]
+            result[name] = {
+                "type": "FeatureCollection",
+                "features": [
+                    {"type": "Feature", "properties": {}, "geometry": g}
+                    for g in geoms
+                ]
+            }
+        else:
+            # single geometry
+            result[name] = {
+                "type": "Feature",
+                "properties": {},
+                "geometry": mapping(shape_obj)
+            }
+    return result
