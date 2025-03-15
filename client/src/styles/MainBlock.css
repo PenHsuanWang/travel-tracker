@@ -1,18 +1,17 @@
-/* src/styles/MainBlock.css */
+/* client/src/styles/MainBlock.css */
 .MainBlock {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  
-  .MapArea {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-  }
-  
-  .MapContainer {
-    height: 100%; /* Ensure the map takes up full height of container */
-    width: 100%;  /* Ensure the map takes up full width of container */
-  }
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.MapArea {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.DataListArea {
+  margin-top: 20px;
+  padding: 10px;
+}

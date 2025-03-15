@@ -1,8 +1,13 @@
-/* src/styles/App.css */
+/* client/src/styles/App.css */
 .App {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+}
+
+.App-body {
+  display: flex;
+  flex: 1;
 }
 
 .App-header {
@@ -10,11 +15,6 @@
   padding: 20px;
   color: white;
   text-align: center;
-}
-
-.App-body {
-  display: flex;
-  flex: 1; /* Ensure this section takes up remaining space */
 }
 
 .App-footer {
