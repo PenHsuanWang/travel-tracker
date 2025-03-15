@@ -1,6 +1,8 @@
 # server/src/app.py
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from src.routes.map_routes import router as map_router
 from src.routes.gis_routes import router as gis_router
@@ -18,9 +20,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Map routes
+# Enable GZip compression (shrink large JSON over the wire)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Routes for map
 app.include_router(map_router, prefix="/api/map")
-# GIS routes
+# Routes for GIS
 app.include_router(gis_router, prefix="/api/gis")
 # File upload routes
 app.include_router(file_upload_router, prefix="/api/map")

@@ -1,9 +1,9 @@
 # server/src/services/map_service.py
+
 import folium
 import pickle
 from shapely.geometry import mapping
 
-# Predefined map layers
 MAP_LAYERS = {
     "openstreetmap": {
         "url": "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -15,36 +15,14 @@ MAP_LAYERS = {
     }
 }
 
-def create_base_map(start_coords=(24.7515, 121.2792)):
-    """Create a base map with no layers."""
-    return folium.Map(location=start_coords, zoom_start=16, tiles=None)
-
-def add_tile_layer(map_object, layer='openstreetmap'):
-    """Add a specified tile layer to the provided map."""
-    tile_layer = MAP_LAYERS.get(layer)
-    if tile_layer:
-        folium.TileLayer(
-            tiles=tile_layer['url'],
-            attr=tile_layer['attribution']
-        ).add_to(map_object)
-
-def inject_custom_js(map_object, script_content):
-    """
-    Optionally inject custom JavaScript into the Folium map.
-    Allows advanced front-end interactions with the Leaflet instance.
-    """
-    from folium import Element
-    map_object.get_root().html.add_child(Element(script_content))
-
-def generate_map(layer: str, center=None, custom_js=None):
-    """
-    Generate a basic folium map with the given tile layer.
-    Optional 'custom_js' to inject advanced logic for the front end.
-    """
+def generate_map(layer: str, center=None):
     if center is None:
         center = (24.7553, 121.2906)
 
     m = folium.Map(location=center, zoom_start=15, tiles=None)
+    # Force a known ID so the instance is map_myLeafletMap
+    m._id = "myLeafletMap"
+
     tile_layer = MAP_LAYERS.get(layer)
     if not tile_layer:
         raise Exception(f"Layer '{layer}' not found")
@@ -54,29 +32,33 @@ def generate_map(layer: str, center=None, custom_js=None):
         attr=tile_layer['attribution']
     ).add_to(m)
 
-    # If advanced use-cases require custom Leaflet logic or events, inject JS here
-    if custom_js:
-        inject_custom_js(m, custom_js)
+    # Inject snippet to set window._leaflet_map
+    custom_js = """
+    <script>
+      // Folium names the instance map_myLeafletMap
+      window._leaflet_map = map_myLeafletMap;
+    </script>
+    """
+    from folium import Element
+    m.get_root().html.add_child(Element(custom_js))
 
     return m._repr_html_()
 
 def generate_gis_map(layer: str, center=None, selected_rivers=None):
     """
-    Generate a folium map that overlays river shapes from a pickle file in MinIO.
-    The user may select a subset of rivers to display.
+    If you still want the old approach: 
+    Return a Folium map with selected rivers directly in HTML.
     """
     if center is None:
         center = (24.7553, 121.2906)
     m = folium.Map(location=center, zoom_start=8, tiles=None)
 
-    # Add the chosen base tile layer (default to 'openstreetmap' if missing)
     tile_layer = MAP_LAYERS.get(layer, MAP_LAYERS['openstreetmap'])
     folium.TileLayer(
         tiles=tile_layer['url'],
         attr=tile_layer['attribution']
     ).add_to(m)
 
-    # Load the pickle file from MinIO bucket "gis-data"
     from src.utils.dbbutler.storage_manager import StorageManager
     from src.utils.dbbutler.minio_adapter import MinIOAdapter
     storage_manager = StorageManager()
@@ -94,7 +76,7 @@ def generate_gis_map(layer: str, center=None, selected_rivers=None):
     except Exception as e:
         raise Exception("Error loading GIS data: " + str(e))
 
-    # For each river or only selected ones, add a FeatureGroup with GeoJSON overlay
+    from shapely.geometry import mapping
     for river, geom in river_shapes.items():
         if selected_rivers and river not in selected_rivers:
             continue
@@ -108,6 +90,5 @@ def generate_gis_map(layer: str, center=None, selected_rivers=None):
 
         river_group.add_to(m)
 
-    # Add a LayerControl so the user can toggle rivers on/off
     folium.LayerControl(collapsed=False).add_to(m)
     return m._repr_html_()
