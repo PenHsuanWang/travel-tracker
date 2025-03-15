@@ -1,5 +1,7 @@
+// client/src/components/operations/MapComponent.js
 import React, { useEffect, useState } from 'react';
 import { generateMap, listGpxFiles, fetchGpxFile } from '../../services/api';
+import MapToolbox from './MapToolbox';
 
 function MapComponent({
   selectedLayer,
@@ -97,12 +99,12 @@ function MapComponent({
         {showGpxDropdown ? 'Hide GPX Files' : 'Show GPX Files'}
       </button>
 
-      {/* GPX DROPDOWN (offset at top: 60px so it’s below the button) */}
+      {/* GPX DROPDOWN */}
       {showGpxDropdown && (
         <div
           style={{
             position: 'absolute',
-            top: '60px',        // <--- This offset prevents overlap with the button
+            top: '60px',
             right: '10px',
             zIndex: 1000,
             backgroundColor: '#fff',
@@ -136,6 +138,9 @@ function MapComponent({
           </ul>
         </div>
       )}
+
+      {/* NEW: The Rivers Toolbox for toggling overlays */}
+      <MapToolbox />
 
       {/* RENDER THE FOLIUM MAP HTML */}
       <div
