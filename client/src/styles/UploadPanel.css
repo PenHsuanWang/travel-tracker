@@ -1,21 +1,43 @@
 /* client/src/styles/UploadPanel.css */
 .UploadPanel {
+  background-color: transparent;
+  padding: 0;
   margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upload-buttons {
+  display: flex;
+  gap: 10px;
 }
 
 .UploadPanel button {
-  margin-right: 10px;
+  background-color: #3b4c5b;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.UploadPanel button:hover {
+  background-color: #4f6375;
 }
 
 .uploaded-data-section {
   margin-top: 20px;
 }
 
-.uploaded-data-dropdown {
+.UploadPanel .uploaded-data-dropdown {
   margin-top: 10px;
   list-style: none;
   padding-left: 0;
   max-height: 150px;
   overflow-y: auto;
   border: 1px solid #ccc;
+  background-color: #fff;
+  color: #000;
 }

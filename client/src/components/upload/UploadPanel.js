@@ -6,18 +6,16 @@ import '../../styles/UploadPanel.css';
 function UploadPanel() {
   const gpsInputRef = useRef(null);
   const imageInputRef = useRef(null);
-
   const [isUploadedDataOpen, setIsUploadedDataOpen] = useState(false);
   const [uploadedData, setUploadedData] = useState([]);
 
-  // Trigger file selection for GPS
   const handleGpsClick = () => {
     if (gpsInputRef.current) {
       gpsInputRef.current.value = null;
       gpsInputRef.current.click();
     }
   };
-  // Upload selected GPS file
+
   const handleGpsFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -29,13 +27,13 @@ function UploadPanel() {
     }
   };
 
-  // Same for images
   const handleImageClick = () => {
     if (imageInputRef.current) {
       imageInputRef.current.value = null;
       imageInputRef.current.click();
     }
   };
+
   const handleImageFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -47,7 +45,6 @@ function UploadPanel() {
     }
   };
 
-  // Show or hide previously uploaded data
   const toggleUploadedDataDropdown = async () => {
     if (!isUploadedDataOpen) {
       try {
@@ -62,10 +59,11 @@ function UploadPanel() {
 
   return (
     <div className="UploadPanel">
-      <h2>Upload Data</h2>
-
-      {/* Buttons to upload GPS and Image */}
-      <button onClick={handleGpsClick}>Upload GPS Data</button>
+      {/* Upload buttons arranged horizontally */}
+      <div className="upload-buttons">
+        <button onClick={handleGpsClick}>Upload GPS Data</button>
+        <button onClick={handleImageClick}>Upload Image</button>
+      </div>
       <input
         type="file"
         ref={gpsInputRef}
@@ -73,8 +71,6 @@ function UploadPanel() {
         style={{ display: 'none' }}
         accept=".gps,.gpx,.txt,application/octet-stream"
       />
-
-      <button onClick={handleImageClick}>Upload Image</button>
       <input
         type="file"
         ref={imageInputRef}
@@ -82,9 +78,7 @@ function UploadPanel() {
         style={{ display: 'none' }}
         accept="image/*"
       />
-
-      {/* Toggle to see previously uploaded data */}
-      <div style={{ marginTop: '20px' }}>
+      <div className="uploaded-data-section">
         <button onClick={toggleUploadedDataDropdown}>
           {isUploadedDataOpen ? 'Hide Uploaded Data' : 'Show Uploaded Data'}
         </button>

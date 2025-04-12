@@ -1,20 +1,36 @@
 /* client/src/styles/Sidebar.css */
 .Sidebar {
-  width: 300px;
-  padding: 20px;
-  background-color: #f4f4f4;
   flex-shrink: 0;
-}
-
-.Sidebar h2 {
-  margin-top: 0;
-}
-
-.uploaded-data-dropdown {
-  margin-top: 10px;
-  list-style: none;
-  padding-left: 0;
-  max-height: 150px;
+  height: 100%;
   overflow-y: auto;
-  border: 1px solid #ccc;
+}
+
+.dashboard-sidebar {
+  background-color: #131a22; /* Uniform dark background */
+  color: #fefefe;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Inter', Arial, sans-serif;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.sidebar-content {
+  flex: 1;
+  padding: 20px;
+  background-color: #131a22; /* Ensure the same background */
+  overflow-y: auto;
+}
+
+.sidebar-card {
+  background-color: transparent; /* Inherit sidebar color */
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 20px;
+  box-shadow: none;
 }
