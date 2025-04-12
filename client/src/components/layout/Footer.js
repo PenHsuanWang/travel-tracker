@@ -1,6 +1,5 @@
 // client/src/components/layout/Footer.js
 import React from 'react';
-import '../../styles/Footer.css';
 
 function Footer() {
   return (

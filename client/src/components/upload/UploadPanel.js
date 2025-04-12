@@ -6,29 +6,50 @@ import '../../styles/UploadPanel.css';
 function UploadPanel() {
   const gpsInputRef = useRef(null);
   const imageInputRef = useRef(null);
-  const [isDataVisible, setIsDataVisible] = useState(false);
+
+  const [isUploadedDataOpen, setIsUploadedDataOpen] = useState(false);
   const [uploadedData, setUploadedData] = useState([]);
 
-  const handleFileClick = (inputRef) => {
-    if (inputRef.current) {
-      inputRef.current.value = null;
-      inputRef.current.click();
+  // Trigger file selection for GPS
+  const handleGpsClick = () => {
+    if (gpsInputRef.current) {
+      gpsInputRef.current.value = null;
+      gpsInputRef.current.click();
     }
   };
-
-  const handleFileChange = async (event, fileType) => {
-    const file = event.target.files[0];
+  // Upload selected GPS file
+  const handleGpsFileChange = async (e) => {
+    const file = e.target.files[0];
     if (!file) return;
     try {
       const data = await uploadFile(file);
-      console.log(`${fileType} file uploaded:`, data);
+      console.log('GPS file uploaded:', data);
     } catch (error) {
-      console.error(`Error uploading ${fileType} file:`, error);
+      console.error('Error uploading GPS file:', error);
     }
   };
 
-  const toggleUploadedData = async () => {
-    if (!isDataVisible) {
+  // Same for images
+  const handleImageClick = () => {
+    if (imageInputRef.current) {
+      imageInputRef.current.value = null;
+      imageInputRef.current.click();
+    }
+  };
+  const handleImageFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const data = await uploadFile(file);
+      console.log('Image file uploaded:', data);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+    }
+  };
+
+  // Show or hide previously uploaded data
+  const toggleUploadedDataDropdown = async () => {
+    if (!isUploadedDataOpen) {
       try {
         const data = await getUploadedData();
         setUploadedData(data);
@@ -36,35 +57,38 @@ function UploadPanel() {
         console.error('Error fetching uploaded data:', error);
       }
     }
-    setIsDataVisible(!isDataVisible);
+    setIsUploadedDataOpen(!isUploadedDataOpen);
   };
 
   return (
     <div className="UploadPanel">
       <h2>Upload Data</h2>
-      <button onClick={() => handleFileClick(gpsInputRef)}>Upload GPS Data</button>
+
+      {/* Buttons to upload GPS and Image */}
+      <button onClick={handleGpsClick}>Upload GPS Data</button>
       <input
         type="file"
         ref={gpsInputRef}
-        onChange={(e) => handleFileChange(e, 'GPS')}
+        onChange={handleGpsFileChange}
         style={{ display: 'none' }}
         accept=".gps,.gpx,.txt,application/octet-stream"
       />
 
-      <button onClick={() => handleFileClick(imageInputRef)}>Upload Image</button>
+      <button onClick={handleImageClick}>Upload Image</button>
       <input
         type="file"
         ref={imageInputRef}
-        onChange={(e) => handleFileChange(e, 'Image')}
+        onChange={handleImageFileChange}
         style={{ display: 'none' }}
         accept="image/*"
       />
 
-      <div className="uploaded-data-section">
-        <button onClick={toggleUploadedData}>
-          {isDataVisible ? 'Hide Uploaded Data' : 'Show Uploaded Data'}
+      {/* Toggle to see previously uploaded data */}
+      <div style={{ marginTop: '20px' }}>
+        <button onClick={toggleUploadedDataDropdown}>
+          {isUploadedDataOpen ? 'Hide Uploaded Data' : 'Show Uploaded Data'}
         </button>
-        {isDataVisible && (
+        {isUploadedDataOpen && (
           <ul className="uploaded-data-dropdown">
             {uploadedData.map((item, idx) => (
               <li key={idx}>{item.name}</li>

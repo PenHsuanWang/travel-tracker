@@ -1,15 +1,13 @@
 // client/src/components/operations/MapComponent.js
 import React, { useEffect, useState } from 'react';
 import { generateMap, listGpxFiles, fetchGpxFile } from '../../services/api';
-import MapToolbox from './MapToolbox';
-import '../../styles/MapComponent.css';
 
 function MapComponent({ selectedLayer, setSelectedLayer, mapHtml, setMapHtml }) {
   const [gpxFiles, setGpxFiles] = useState([]);
   const [showGpxDropdown, setShowGpxDropdown] = useState(false);
   const [selectedGpxFile, setSelectedGpxFile] = useState(null);
 
-  // Generate default map on layer change
+  // Generate base map if the user changes layers
   useEffect(() => {
     const generateDefaultMap = async () => {
       try {
@@ -23,7 +21,8 @@ function MapComponent({ selectedLayer, setSelectedLayer, mapHtml, setMapHtml }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLayer]);
 
-  const toggleGpxDropdown = async () => {
+  // Toggle GPX listing
+  const handleToggleGpxDropdown = async () => {
     if (!showGpxDropdown) {
       try {
         const files = await listGpxFiles();
@@ -35,6 +34,7 @@ function MapComponent({ selectedLayer, setSelectedLayer, mapHtml, setMapHtml }) 
     setShowGpxDropdown(!showGpxDropdown);
   };
 
+  // Minimal parser to find the first lat/lon in a GPX file
   const parseFirstLatLonFromGpx = (arrayBuffer) => {
     const decoder = new TextDecoder('utf-8');
     const gpxText = decoder.decode(arrayBuffer);
@@ -48,6 +48,7 @@ function MapComponent({ selectedLayer, setSelectedLayer, mapHtml, setMapHtml }) 
     return [lat, lon];
   };
 
+  // Center map on the selected GPX file’s first track point
   const handleGpxClick = async (filename) => {
     try {
       setSelectedGpxFile(filename);
@@ -57,6 +58,7 @@ function MapComponent({ selectedLayer, setSelectedLayer, mapHtml, setMapHtml }) 
         console.warn('No valid track point found in GPX file:', filename);
         return;
       }
+      // Re-generate the map with new center
       const html = await generateMap(selectedLayer, firstLatLon);
       setMapHtml(html);
     } catch (error) {
@@ -65,34 +67,63 @@ function MapComponent({ selectedLayer, setSelectedLayer, mapHtml, setMapHtml }) 
   };
 
   return (
-    <div className="map-container">
-      {/* Layer selector in top-left */}
+    <div className="map-container" style={{ position: 'relative', height: '100%', width: '100%' }}>
+      {/* Layer selector at top-left */}
       <select
-        className="layer-selector"
+        style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 1000 }}
         value={selectedLayer}
         onChange={(e) => setSelectedLayer(e.target.value)}
       >
-        <option value="openstreetmap">OpenStreetMap</option>
-        <option value="rudy map">Rudy Map</option>
-        <option value="mapbox">Mapbox</option>
+        <option value="openstreetmap">openstreetmap</option>
+        <option value="rudy map">rudy map</option>
+        <option value="mapbox">mapbox</option>
       </select>
 
-      {/* GPX Files toggle in top-right */}
-      <button className="gpx-toggle-button" onClick={toggleGpxDropdown}>
+      {/* GPX dropdown toggle (top-right) */}
+      <button
+        style={{
+          position: 'absolute',
+          top: '10px',
+          right: '10px',
+          zIndex: 1000,
+          padding: '8px 12px',
+        }}
+        onClick={handleToggleGpxDropdown}
+      >
         {showGpxDropdown ? 'Hide GPX Files' : 'Show GPX Files'}
       </button>
 
+      {/* If GPX dropdown is open */}
       {showGpxDropdown && (
-        <div className="gpx-dropdown">
-          <ul>
+        <div
+          style={{
+            position: 'absolute',
+            top: '60px',
+            right: '10px',
+            zIndex: 1000,
+            backgroundColor: '#fff',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            width: '220px',
+            maxHeight: '200px',
+            overflowY: 'auto',
+            padding: '10px',
+          }}
+        >
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {gpxFiles.length === 0 ? (
               <li>No GPX files found.</li>
             ) : (
-              gpxFiles.map((filename, idx) => (
+              gpxFiles.map((filename, index) => (
                 <li
-                  key={idx}
+                  key={index}
                   onClick={() => handleGpxClick(filename)}
-                  className={selectedGpxFile === filename ? 'selected' : ''}
+                  style={{
+                    margin: '5px 0',
+                    cursor: 'pointer',
+                    backgroundColor: selectedGpxFile === filename ? '#e0e0e0' : 'transparent',
+                    fontWeight: selectedGpxFile === filename ? 'bold' : 'normal',
+                  }}
                 >
                   {filename}
                 </li>
@@ -102,13 +133,10 @@ function MapComponent({ selectedLayer, setSelectedLayer, mapHtml, setMapHtml }) 
         </div>
       )}
 
-      {/* Embedded Map Toolbox */}
-      <MapToolbox />
-
-      {/* Render the generated map HTML */}
+      {/* Render the Folium HTML snippet */}
       <div
-        className="map-html-container"
         dangerouslySetInnerHTML={{ __html: mapHtml }}
+        style={{ height: '100%', width: '100%' }}
       />
     </div>
   );

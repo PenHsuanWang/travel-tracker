@@ -7,7 +7,7 @@ import Footer from './components/layout/Footer';
 import './styles/App.css';
 
 function App() {
-  // Shared state for the map
+  // Shared state for the map layer and generated Folium HTML
   const [selectedLayer, setSelectedLayer] = useState('openstreetmap');
   const [mapHtml, setMapHtml] = useState('');
 
@@ -15,9 +15,11 @@ function App() {
     <div className="App">
       <Header />
       <div className="App-body">
-        {/* Sidebar now composed of UploadPanel & CategoriesPanel */}
-        <Sidebar mapHtml={mapHtml} setMapHtml={setMapHtml} />
-        {/* Main content area for map and lists */}
+        <Sidebar
+          selectedLayer={selectedLayer}
+          mapHtml={mapHtml}
+          setMapHtml={setMapHtml}
+        />
         <MainBlock
           selectedLayer={selectedLayer}
           setSelectedLayer={setSelectedLayer}

@@ -4,11 +4,17 @@ import UploadPanel from '../upload/UploadPanel';
 import CategoriesPanel from '../categories/CategoriesPanel';
 import '../../styles/Sidebar.css';
 
-function Sidebar({ mapHtml, setMapHtml }) {
+function Sidebar({ selectedLayer, mapHtml, setMapHtml }) {
   return (
     <aside className="Sidebar">
+      {/* Panel for uploading data */}
       <UploadPanel />
-      <CategoriesPanel mapHtml={mapHtml} setMapHtml={setMapHtml} />
+      {/* Panel for selecting from multiple GIS data categories (rivers, mountains, etc.) */}
+      <CategoriesPanel
+        selectedLayer={selectedLayer}
+        mapHtml={mapHtml}
+        setMapHtml={setMapHtml}
+      />
     </aside>
   );
 }

@@ -19,7 +19,7 @@ function DataListComponent() {
 
   return (
     <div>
-      <h2>Uploaded GPX Files</h2>
+      <h2>List of Uploaded GPX Files</h2>
       {gpxList.length === 0 ? (
         <p>No GPX files found in MinIO bucket.</p>
       ) : (
