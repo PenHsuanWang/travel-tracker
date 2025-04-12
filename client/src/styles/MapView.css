@@ -1,0 +1,63 @@
+/* client/src/styles/MapView.css */
+.MapView {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Absolutely position the layer selector in top-left */
+.layer-selector {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+  padding: 6px;
+}
+
+/* GPX toggle in top-right */
+.gpx-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+/* GPX dropdown below the toggle */
+.gpx-dropdown {
+  position: absolute;
+  top: 60px;
+  right: 10px;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 220px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.gpx-dropdown ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.gpx-dropdown li {
+  margin: 5px 0;
+  cursor: pointer;
+}
+.gpx-dropdown li.selected {
+  background-color: #e0e0e0;
+  font-weight: bold;
+}
+
+/* The Folium map area */
+.map-html {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
