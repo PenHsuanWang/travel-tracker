@@ -1,0 +1,18 @@
+/* client/src/styles/Header.css */
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+  text-align: center;
+}
+
+.App-header ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.App-header ul li {
+  display: inline;
+  margin-right: 15px;
+}

@@ -15,14 +15,9 @@ function App() {
     <div className="App">
       <Header />
       <div className="App-body">
-        {/* SINGLE Sidebar on the left */}
-        <Sidebar
-          selectedLayer={selectedLayer}
-          mapHtml={mapHtml}
-          setMapHtml={setMapHtml}
-        />
-
-        {/* Main content (map + data list) on the right */}
+        {/* Sidebar now composed of UploadPanel & CategoriesPanel */}
+        <Sidebar mapHtml={mapHtml} setMapHtml={setMapHtml} />
+        {/* Main content area for map and lists */}
         <MainBlock
           selectedLayer={selectedLayer}
           setSelectedLayer={setSelectedLayer}

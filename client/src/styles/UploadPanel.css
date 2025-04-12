@@ -1,0 +1,21 @@
+/* client/src/styles/UploadPanel.css */
+.UploadPanel {
+  margin-bottom: 20px;
+}
+
+.UploadPanel button {
+  margin-right: 10px;
+}
+
+.uploaded-data-section {
+  margin-top: 20px;
+}
+
+.uploaded-data-dropdown {
+  margin-top: 10px;
+  list-style: none;
+  padding-left: 0;
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+}

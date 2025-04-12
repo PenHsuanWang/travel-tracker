@@ -4,12 +4,7 @@ import MapComponent from '../operations/MapComponent';
 import DataListComponent from '../lists/DataListComponent';
 import '../../styles/MainBlock.css';
 
-function MainBlock({
-  selectedLayer,
-  setSelectedLayer,
-  mapHtml,
-  setMapHtml
-}) {
+function MainBlock({ selectedLayer, setSelectedLayer, mapHtml, setMapHtml }) {
   return (
     <div className="MainBlock">
       <div className="MapArea">

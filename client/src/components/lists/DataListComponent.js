@@ -5,7 +5,6 @@ import { listGpxFiles } from '../../services/api';
 function DataListComponent() {
   const [gpxList, setGpxList] = useState([]);
 
-  // On component mount, fetch the list of GPX files from MinIO
   useEffect(() => {
     const fetchGpxFiles = async () => {
       try {
@@ -20,7 +19,7 @@ function DataListComponent() {
 
   return (
     <div>
-      <h2>List of Uploaded GPX Files</h2>
+      <h2>Uploaded GPX Files</h2>
       {gpxList.length === 0 ? (
         <p>No GPX files found in MinIO bucket.</p>
       ) : (
