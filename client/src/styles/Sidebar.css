@@ -1,36 +1,10 @@
 /* client/src/styles/Sidebar.css */
 .Sidebar {
-  flex-shrink: 0;
-  height: 100%;
-  overflow-y: auto;
-}
-
-.dashboard-sidebar {
-  background-color: #131a22; /* Uniform dark background */
-  color: #fefefe;
   width: 280px;
+  background-color: #1f2327; /* A dark background for your side nav */
+  color: #fff;
   display: flex;
   flex-direction: column;
-  font-family: 'Inter', Arial, sans-serif;
-}
-
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-
-.sidebar-content {
-  flex: 1;
   padding: 20px;
-  background-color: #131a22; /* Ensure the same background */
-  overflow-y: auto;
-}
-
-.sidebar-card {
-  background-color: transparent; /* Inherit sidebar color */
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 20px;
-  box-shadow: none;
+  box-sizing: border-box;
 }

@@ -7,7 +7,7 @@ import Footer from './components/layout/Footer';
 import './styles/App.css';
 
 function App() {
-  // Shared state for the map layer and generated Folium HTML
+  // Shared state for the map
   const [selectedLayer, setSelectedLayer] = useState('openstreetmap');
   const [mapHtml, setMapHtml] = useState('');
 

@@ -1,29 +1,31 @@
 /* client/src/styles/CategoriesPanel.css */
 .CategoriesPanel {
-  background-color: transparent;
-  margin-top: 20px;
+  margin-bottom: 20px;
+  color: #fff;
 }
 
-.dropdown-container {
+.CategoriesPanel h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+
+.category-list {
   margin-top: 10px;
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 10px;
+  border-radius: 4px;
+  /* Optional subtle border: */
+  /* border: 1px solid rgba(255,255,255,0.2); */
 }
 
-.dropdown-container input[type="text"] {
-  width: 100%;
-  padding: 6px 10px;
-  margin-bottom: 10px;
-  border: 1px solid #999;
+.CategoriesPanel button {
+  background-color: #394a5a;
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
   border-radius: 4px;
-  font-size: 0.9rem;
+  cursor: pointer;
 }
-
-.dropdown-content {
-  margin-top: 10px;
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid #ccc;
-  padding: 5px;
-  background-color: #fff;
-  color: #000;
-  border-radius: 4px;
+.CategoriesPanel button:hover {
+  background-color: #4f6375;
 }

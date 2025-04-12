@@ -1,21 +1,7 @@
 /* client/src/styles/Footer.css */
 .App-footer {
   background-color: #282c34;
+  color: #fff;
   padding: 10px;
-  color: white;
   text-align: center;
-  position: relative;
-  width: 100%;
-  bottom: 0;
-}
-
-.App-footer ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.App-footer ul li {
-  display: inline;
-  margin-right: 15px;
 }

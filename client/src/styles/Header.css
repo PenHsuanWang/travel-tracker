@@ -6,13 +6,7 @@
   text-align: center;
 }
 
-.App-header ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.App-header ul li {
-  display: inline;
-  margin-right: 15px;
+#logo {
+  font-size: 1.3rem;
+  font-weight: 600;
 }
