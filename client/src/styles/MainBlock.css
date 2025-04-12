@@ -2,16 +2,17 @@
 .MainBlock {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row; /* Map on the left, Data on the right, or row-reverse if you want reversed */
 }
 
 .MapArea {
-  flex: 1;
+  flex: 2;
   position: relative;
   overflow: hidden;
 }
 
 .DataListArea {
-  margin-top: 20px;
+  flex: 1;
   padding: 10px;
+  background-color: #f0f0f0;
 }
