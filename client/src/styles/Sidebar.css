@@ -1,20 +1,10 @@
 /* client/src/styles/Sidebar.css */
 .Sidebar {
-  width: 300px;
+  width: 280px;
+  background-color: #1f2327; /* A dark background for your side nav */
+  color: #fff;
+  display: flex;
+  flex-direction: column;
   padding: 20px;
-  background-color: #f4f4f4;
-  flex-shrink: 0;
-}
-
-.Sidebar h2 {
-  margin-top: 0;
-}
-
-.uploaded-data-dropdown {
-  margin-top: 10px;
-  list-style: none;
-  padding-left: 0;
-  max-height: 150px;
-  overflow-y: auto;
-  border: 1px solid #ccc;
+  box-sizing: border-box;
 }

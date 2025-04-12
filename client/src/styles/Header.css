@@ -1,0 +1,12 @@
+/* client/src/styles/Header.css */
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+  text-align: center;
+}
+
+#logo {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
