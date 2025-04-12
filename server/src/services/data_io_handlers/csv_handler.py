@@ -3,7 +3,7 @@
 from fastapi import UploadFile
 from src.services.data_io_handlers.base_handler import BaseHandler
 from src.utils.dbbutler.storage_manager import StorageManager
-from src.utils.file_analysis import process_csv
+# from src.utils.file_analysis import process_csv
 
 
 class CSVHandler(BaseHandler):
