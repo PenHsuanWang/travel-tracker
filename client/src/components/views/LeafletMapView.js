@@ -1,6 +1,6 @@
 // client/src/components/views/LeafletMapView.js
 import React, { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { riversData, listGpxFiles, fetchGpxFile } from '../../services/api';
 import 'leaflet/dist/leaflet.css';
@@ -58,7 +58,8 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
   const [loading, setLoading] = useState(true);
   const [gpxFiles, setGpxFiles] = useState([]);
   const [showGpx, setShowGpx] = useState(false);
-  const [selectedGpx, setSelectedGpx] = useState(null);
+  const [selectedGpxFiles, setSelectedGpxFiles] = useState([]);
+  const [gpxTracks, setGpxTracks] = useState({});
   const [gpxCenter, setGpxCenter] = useState(null);
   const mapRef = useRef(null);
 
@@ -92,31 +93,91 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
   };
 
   const handleGpxClick = async (filename) => {
-    setSelectedGpx(filename);
-    try {
-      const arrayBuffer = await fetchGpxFile(filename, 'gps-data');
-      const latLon = parseFirstLatLon(arrayBuffer);
-      if (!latLon) {
-        console.warn('No valid track point found in GPX file:', filename);
-        return;
+    // Toggle selection
+    const isSelected = selectedGpxFiles.includes(filename);
+    let newSelection;
+    
+    if (isSelected) {
+      // Deselect: remove from selection and remove track data
+      newSelection = selectedGpxFiles.filter(f => f !== filename);
+      const newTracks = { ...gpxTracks };
+      delete newTracks[filename];
+      setGpxTracks(newTracks);
+      setSelectedGpxFiles(newSelection);
+    } else {
+      // Select: add to selection and load track data
+      newSelection = [...selectedGpxFiles, filename];
+      setSelectedGpxFiles(newSelection);
+      
+      try {
+        const arrayBuffer = await fetchGpxFile(filename, 'gps-data');
+        const trackData = parseGpxTrack(arrayBuffer);
+        
+        if (trackData.coordinates.length > 0) {
+          setGpxTracks(prev => ({
+            ...prev,
+            [filename]: trackData
+          }));
+          
+          // Center map to first point of newly loaded track
+          setGpxCenter(trackData.coordinates[0]);
+          console.log(`GPX track loaded: ${filename}, ${trackData.coordinates.length} points`);
+        } else {
+          console.warn('No valid track points found in GPX file:', filename);
+        }
+      } catch (err) {
+        console.error('Error fetching gpx file:', err);
       }
-      setGpxCenter(latLon);
-    } catch (err) {
-      console.error('Error fetching gpx file:', err);
     }
   };
 
-  const parseFirstLatLon = (arrayBuffer) => {
+  const parseGpxTrack = (arrayBuffer) => {
     const decoder = new TextDecoder('utf-8');
     const gpxText = decoder.decode(arrayBuffer);
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(gpxText, 'application/xml');
-    const trkpt = xmlDoc.querySelector('trkpt');
-    if (!trkpt) return null;
-    const lat = parseFloat(trkpt.getAttribute('lat'));
-    const lon = parseFloat(trkpt.getAttribute('lon'));
-    if (isNaN(lat) || isNaN(lon)) return null;
-    return [lat, lon];
+    
+    const coordinates = [];
+    let trackName = 'Unnamed Track';
+    
+    // Try to get track name
+    const nameElement = xmlDoc.querySelector('trk > name');
+    if (nameElement && nameElement.textContent) {
+      trackName = nameElement.textContent;
+    }
+    
+    // Get all track points
+    const trkpts = xmlDoc.querySelectorAll('trkpt');
+    trkpts.forEach(trkpt => {
+      const lat = parseFloat(trkpt.getAttribute('lat'));
+      const lon = parseFloat(trkpt.getAttribute('lon'));
+      if (!isNaN(lat) && !isNaN(lon)) {
+        coordinates.push([lat, lon]);
+      }
+    });
+    
+    return {
+      name: trackName,
+      coordinates: coordinates
+    };
+  };
+
+  const getGpxTrackColor = (filename) => {
+    // Different colors for different GPX tracks
+    const colors = [
+      '#ff0000', // red
+      '#00ff00', // green
+      '#0000ff', // blue
+      '#ff00ff', // magenta
+      '#00ffff', // cyan
+      '#ff8800', // orange
+      '#8800ff', // purple
+      '#ffff00', // yellow
+      '#ff0088', // pink
+      '#00ff88'  // mint
+    ];
+    const index = gpxFiles.indexOf(filename);
+    return colors[index % colors.length];
   };
 
   const getGeoJSONStyle = (riverName) => {
@@ -163,9 +224,20 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
                 <li
                   key={idx}
                   onClick={() => handleGpxClick(file)}
-                  className={selectedGpx === file ? 'selected' : ''}
+                  className={selectedGpxFiles.includes(file) ? 'selected' : ''}
                 >
-                  {file}
+                  <input
+                    type="checkbox"
+                    checked={selectedGpxFiles.includes(file)}
+                    onChange={() => handleGpxClick(file)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <span style={{ 
+                    color: selectedGpxFiles.includes(file) ? getGpxTrackColor(file) : 'inherit',
+                    marginLeft: '8px'
+                  }}>
+                    {file}
+                  </span>
                 </li>
               ))
             )}
@@ -215,6 +287,26 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
             />
           );
         })}
+
+        {/* Render GPX track polylines */}
+        {Object.entries(gpxTracks).map(([filename, trackData]) => (
+          <Polyline
+            key={filename}
+            positions={trackData.coordinates}
+            pathOptions={{
+              color: getGpxTrackColor(filename),
+              weight: 3,
+              opacity: 0.8
+            }}
+            eventHandlers={{
+              click: () => {
+                console.log(`Clicked on track: ${filename}`);
+              }
+            }}
+          >
+            {/* Popup for track info */}
+          </Polyline>
+        ))}
       </MapContainer>
     </div>
   );
