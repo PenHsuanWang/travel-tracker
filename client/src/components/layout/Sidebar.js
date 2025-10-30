@@ -4,7 +4,7 @@ import UploadPanel from '../panels/UploadPanel';
 import CategoriesPanel from '../panels/CategoriesPanel';
 import '../../styles/Sidebar.css';
 
-function Sidebar({ selectedLayer, mapHtml, setMapHtml }) {
+function Sidebar({ selectedRivers, setSelectedRivers }) {
   return (
     <aside className="Sidebar">
       {/* Upload Data Panel */}
@@ -12,15 +12,9 @@ function Sidebar({ selectedLayer, mapHtml, setMapHtml }) {
 
       {/* Categories Panel (e.g. Rivers, Mountains, Highways) */}
       <CategoriesPanel
-        selectedLayer={selectedLayer}
-        mapHtml={mapHtml}
-        setMapHtml={setMapHtml}
+        selectedRivers={selectedRivers}
+        setSelectedRivers={setSelectedRivers}
       />
-
-      {/* Optionally, a “Generate GIS Map” button if you prefer a manual approach */}
-      {/*
-        <button onClick={() => { ... }}>Generate GIS Map</button>
-      */}
     </aside>
   );
 }
