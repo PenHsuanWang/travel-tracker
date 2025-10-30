@@ -1,14 +1,13 @@
 // client/src/components/panels/CategoriesPanel.js
 import React, { useState, useEffect } from 'react';
-import { listRivers, generateGisMap } from '../../services/api';
+import { listRivers } from '../../services/api';
 import '../../styles/CategoriesPanel.css';
 
-function CategoriesPanel({ selectedLayer, mapHtml, setMapHtml }) {
+function CategoriesPanel({ selectedRivers, setSelectedRivers }) {
   const [categoriesOpen, setCategoriesOpen] = useState(true);
   const [riverNames, setRiverNames] = useState([]);
-  const [selectedRivers, setSelectedRivers] = useState([]);
 
-  // NEW: track user’s typed search
+  // Track user's typed search
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -27,7 +26,9 @@ function CategoriesPanel({ selectedLayer, mapHtml, setMapHtml }) {
     setCategoriesOpen(!categoriesOpen);
   };
 
-  const handleRiverChange = async (river) => {
+  const handleRiverChange = (river) => {
+    // Just update state - NO backend call!
+    // The map component will automatically re-render with new selection
     let newSelection;
     if (selectedRivers.includes(river)) {
       newSelection = selectedRivers.filter((r) => r !== river);
@@ -35,14 +36,7 @@ function CategoriesPanel({ selectedLayer, mapHtml, setMapHtml }) {
       newSelection = [...selectedRivers, river];
     }
     setSelectedRivers(newSelection);
-
-    // Optionally auto-generate the map each time a user toggles
-    try {
-      const html = await generateGisMap(selectedLayer, null, newSelection);
-      setMapHtml(html);
-    } catch (error) {
-      console.error('Error generating GIS map:', error);
-    }
+    console.log('River selection updated:', newSelection.length, 'rivers selected');
   };
 
   // Filter the list of rivers by the search term (case-insensitive)

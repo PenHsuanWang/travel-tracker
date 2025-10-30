@@ -9,22 +9,20 @@ import './styles/App.css';
 function App() {
   // Shared state for the map
   const [selectedLayer, setSelectedLayer] = useState('openstreetmap');
-  const [mapHtml, setMapHtml] = useState('');
+  const [selectedRivers, setSelectedRivers] = useState([]);
 
   return (
     <div className="App">
       <Header />
       <div className="App-body">
         <Sidebar
-          selectedLayer={selectedLayer}
-          mapHtml={mapHtml}
-          setMapHtml={setMapHtml}
+          selectedRivers={selectedRivers}
+          setSelectedRivers={setSelectedRivers}
         />
         <MainBlock
           selectedLayer={selectedLayer}
           setSelectedLayer={setSelectedLayer}
-          mapHtml={mapHtml}
-          setMapHtml={setMapHtml}
+          selectedRivers={selectedRivers}
         />
       </div>
       <Footer />
