@@ -67,6 +67,8 @@
   cursor: pointer;
   border-radius: 3px;
   font-size: 13px;
+  display: flex;
+  align-items: center;
 }
 
 .leaflet-map-view .gpx-dropdown li:hover {
@@ -74,9 +76,18 @@
 }
 
 .leaflet-map-view .gpx-dropdown li.selected {
-  background-color: #3388ff;
-  color: white;
+  background-color: #d0e8f0;
   font-weight: bold;
+}
+
+.leaflet-map-view .gpx-dropdown li input[type="checkbox"] {
+  cursor: pointer;
+  margin: 0;
+}
+
+.leaflet-map-view .gpx-dropdown li span {
+  margin-left: 8px;
+  flex: 1;
 }
 
 /* Loading overlay */
