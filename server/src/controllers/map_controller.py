@@ -2,8 +2,12 @@
 
 from fastapi.responses import HTMLResponse
 import pickle
+import os
 from shapely.geometry import mapping
 from src.services.map_service import generate_map, generate_gis_map
+from dotenv import load_dotenv
+
+load_dotenv()
 
 MAP_LAYERS = {
     "openstreetmap": {
@@ -33,10 +37,10 @@ def get_river_names():
 
     storage_manager = StorageManager()
     minio_adapter = MinIOAdapter(
-        endpoint="localhost:9000",
-        access_key="your-access-key",
-        secret_key="your-secret-key",
-        secure=False
+        endpoint=os.getenv("MINIO_ENDPOINT", "localhost:9000"),
+        access_key=os.getenv("MINIO_ACCESS_KEY"),
+        secret_key=os.getenv("MINIO_SECRET_KEY"),
+        secure=os.getenv("MINIO_SECURE", "False").lower() == "true"
     )
     storage_manager.add_adapter('minio', minio_adapter)
 
@@ -71,10 +75,10 @@ def get_river_data_as_geojson() -> dict:
 
     storage_manager = StorageManager()
     minio_adapter = MinIOAdapter(
-        endpoint="localhost:9000",
-        access_key="your-access-key",
-        secret_key="your-secret-key",
-        secure=False
+        endpoint=os.getenv("MINIO_ENDPOINT", "localhost:9000"),
+        access_key=os.getenv("MINIO_ACCESS_KEY"),
+        secret_key=os.getenv("MINIO_SECRET_KEY"),
+        secure=os.getenv("MINIO_SECURE", "False").lower() == "true"
     )
     storage_manager.add_adapter('minio', minio_adapter)
 

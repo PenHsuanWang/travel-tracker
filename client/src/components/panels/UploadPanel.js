@@ -1,18 +1,13 @@
 // client/src/components/panels/UploadPanel.js
 import React, { useRef, useState } from 'react';
-import { uploadFile, getUploadedData, listGpxFiles } from '../../services/api';
+import { uploadFile, listGpxFiles } from '../../services/api';
 import '../../styles/UploadPanel.css';
 
 function UploadPanel() {
   const gpsInputRef = useRef(null);
   const imageInputRef = useRef(null);
 
-  // Whether or not to show the “uploaded” section
   const [showUploadedData, setShowUploadedData] = useState(false);
-
-  // For listing general uploaded data (images, text, etc.)
-  const [uploadedData, setUploadedData] = useState([]);
-  // For listing GPX files specifically
   const [gpxList, setGpxList] = useState([]);
 
   const handleGpsClick = () => {
@@ -28,6 +23,11 @@ function UploadPanel() {
     try {
       const result = await uploadFile(file);
       console.log('GPS file uploaded:', result);
+      // Refresh the list after upload
+      if (showUploadedData) {
+        const gpxFiles = await listGpxFiles();
+        setGpxList(gpxFiles || []);
+      }
     } catch (error) {
       console.error('Error uploading GPS file:', error);
     }
@@ -51,19 +51,15 @@ function UploadPanel() {
     }
   };
 
-  // Toggle to show/hide the entire “uploaded” data section, including GPX files
   const toggleUploadedData = async () => {
     if (!showUploadedData) {
       try {
-        // 1) Fetch any “uploaded” data from your backend
-        const data = await getUploadedData();
-        setUploadedData(data || []);
-
-        // 2) Fetch the list of GPX files from MinIO
         const gpxFiles = await listGpxFiles();
+        console.log('[UploadPanel] GPX files:', gpxFiles);
         setGpxList(gpxFiles || []);
       } catch (error) {
-        console.error('Error fetching uploaded data or GPX files:', error);
+        console.error('[UploadPanel] Error fetching GPX files:', error);
+        setGpxList([]);
       }
     }
     setShowUploadedData(!showUploadedData);
@@ -73,7 +69,6 @@ function UploadPanel() {
     <div className="UploadPanel">
       <h2>Upload Data</h2>
 
-      {/* Row of upload buttons */}
       <div className="button-row">
         <button onClick={handleGpsClick}>Upload GPS</button>
         <input
@@ -94,27 +89,13 @@ function UploadPanel() {
         />
       </div>
 
-      {/* Show/hide the “uploaded data” section */}
       <button onClick={toggleUploadedData} style={{ marginTop: '10px' }}>
         {showUploadedData ? 'Hide Uploaded Data' : 'Show Uploaded Data'}
       </button>
 
       {showUploadedData && (
         <div style={{ marginTop: '10px' }}>
-          {/* Example: Display general “uploadedData” items from your backend */}
-          <h4>Other Uploaded Items</h4>
-          {uploadedData.length === 0 ? (
-            <p>No items found.</p>
-          ) : (
-            <ul className="uploaded-data-list">
-              {uploadedData.map((item, idx) => (
-                <li key={idx}>{item.name}</li>
-              ))}
-            </ul>
-          )}
-
-          {/* List of GPX files (previously in the main content area) */}
-          <h4 style={{ marginTop: '15px' }}>Uploaded GPX Files</h4>
+          <h4>Uploaded GPX Files</h4>
           {gpxList.length === 0 ? (
             <p>No GPX files found.</p>
           ) : (
