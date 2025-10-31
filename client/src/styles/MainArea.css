@@ -1,0 +1,10 @@
+.main-area {
+  flex: 1;
+  position: relative;
+  background: #f0f0f0;
+  overflow: hidden;
+}
+.content-container {
+  display: flex;
+  flex: 1;
+}

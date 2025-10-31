@@ -1,10 +1,13 @@
 # src/services/data_io_handlers/gpx_handler.py
 
+import os
 from fastapi import UploadFile
 from src.services.data_io_handlers.base_handler import BaseHandler
 from src.utils.dbbutler.storage_manager import StorageManager
-# from src.utils.file_analysis import analyze_file
 from src.utils.dbbutler.minio_adapter import MinIOAdapter
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class GPXHandler(BaseHandler):
@@ -15,12 +18,11 @@ class GPXHandler(BaseHandler):
     def __init__(self):
         self.storage_manager = StorageManager()
 
-        # Initialize and add the MinIO adapter
         minio_adapter = MinIOAdapter(
-            endpoint="localhost:9000",  # Update with your actual MinIO endpoint
-            access_key="your-access-key",  # Replace with your access key
-            secret_key="your-secret-key",  # Replace with your secret key
-            secure=False  # Change as needed
+            endpoint=os.getenv("MINIO_ENDPOINT", "localhost:9000"),
+            access_key=os.getenv("MINIO_ACCESS_KEY"),
+            secret_key=os.getenv("MINIO_SECRET_KEY"),
+            secure=os.getenv("MINIO_SECURE", "False").lower() == "true"
         )
         self.storage_manager.add_adapter('minio', minio_adapter)
 

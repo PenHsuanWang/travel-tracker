@@ -1,0 +1,29 @@
+.gpx-dropdown button {
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+
+.gpx-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: rgba(255,255,255,0.95);
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.gpx-list li {
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.gpx-list li:hover {
+  background: #f2f2f2;
+}
+.placeholder {
+  color: #888;
+  font-style: italic;
+  cursor: default;
+}

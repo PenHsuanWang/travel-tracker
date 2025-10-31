@@ -1,8 +1,12 @@
 # src/services/file_retrieval_service.py
 
+import os
 from typing import List, Optional
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.dbbutler.minio_adapter import MinIOAdapter
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class FileRetrievalService:
     """
@@ -10,13 +14,11 @@ class FileRetrievalService:
     """
     def __init__(self):
         self.storage_manager = StorageManager()
-        # Register the MinIO adapter here if not already done elsewhere.
-        # Adjust endpoint, access_key, and secret_key for your actual MinIO config.
         minio_adapter = MinIOAdapter(
-            endpoint="localhost:9000",
-            access_key="your-access-key",
-            secret_key="your-secret-key",
-            secure=False
+            endpoint=os.getenv("MINIO_ENDPOINT", "localhost:9000"),
+            access_key=os.getenv("MINIO_ACCESS_KEY"),
+            secret_key=os.getenv("MINIO_SECRET_KEY"),
+            secure=os.getenv("MINIO_SECURE", "False").lower() == "true"
         )
         self.storage_manager.add_adapter('minio', minio_adapter)
 
