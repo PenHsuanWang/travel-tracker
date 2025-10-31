@@ -3,6 +3,7 @@
 from fastapi import UploadFile
 from src.services.data_io_handlers.base_handler import BaseHandler
 from src.utils.dbbutler.storage_manager import StorageManager
+from src.utils.adapter_factory import AdapterFactory
 
 
 class ImageHandler(BaseHandler):
@@ -12,6 +13,10 @@ class ImageHandler(BaseHandler):
 
     def __init__(self):
         self.storage_manager = StorageManager()
+        
+        # Use AdapterFactory for consistent initialization
+        minio_adapter = AdapterFactory.create_minio_adapter()
+        self.storage_manager.add_adapter('minio', minio_adapter)
 
     def handle(self, file: UploadFile) -> str:
         """
@@ -26,10 +31,5 @@ class ImageHandler(BaseHandler):
 
         # Save raw file data to MinIO
         self.storage_manager.save_data(file_name, file_data, adapter_name='minio', bucket=bucket_name)
-
-        metadata = {'name': file_name, 'file_path': f'{bucket_name}/{file_name}'}
-
-        # Save metadata to MongoDB
-        self.storage_manager.save_data(file_name, metadata, adapter_name='mongodb', collection_name='metadata')
 
         return f'{bucket_name}/{file_name}'
