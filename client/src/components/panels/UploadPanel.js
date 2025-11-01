@@ -46,8 +46,12 @@ function UploadPanel() {
     try {
       const result = await uploadFile(file);
       console.log('Image file uploaded:', result);
+      alert(`Image uploaded successfully: ${result.filename}`);
+      // Trigger a custom event to notify ImageGalleryPanel
+      window.dispatchEvent(new CustomEvent('imageUploaded'));
     } catch (error) {
       console.error('Error uploading image:', error);
+      alert('Failed to upload image. Please try again.');
     }
   };
 

@@ -72,4 +72,15 @@ export const riversData = async () => {
   return response.data;
 };
 
+export const listImageFiles = async () => {
+  const response = await apiClient.get('/list-files', {
+    params: { bucket: 'images' }
+  });
+  return response.data;
+};
+
+export const getImageUrl = (filename) => {
+  return `${apiClient.defaults.baseURL}/files/${encodeURIComponent(filename)}?bucket=images`;
+};
+
 export default apiClient;

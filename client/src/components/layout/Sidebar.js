@@ -1,6 +1,7 @@
 // client/src/components/layout/Sidebar.js
 import React from 'react';
 import UploadPanel from '../panels/UploadPanel';
+import ImageGalleryPanel from '../panels/ImageGalleryPanel';
 import CategoriesPanel from '../panels/CategoriesPanel';
 import '../../styles/Sidebar.css';
 
@@ -9,6 +10,9 @@ function Sidebar({ selectedRivers, setSelectedRivers }) {
     <aside className="Sidebar">
       {/* Upload Data Panel */}
       <UploadPanel />
+
+      {/* Image Gallery Panel */}
+      <ImageGalleryPanel />
 
       {/* Categories Panel (e.g. Rivers, Mountains, Highways) */}
       <CategoriesPanel

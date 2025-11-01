@@ -16,6 +16,6 @@ class FileUploadService:
         :param file: The uploaded file.
         :return: The file path where the file is stored.
         """
-        file_extension = file.filename.split('.')[-1]
+        file_extension = file.filename.split('.')[-1].lower()
         handler = HandlerFactory.get_handler(file_extension)
         return handler.handle(file)
