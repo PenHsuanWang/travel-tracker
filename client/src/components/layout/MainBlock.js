@@ -1,17 +1,16 @@
 // client/src/components/layout/MainBlock.js
 import React from 'react';
-import MapView from '../views/MapView';
+import LeafletMapView from '../views/LeafletMapView';
 import '../../styles/MainBlock.css';
 
-function MainBlock({ selectedLayer, setSelectedLayer, mapHtml, setMapHtml }) {
+function MainBlock({ selectedLayer, setSelectedLayer, selectedRivers }) {
   return (
     <div className="MainBlock">
       <div className="MapArea">
-        <MapView
+        <LeafletMapView
           selectedLayer={selectedLayer}
           setSelectedLayer={setSelectedLayer}
-          mapHtml={mapHtml}
-          setMapHtml={setMapHtml}
+          selectedRivers={selectedRivers}
         />
       </div>
     </div>

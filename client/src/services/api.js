@@ -2,17 +2,46 @@
 import axios from 'axios';
 
 const apiClient = axios.create({
-  baseURL: 'http://localhost:5002/api',
+  baseURL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002/api',
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
 export const uploadFile = async (file) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  const response = await apiClient.post('/map/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  try {
+    console.log('[API] Uploading file:', file.name, file.type, file.size);
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    console.log('[API] Sending POST to:', `${apiClient.defaults.baseURL}/map/upload`);
+    const response = await apiClient.post('/map/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    
+    console.log('[API] Upload successful, response:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[API] Upload failed:', error);
+    if (error.response) {
+      console.error('[API] Server responded with error:', error.response.status, error.response.data);
+    } else if (error.request) {
+      console.error('[API] No response received:', error.request);
+    } else {
+      console.error('[API] Error setting up request:', error.message);
+    }
+    throw error;
+  }
+};
+
+export const getFileMetadata = async (metadataId) => {
+  const response = await apiClient.get(`/map/metadata/${metadataId}`);
+  return response.data;
+};
+
+export const deleteImage = async (filename, bucket = 'images') => {
+  const response = await apiClient.delete(`/map/delete/${encodeURIComponent(filename)}`, {
+    params: { bucket }
   });
   return response.data;
 };
@@ -70,6 +99,17 @@ export const getMapMetadata = async () => {
 export const riversData = async () => {
   const response = await apiClient.get('/gis/rivers_data');
   return response.data;
+};
+
+export const listImageFiles = async () => {
+  const response = await apiClient.get('/list-files/detail', {
+    params: { bucket: 'images' }
+  });
+  return response.data;
+};
+
+export const getImageUrl = (filename) => {
+  return `${apiClient.defaults.baseURL}/files/${encodeURIComponent(filename)}?bucket=images`;
 };
 
 export default apiClient;

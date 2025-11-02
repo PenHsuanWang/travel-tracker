@@ -1,0 +1,18 @@
+.legend {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: rgba(255,255,255,0.8);
+  padding: 8px;
+  border-radius: 4px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.legend-color {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+}

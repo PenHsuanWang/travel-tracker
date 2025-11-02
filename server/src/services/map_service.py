@@ -2,7 +2,11 @@
 
 import folium
 import pickle
+import os
 from shapely.geometry import mapping
+from dotenv import load_dotenv
+
+load_dotenv()
 
 MAP_LAYERS = {
     "openstreetmap": {
@@ -63,10 +67,10 @@ def generate_gis_map(layer: str, center=None, selected_rivers=None):
     from src.utils.dbbutler.minio_adapter import MinIOAdapter
     storage_manager = StorageManager()
     minio_adapter = MinIOAdapter(
-        endpoint="localhost:9000",
-        access_key="your-access-key",
-        secret_key="your-secret-key",
-        secure=False
+        endpoint=os.getenv("MINIO_ENDPOINT", "localhost:9000"),
+        access_key=os.getenv("MINIO_ACCESS_KEY"),
+        secret_key=os.getenv("MINIO_SECRET_KEY"),
+        secure=os.getenv("MINIO_SECURE", "False").lower() == "true"
     )
     storage_manager.add_adapter('minio', minio_adapter)
 

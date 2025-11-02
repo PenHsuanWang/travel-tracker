@@ -1,12 +1,25 @@
 # src/routes/file_retrieval_routes.py
 
-from fastapi import APIRouter, HTTPException, Response
-from typing import List
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, HTTPException, Response  # type: ignore[import-not-found]
+from pydantic import BaseModel  # type: ignore[import-not-found]
+
 from src.services.file_retrieval_service import FileRetrievalService
 
 router = APIRouter()
 
 retrieval_service = FileRetrievalService()
+
+
+class FileListItem(BaseModel):
+    object_key: str
+    metadata_id: str
+    bucket: str
+    has_storage_object: bool
+    has_metadata: bool
+    metadata: Optional[Dict[str, Any]] = None
+    warnings: List[str] = []
 
 @router.get("/list-files", response_model=List[str])
 async def list_files(bucket: str = "gps-data"):
@@ -17,6 +30,15 @@ async def list_files(bucket: str = "gps-data"):
     try:
         keys = retrieval_service.list_files(bucket)
         return keys
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/list-files/detail", response_model=List[FileListItem])
+async def list_files_with_metadata(bucket: str = "images"):
+    """List files alongside any metadata captured during upload."""
+    try:
+        return retrieval_service.list_files_with_metadata(bucket)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

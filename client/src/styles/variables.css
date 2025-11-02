@@ -1,0 +1,11 @@
+:root {
+  --spacing: 8px;
+  --sidebar-width: 280px;
+  --header-height: 60px;
+  --footer-height: 40px;
+
+  --color-bg-sidebar: #1f2327;
+  --color-text-light: #ffffff;
+  --color-accent: #4f90ff;
+  --color-bg-main: #f0f0f0;
+}

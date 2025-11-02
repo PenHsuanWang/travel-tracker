@@ -24,15 +24,25 @@ class StorageManager:
         """
         self.adapters[name] = adapter
 
-    def save_data(self, key: str, value: Any, **kwargs) -> None:
+    def save_data(self, key: str, value: Any, adapter_name: str = None, **kwargs) -> None:
         """
-        Save data to all configured storage adapters.
+        Save data to specific adapter or all adapters.
 
         :param key: The key under which the data is to be saved.
         :param value: The data to be saved.
+        :param adapter_name: If provided, save to specific adapter only.
         """
-        for adapter in self.adapters.values():
-            adapter.save_data(key, value, **kwargs)
+        if adapter_name:
+            # Save to specific adapter
+            adapter = self.adapters.get(adapter_name)
+            if adapter:
+                adapter.save_data(key, value, **kwargs)
+            else:
+                raise ValueError(f"Adapter '{adapter_name}' not registered")
+        else:
+            # Save to all adapters (backward compatibility)
+            for adapter in self.adapters.values():
+                adapter.save_data(key, value, **kwargs)
 
     def load_data(self, name: str, key: str, **kwargs) -> Optional[Any]:
         """
