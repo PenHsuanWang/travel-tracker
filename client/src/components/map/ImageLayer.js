@@ -84,11 +84,11 @@ function ImageLayer({ onImageSelected = null }) {
   }, [map]);
 
   /**
-   * Listen for image upload events
+   * Listen for image upload events with GPS data
    */
   useEffect(() => {
-    const handleImageUploaded = (event) => {
-      console.log('[ImageLayer] Image uploaded event received');
+    const handleImageUploadedWithGPS = (event) => {
+      console.log('[ImageLayer] Image uploaded with GPS event received', event.detail);
       const { gps, object_key, original_filename, thumb_url, metadata_id } = event.detail;
 
       if (!map) return;
@@ -130,8 +130,8 @@ function ImageLayer({ onImageSelected = null }) {
       }
     };
 
-    window.addEventListener('imageUploaded', handleImageUploaded);
-    return () => window.removeEventListener('imageUploaded', handleImageUploaded);
+    window.addEventListener('imageUploadedWithGPS', handleImageUploadedWithGPS);
+    return () => window.removeEventListener('imageUploadedWithGPS', handleImageUploadedWithGPS);
   }, [map, onImageSelected]);
 
   /**
@@ -166,44 +166,66 @@ function ImageLayer({ onImageSelected = null }) {
 }
 
 /**
+ * Extract display name (remove UUID prefix if present)
+ * Handles formats like: UUID_IMG_0651.jpg or uuid_filename.jpg or 12345678901234567890123456789012_file.jpg
+ */
+function getDisplayName(filename) {
+  // Pattern 1: Standard UUID format with dashes: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx_name
+  const uuidDashPattern = filename.match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}_(.+)$/i);
+  if (uuidDashPattern && uuidDashPattern[1]) {
+    return uuidDashPattern[1];
+  }
+  
+  // Pattern 2: 32-character UUID without dashes: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx_name
+  const uuidNoDashPattern = filename.match(/^[a-f0-9]{32}_(.+)$/i);
+  if (uuidNoDashPattern && uuidNoDashPattern[1]) {
+    return uuidNoDashPattern[1];
+  }
+  
+  // Pattern 3: Shorter alphanumeric ID: xxxxxxxx_name (at least 8 chars, then underscore)
+  const alphaPattern = filename.match(/^[a-z0-9]{8,}_(.+)$/i);
+  if (alphaPattern && alphaPattern[1]) {
+    return alphaPattern[1];
+  }
+  
+  // Pattern 4: No UUID/ID, return as-is
+  return filename;
+}
+
+/**
  * Create HTML content for marker popup
  */
 function createPopupContent(image, onImageSelected) {
-  const truncatedName = image.original_filename.length > 30
-    ? image.original_filename.substring(0, 27) + '...'
-    : image.original_filename;
+  const displayName = getDisplayName(image.original_filename);
+  const truncatedName = displayName.length > 30
+    ? displayName.substring(0, 27) + '...'
+    : displayName;
 
   const placeholderImage = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-size="16"%3ENo Image%3C/text%3E%3C/svg%3E';
 
-  const handleViewDetails = () => {
-    if (onImageSelected) {
-      onImageSelected(image);
-    }
-    window.dispatchEvent(
-      new CustomEvent('viewImageDetails', {
-        detail: image,
-      })
-    );
-  };
+  // Store image data in a way that doesn't require JSON.stringify in onclick
+  // Use data attributes instead
+  const imageDataKey = `imageData_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  window[imageDataKey] = image;
 
   return `
     <div class="image-popup">
       <div class="image-popup-thumbnail">
         <img 
           src="${image.thumb_url}" 
-          alt="${image.original_filename}"
+          alt="${displayName}"
           onerror="this.src='${placeholderImage}'"
           style="display: none;"
           onload="this.style.display='block'"
         />
       </div>
-      <div class="image-popup-name" title="${image.original_filename}">
+      <div class="image-popup-name" title="${displayName}">
         ${truncatedName}
       </div>
       <div class="image-popup-coords">
         <small>${image.lat.toFixed(4)}°, ${image.lon.toFixed(4)}°</small>
       </div>
-      <button class="image-popup-button" onclick="window.dispatchEvent(new CustomEvent('viewImageDetails', { detail: ${JSON.stringify(image).replace(/"/g, '&quot;')} }))">
+      <button class="image-popup-button" onclick="(function() { const imageData = window['${imageDataKey}']; window.dispatchEvent(new CustomEvent('viewImageDetails', { detail: imageData })); delete window['${imageDataKey}']; })()">
         View Details
       </button>
     </div>
