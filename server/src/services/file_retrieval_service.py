@@ -206,17 +206,20 @@ class FileRetrievalService:
         :return: URL string (presigned URL or direct URL)
         """
         try:
+            from urllib.parse import quote
+            
             minio_adapter = self.storage_manager.adapters.get('minio')
             if not minio_adapter:
-                return f"/api/files/{object_key}?bucket={bucket_name}"
+                return f"/api/files/{quote(object_key, safe='')}?bucket={bucket_name}"
             
             # Try to generate presigned URL for thumbnail
-            # For MVP, just return the direct image URL
+            # For MVP, just return the direct image URL with proper URL encoding
             # TODO: Implement actual thumbnail generation or use presigned URLs
-            return f"/api/files/{object_key}?bucket={bucket_name}"
+            return f"/api/files/{quote(object_key, safe='')}?bucket={bucket_name}"
         except Exception as exc:
             self.logger.warning("Failed to generate thumbnail URL: %s", exc)
-            return f"/api/files/{object_key}?bucket={bucket_name}"
+            from urllib.parse import quote
+            return f"/api/files/{quote(object_key, safe='')}?bucket={bucket_name}"
 
     def get_file_bytes(self, bucket_name: str, filename: str) -> Optional[bytes]:
         """

@@ -86,12 +86,19 @@ async def get_geotagged_images(
 async def get_file(filename: str, bucket: str = "gps-data"):
     """
     Retrieve a file from MinIO by filename.
-    Returns raw bytes as an 'application/octet-stream'.
-    Adjust media_type if you know the file type (e.g., image/png, text/plain, etc.).
+    Returns raw bytes with appropriate media type based on file extension.
     """
     file_bytes = retrieval_service.get_file_bytes(bucket, filename)
     if file_bytes is None:
         raise HTTPException(status_code=404, detail="File not found in MinIO")
 
-    # Return raw bytes as a generic binary stream.
-    return Response(content=file_bytes, media_type="application/octet-stream")
+    # Detect media type from filename extension
+    import mimetypes
+    media_type, _ = mimetypes.guess_type(filename)
+    
+    # Default to octet-stream if type cannot be determined
+    if not media_type:
+        media_type = "application/octet-stream"
+    
+    # Return raw bytes with proper media type
+    return Response(content=file_bytes, media_type=media_type)

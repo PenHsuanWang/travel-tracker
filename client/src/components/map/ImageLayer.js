@@ -42,9 +42,10 @@ function ImageLayer({ onImageSelected = null }) {
           const lat = Number(image.lat);
           const lon = Number(image.lon);
 
-          // Create marker
+          // Create marker with display name (no UUID)
+          const displayName = getDisplayName(image.original_filename);
           const marker = L.marker([lat, lon], {
-            title: image.original_filename,
+            title: displayName,
           });
 
           // Create popup content with thumbnail
@@ -102,8 +103,10 @@ function ImageLayer({ onImageSelected = null }) {
       const lon = Number(gps.longitude);
 
       try {
+        // Create marker with display name (no UUID)
+        const displayName = getDisplayName(original_filename);
         const marker = L.marker([lat, lon], {
-          title: original_filename,
+          title: displayName,
         });
 
         const image = {
@@ -203,29 +206,45 @@ function createPopupContent(image, onImageSelected) {
 
   const placeholderImage = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-size="16"%3ENo Image%3C/text%3E%3C/svg%3E';
 
-  // Store image data in a way that doesn't require JSON.stringify in onclick
-  // Use data attributes instead
-  const imageDataKey = `imageData_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  window[imageDataKey] = image;
+  // Get API base URL from environment or use default
+  const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002/api';
+  
+  // Build full thumbnail URL
+  let thumbUrl = image.thumb_url;
+  if (thumbUrl && !thumbUrl.startsWith('http')) {
+    // Relative URL - prepend base URL
+    thumbUrl = apiBaseUrl + thumbUrl;
+  }
+
+  // Create a unique ID for this popup's data
+  const popupId = `popup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Store image data globally for the onclick handler
+  window[popupId] = {
+    object_key: image.object_key,
+    original_filename: image.original_filename,
+    lat: image.lat,
+    lon: image.lon
+  };
 
   return `
     <div class="image-popup">
       <div class="image-popup-thumbnail">
         <img 
-          src="${image.thumb_url}" 
-          alt="${displayName}"
+          src="${thumbUrl || placeholderImage}" 
+          alt="${displayName.replace(/"/g, '&quot;')}"
           onerror="this.src='${placeholderImage}'"
           style="display: none;"
           onload="this.style.display='block'"
         />
       </div>
-      <div class="image-popup-name" title="${displayName}">
+      <div class="image-popup-name" title="${displayName.replace(/"/g, '&quot;')}">
         ${truncatedName}
       </div>
       <div class="image-popup-coords">
         <small>${image.lat.toFixed(4)}°, ${image.lon.toFixed(4)}°</small>
       </div>
-      <button class="image-popup-button" onclick="(function() { const imageData = window['${imageDataKey}']; window.dispatchEvent(new CustomEvent('viewImageDetails', { detail: imageData })); delete window['${imageDataKey}']; })()">
+      <button class="image-popup-button" onclick="(function() { var data = window['${popupId}']; if (data) { window.dispatchEvent(new CustomEvent('viewImageDetails', { detail: data })); delete window['${popupId}']; } })()">
         View Details
       </button>
     </div>
