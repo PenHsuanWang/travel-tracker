@@ -51,6 +51,9 @@ def exif_to_dict(raw_exif: Any) -> Dict[str, Any]:
     keyed by numeric tag ids) and returns a dict keyed by human-readable tag
     names. All values are converted to JSON-serializable types.
     If raw_exif is falsy, returns an empty dict.
+    
+    Special handling for GPSInfo: if raw_exif is an Exif object with get_ifd(),
+    we dereference the GPS IFD to get the actual GPS data instead of the offset pointer.
     """
     if not raw_exif:
         return {}
@@ -65,6 +68,22 @@ def exif_to_dict(raw_exif: Any) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
     for tag_id, val in items:
         name = ExifTags.TAGS.get(tag_id, str(tag_id))
+        
+        # Special handling for GPSInfo: dereference the GPS IFD if possible
+        if name == "GPSInfo" and hasattr(raw_exif, "get_ifd"):
+            try:
+                gps_ifd = raw_exif.get_ifd(ExifTags.IFD.GPSInfo)
+                if gps_ifd:
+                    # Build a proper dict with GPS tag names
+                    result["GPSInfo"] = {
+                        ExifTags.GPSTAGS.get(k, str(k)): _serialize_exif_value(v)
+                        for k, v in dict(gps_ifd).items()
+                    }
+                    continue
+            except Exception:
+                # If GPS IFD dereference fails, fall through to generic serializer
+                pass
+        
         # Serialize the value to JSON-compatible type
         result[name] = _serialize_exif_value(val)
 
@@ -129,6 +148,8 @@ def _normalize_gps_if_needed(gps_raw: Any) -> Optional[Dict[str, Any]]:
     gps_raw may be a mapping with numeric keys (typical raw exif) or already
     a dict keyed by names. Returns a dict keyed by GPS tag names (e.g.
     'GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef').
+    
+    Handles both numeric keys and stringified numeric keys (e.g., "2", "4").
     """
     if not gps_raw:
         return None
@@ -138,7 +159,13 @@ def _normalize_gps_if_needed(gps_raw: Any) -> Optional[Dict[str, Any]]:
     # If mapping-like with items(), iterate and map numeric keys to names
     try:
         for key, val in getattr(gps_raw, "items", lambda: [])():
-            name = ExifTags.GPSTAGS.get(key, str(key))
+            # Handle stringified numeric keys (convert "2" -> 2 for lookup)
+            if isinstance(key, str) and key.isdigit():
+                k_for_map = int(key)
+            else:
+                k_for_map = key
+            
+            name = ExifTags.GPSTAGS.get(k_for_map, str(key))
             gps[name] = val
     except Exception:
         # If the above failed, try a simple dict copy
@@ -199,6 +226,9 @@ def extract_exif_from_stream(stream: IO) -> Dict[str, Any]:
 
     The stream must be seekable (e.g. SpooledTemporaryFile or BytesIO).
     If Pillow cannot parse EXIF, returns an empty dict.
+    
+    Special handling: If the EXIF contains GPS data, we dereference the GPS IFD
+    to ensure we get the actual GPS data dictionary instead of an offset pointer.
     """
     try:
         stream.seek(0)
@@ -217,6 +247,23 @@ def extract_exif_from_stream(stream: IO) -> Dict[str, Any]:
             raw_exif = getattr(img, "_getexif", None) and img._getexif()
 
         exif = exif_to_dict(raw_exif)
+        
+        # Additional GPS IFD dereference: if we have an Exif object and GPSInfo
+        # wasn't properly dereferenced in exif_to_dict, try again here
+        if hasattr(raw_exif, "get_ifd"):
+            try:
+                # Check if GPSInfo is still a pointer (int) instead of a dict
+                if "GPSInfo" in exif and isinstance(exif["GPSInfo"], (int, str)):
+                    gps_ifd = raw_exif.get_ifd(ExifTags.IFD.GPSInfo)
+                    if gps_ifd:
+                        exif["GPSInfo"] = {
+                            ExifTags.GPSTAGS.get(k, str(k)): _serialize_exif_value(v)
+                            for k, v in dict(gps_ifd).items()
+                        }
+            except Exception:
+                # Best-effort: keep exif even if GPS deref fails
+                pass
+        
         return exif
     except Exception:
         return {}

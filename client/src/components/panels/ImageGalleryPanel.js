@@ -68,7 +68,15 @@ function ImageGalleryPanel() {
   };
 
   const loadMetadataForImage = async (filename) => {
-    if (imageMetadata[filename]) return; // Already loaded
+    const cached = imageMetadata[filename];
+    
+    // Only skip refetch if GPS is already present and valid
+    const hasValidGps =
+      cached?.gps &&
+      Number.isFinite(Number(cached.gps.latitude)) &&
+      Number.isFinite(Number(cached.gps.longitude));
+    
+    if (hasValidGps) return; // Only skip when GPS is good
     
     try {
       const metadata = await getFileMetadata(filename);
@@ -134,7 +142,10 @@ function ImageGalleryPanel() {
     const metadata = imageMetadata[filename];
     if (!metadata) return null;
 
-    const hasLocation = metadata.gps?.latitude && metadata.gps?.longitude;
+    const hasLocation =
+      metadata?.gps &&
+      Number.isFinite(Number(metadata.gps.latitude)) &&
+      Number.isFinite(Number(metadata.gps.longitude));
     
     return (
       <div 
@@ -157,10 +168,10 @@ function ImageGalleryPanel() {
           {hasLocation && (
             <div className="tooltip-section">
               <strong>📍 Location</strong>
-              <div>Latitude: {metadata.gps.latitude.toFixed(6)}°</div>
-              <div>Longitude: {metadata.gps.longitude.toFixed(6)}°</div>
+              <div>Latitude: {Number(metadata.gps.latitude).toFixed(6)}°</div>
+              <div>Longitude: {Number(metadata.gps.longitude).toFixed(6)}°</div>
               {metadata.gps.altitude && (
-                <div>Altitude: {metadata.gps.altitude.toFixed(1)}m</div>
+                <div>Altitude: {Number(metadata.gps.altitude).toFixed(1)}m</div>
               )}
             </div>
           )}
@@ -188,7 +199,10 @@ function ImageGalleryPanel() {
     const metadata = imageMetadata[filename];
     if (!metadata) return <div className="image-info">{filename}</div>;
 
-    const hasLocation = metadata.gps?.latitude && metadata.gps?.longitude;
+    const hasLocation =
+      metadata?.gps &&
+      Number.isFinite(Number(metadata.gps.latitude)) &&
+      Number.isFinite(Number(metadata.gps.longitude));
     
     return (
       <div className="image-info-detailed">
@@ -205,9 +219,9 @@ function ImageGalleryPanel() {
           {hasLocation && (
             <div className="metadata-section">
               <h4>GPS Location</h4>
-              <p>Latitude: {metadata.gps.latitude.toFixed(6)}°</p>
-              <p>Longitude: {metadata.gps.longitude.toFixed(6)}°</p>
-              {metadata.gps.altitude && <p>Altitude: {metadata.gps.altitude.toFixed(1)}m</p>}
+              <p>Latitude: {Number(metadata.gps.latitude).toFixed(6)}°</p>
+              <p>Longitude: {Number(metadata.gps.longitude).toFixed(6)}°</p>
+              {metadata.gps.altitude && <p>Altitude: {Number(metadata.gps.altitude).toFixed(1)}m</p>}
               <button 
                 className="view-on-map-btn"
                 onClick={() => {
