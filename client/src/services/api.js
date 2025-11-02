@@ -9,12 +9,29 @@ const apiClient = axios.create({
 });
 
 export const uploadFile = async (file) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  const response = await apiClient.post('/map/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return response.data;
+  try {
+    console.log('[API] Uploading file:', file.name, file.type, file.size);
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    console.log('[API] Sending POST to:', `${apiClient.defaults.baseURL}/map/upload`);
+    const response = await apiClient.post('/map/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    
+    console.log('[API] Upload successful, response:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[API] Upload failed:', error);
+    if (error.response) {
+      console.error('[API] Server responded with error:', error.response.status, error.response.data);
+    } else if (error.request) {
+      console.error('[API] No response received:', error.request);
+    } else {
+      console.error('[API] Error setting up request:', error.message);
+    }
+    throw error;
+  }
 };
 
 export const getFileMetadata = async (metadataId) => {

@@ -2,12 +2,55 @@ from typing import Any, Dict, Optional, Tuple, IO
 from PIL import Image, ExifTags
 
 
+def _serialize_exif_value(val: Any) -> Any:
+    """Convert EXIF value to JSON-serializable type.
+    
+    Handles IFDRational, bytes, tuples, and nested structures.
+    """
+    # Handle IFDRational objects (PIL.TiffImagePlugin.IFDRational)
+    if hasattr(val, "numerator") and hasattr(val, "denominator"):
+        try:
+            return float(val.numerator) / float(val.denominator) if val.denominator != 0 else float(val.numerator)
+        except Exception:
+            return None
+    
+    # Handle bytes
+    if isinstance(val, (bytes, bytearray)):
+        try:
+            return val.decode('utf-8', errors='ignore')
+        except Exception:
+            return str(val)
+    
+    # Handle tuples (convert to list for JSON)
+    if isinstance(val, tuple):
+        return [_serialize_exif_value(item) for item in val]
+    
+    # Handle lists
+    if isinstance(val, list):
+        return [_serialize_exif_value(item) for item in val]
+    
+    # Handle dicts (nested EXIF data like GPSInfo)
+    if isinstance(val, dict):
+        return {str(k): _serialize_exif_value(v) for k, v in val.items()}
+    
+    # Handle primitive types
+    if isinstance(val, (int, float, str, bool, type(None))):
+        return val
+    
+    # Fallback: convert to string
+    try:
+        return str(val)
+    except Exception:
+        return None
+
+
 def exif_to_dict(raw_exif: Any) -> Dict[str, Any]:
     """Normalize raw EXIF (tag id -> value) into a name->value dict.
 
     Accepts Pillow's raw exif mapping (which may be an Exif object or dict
     keyed by numeric tag ids) and returns a dict keyed by human-readable tag
-    names. If raw_exif is falsy, returns an empty dict.
+    names. All values are converted to JSON-serializable types.
+    If raw_exif is falsy, returns an empty dict.
     """
     if not raw_exif:
         return {}
@@ -22,8 +65,8 @@ def exif_to_dict(raw_exif: Any) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
     for tag_id, val in items:
         name = ExifTags.TAGS.get(tag_id, str(tag_id))
-        # For GPSInfo, keep the nested mapping as-is (we'll normalize later)
-        result[name] = val
+        # Serialize the value to JSON-compatible type
+        result[name] = _serialize_exif_value(val)
 
     return result
 

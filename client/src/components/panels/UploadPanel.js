@@ -43,9 +43,12 @@ function UploadPanel() {
   const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    
+    console.log('[UploadPanel] Starting image upload:', file.name, file.type, file.size);
+    
     try {
       const result = await uploadFile(file);
-      console.log('Image file uploaded:', result);
+      console.log('[UploadPanel] Image file uploaded successfully:', result);
       
       // Show more detailed success message
       let message = `Image uploaded successfully: ${result.filename}`;
@@ -60,8 +63,21 @@ function UploadPanel() {
       // Trigger a custom event to notify ImageGalleryPanel
       window.dispatchEvent(new CustomEvent('imageUploaded'));
     } catch (error) {
-      console.error('Error uploading image:', error);
-      alert('Failed to upload image. Please try again.');
+      console.error('[UploadPanel] Error uploading image - Full error:', error);
+      console.error('[UploadPanel] Error response:', error.response);
+      console.error('[UploadPanel] Error message:', error.message);
+      
+      // Show more detailed error message
+      let errorMessage = 'Failed to upload image. ';
+      if (error.response) {
+        errorMessage += `Server error: ${error.response.status} - ${JSON.stringify(error.response.data)}`;
+      } else if (error.request) {
+        errorMessage += 'No response from server. Please check if the backend is running.';
+      } else {
+        errorMessage += `Error: ${error.message}`;
+      }
+      
+      alert(errorMessage);
     }
   };
 
