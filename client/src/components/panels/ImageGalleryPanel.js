@@ -17,11 +17,22 @@ function ImageGalleryPanel() {
     setLoading(true);
     try {
       const files = await listImageFiles();
-      console.log('[ImageGalleryPanel] Loaded images:', files);
-      setImageFiles(files || []);
+      const normalizedFiles = Array.isArray(files) ? files : [];
+      console.log('[ImageGalleryPanel] Loaded images:', normalizedFiles);
+
+      const preloadedMetadata = normalizedFiles.reduce((acc, item) => {
+        if (item?.object_key && item.metadata) {
+          acc[item.object_key] = item.metadata;
+        }
+        return acc;
+      }, {});
+
+      setImageFiles(normalizedFiles);
+      setImageMetadata(preloadedMetadata);
     } catch (error) {
       console.error('[ImageGalleryPanel] Error loading images:', error);
       setImageFiles([]);
+      setImageMetadata({});
     } finally {
       setLoading(false);
     }
@@ -60,7 +71,6 @@ function ImageGalleryPanel() {
     if (imageMetadata[filename]) return; // Already loaded
     
     try {
-      // Extract metadata_id from filename (it's the UUID prefix)
       const metadata = await getFileMetadata(filename);
       setImageMetadata(prev => ({
         ...prev,
@@ -95,9 +105,9 @@ function ImageGalleryPanel() {
     setDeleting(filename);
     try {
       await deleteImage(filename, 'images');
-      
+
       // Remove from state
-      setImageFiles(prev => prev.filter(f => f !== filename));
+      setImageFiles(prev => prev.filter(item => item.object_key !== filename));
       
       // Remove metadata from cache
       setImageMetadata(prev => {
@@ -271,34 +281,39 @@ function ImageGalleryPanel() {
             <p>No images uploaded yet.</p>
           ) : (
             <div className="image-grid">
-              {imageFiles.map((filename, idx) => (
-                <div 
-                  key={idx} 
-                  className="image-thumbnail"
-                  onClick={() => handleImageClick(filename)}
-                  onMouseEnter={(e) => handleImageHover(filename, e)}
-                  onMouseLeave={handleImageLeave}
-                  onMouseMove={(e) => setTooltipPosition({ x: e.clientX, y: e.clientY })}
-                >
-                  <img 
-                    src={getImageUrl(filename)} 
-                    alt={filename}
-                    title={filename}
-                  />
-                  <div className="image-name">{filename}</div>
-                  {imageMetadata[filename]?.gps && (
-                    <div className="gps-indicator" title="Has GPS location">📍</div>
-                  )}
-                  <button
-                    className="delete-button"
-                    onClick={(e) => handleDeleteImage(filename, e)}
-                    disabled={deleting === filename}
-                    title="Delete image"
+              {imageFiles.map((item, idx) => {
+                const filename = item?.object_key || `image-${idx}`;
+                return (
+                  <div 
+                    key={filename}
+                    className="image-thumbnail"
+                    onClick={() => handleImageClick(filename)}
+                    onMouseEnter={(e) => handleImageHover(filename, e)}
+                    onMouseLeave={handleImageLeave}
+                    onMouseMove={(e) => setTooltipPosition({ x: e.clientX, y: e.clientY })}
                   >
-                    {deleting === filename ? '⏳' : '🗑️'}
-                  </button>
-                </div>
-              ))}
+                    <img 
+                      src={getImageUrl(filename)} 
+                      alt={filename}
+                      title={filename}
+                    />
+                    <div className="image-name">
+                      {imageMetadata[filename]?.original_filename || filename}
+                    </div>
+                    {imageMetadata[filename]?.gps && (
+                      <div className="gps-indicator" title="Has GPS location">📍</div>
+                    )}
+                    <button
+                      className="delete-button"
+                      onClick={(e) => handleDeleteImage(filename, e)}
+                      disabled={deleting === filename}
+                      title="Delete image"
+                    >
+                      {deleting === filename ? '⏳' : '🗑️'}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

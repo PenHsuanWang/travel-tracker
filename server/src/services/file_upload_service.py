@@ -1,6 +1,6 @@
 # src/services/file_upload_service.py
 
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile  # type: ignore[import-not-found]
 from src.services.data_io_handlers.handler_factory import HandlerFactory
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
@@ -134,6 +134,7 @@ class FileUploadService:
         service = cls()
         deleted_items = []
         errors = []
+        metadata_snapshot: Optional[Dict[str, Any]] = None
         
         # Delete from MinIO
         try:
@@ -150,17 +151,37 @@ class FileUploadService:
         except Exception as e:
             errors.append(f"MinIO deletion error: {str(e)}")
         
-        # Delete metadata from MongoDB
+        # Capture metadata before deletion and remove stored document
         try:
             mongodb_adapter = service.storage_manager.adapters.get('mongodb')
             if mongodb_adapter:
-                if mongodb_adapter.exists(filename, collection_name='file_metadata'):
-                    success = mongodb_adapter.delete_data(filename, collection_name='file_metadata')
-                    if success:
-                        deleted_items.append(f"MongoDB: file_metadata/{filename}")
-                else:
-                    # Metadata might not exist for legacy uploads
-                    pass
+                try:
+                    snapshot_raw = mongodb_adapter.load_data(
+                        filename,
+                        collection_name='file_metadata'
+                    )
+                except Exception as exc:
+                    snapshot_raw = None
+                    errors.append(f"MongoDB metadata read error: {str(exc)}")
+
+                if snapshot_raw:
+                    try:
+                        parsed_metadata = FileMetadata(**snapshot_raw)
+                        metadata_snapshot = parsed_metadata.model_dump()
+                        metadata_snapshot['created_at'] = parsed_metadata.created_at.isoformat()
+                    except Exception as exc:
+                        metadata_snapshot = snapshot_raw
+                        created_at = metadata_snapshot.get('created_at')
+                        if isinstance(created_at, datetime):
+                            metadata_snapshot['created_at'] = created_at.isoformat()
+                        errors.append(f"Metadata parsing warning: {str(exc)}")
+
+                delete_success = mongodb_adapter.delete_data(
+                    filename,
+                    collection_name='file_metadata'
+                )
+                if delete_success:
+                    deleted_items.append(f"MongoDB: file_metadata/{filename}")
         except Exception as e:
             # MongoDB is optional, log error but don't fail
             errors.append(f"MongoDB deletion error: {str(e)}")
@@ -171,13 +192,13 @@ class FileUploadService:
                 "message": "File deleted successfully",
                 "filename": filename,
                 "bucket": bucket,
-                "deleted": deleted_items
+                "deleted": deleted_items,
+                "metadata": metadata_snapshot
             }
             if errors:
                 result["warnings"] = errors
             return result
         else:
-            from fastapi import HTTPException
             raise HTTPException(
                 status_code=404,
                 detail={
