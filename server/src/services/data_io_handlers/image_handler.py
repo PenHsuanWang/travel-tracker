@@ -1,14 +1,18 @@
 # src/services/handlers/image_handler.py
 
+import uuid
+import tempfile
 from fastapi import UploadFile
 from src.services.data_io_handlers.base_handler import BaseHandler
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
+from src.utils.exif_utils import extract_exif_from_stream, get_lat_lon_from_exif
+from src.models.file_metadata import HandlerResult, GPSData
 
 
 class ImageHandler(BaseHandler):
     """
-    Handler for image file uploads.
+    Handler for image file uploads with EXIF extraction.
     """
 
     def __init__(self):
@@ -18,18 +22,121 @@ class ImageHandler(BaseHandler):
         minio_adapter = AdapterFactory.create_minio_adapter()
         self.storage_manager.add_adapter('minio', minio_adapter)
 
-    def handle(self, file: UploadFile) -> str:
+    def handle(self, file: UploadFile) -> HandlerResult:
         """
-        Handle the uploaded image file.
+        Handle the uploaded image file and extract EXIF metadata.
 
         :param file: The uploaded image file.
-        :return: The file path where the image file is stored.
+        :return: HandlerResult containing file info and EXIF data.
         """
-        file_data = file.file.read()
-        file_name = file.filename
         bucket_name = 'images'
-
-        # Save raw file data to MinIO
-        self.storage_manager.save_data(file_name, file_data, adapter_name='minio', bucket=bucket_name)
-
-        return f'{bucket_name}/{file_name}'
+        original_filename = file.filename
+        file_extension = original_filename.split('.')[-1].lower()
+        
+        # Generate unique object key
+        unique_id = str(uuid.uuid4())
+        object_key = f"{unique_id}_{original_filename}"
+        
+        # Use SpooledTemporaryFile for memory-efficient handling
+        with tempfile.SpooledTemporaryFile(max_size=10*1024*1024) as temp_file:
+            # Copy upload stream to temp file
+            file.file.seek(0)
+            temp_file.write(file.file.read())
+            temp_file.seek(0)
+            
+            # Extract EXIF data
+            exif_data = extract_exif_from_stream(temp_file)
+            lat, lon = get_lat_lon_from_exif(exif_data)
+            
+            # Extract additional metadata
+            gps_data = None
+            if lat is not None and lon is not None:
+                gps_data = GPSData(
+                    latitude=lat,
+                    longitude=lon,
+                    altitude=self._extract_altitude(exif_data),
+                    latitude_ref=self._get_gps_ref(exif_data, 'GPSLatitudeRef'),
+                    longitude_ref=self._get_gps_ref(exif_data, 'GPSLongitudeRef')
+                )
+            
+            date_taken = self._extract_date_taken(exif_data)
+            camera_make = exif_data.get('Make')
+            camera_model = exif_data.get('Model')
+            
+            # Get file size
+            temp_file.seek(0, 2)  # Seek to end
+            file_size = temp_file.tell()
+            temp_file.seek(0)
+            
+            # Read file data for storage
+            file_data = temp_file.read()
+            
+        # Save to MinIO
+        self.storage_manager.save_data(
+            object_key, 
+            file_data, 
+            adapter_name='minio', 
+            bucket=bucket_name
+        )
+        
+        # Return HandlerResult
+        return HandlerResult(
+            object_key=object_key,
+            bucket=bucket_name,
+            filename=object_key,
+            original_filename=original_filename,
+            size=file_size,
+            mime_type=file.content_type or 'image/jpeg',
+            file_extension=file_extension,
+            exif=exif_data if exif_data else None,
+            gps=gps_data,
+            date_taken=date_taken,
+            camera_make=camera_make,
+            camera_model=camera_model,
+            status='success'
+        )
+    
+    def _extract_altitude(self, exif_data: dict) -> float:
+        """Extract altitude from EXIF GPS data"""
+        try:
+            gps_info = exif_data.get('GPSInfo')
+            if gps_info:
+                # Try different ways GPS info might be stored
+                if hasattr(gps_info, 'get'):
+                    altitude = gps_info.get('GPSAltitude') or gps_info.get(6)
+                    if altitude:
+                        # Handle rational tuple
+                        if isinstance(altitude, (tuple, list)) and len(altitude) >= 2:
+                            return float(altitude[0]) / float(altitude[1])
+                        return float(altitude)
+        except Exception:
+            pass
+        return None
+    
+    def _get_gps_ref(self, exif_data: dict, ref_key: str) -> str:
+        """Extract GPS reference (N/S/E/W) from EXIF"""
+        try:
+            gps_info = exif_data.get('GPSInfo')
+            if gps_info and hasattr(gps_info, 'get'):
+                ref = gps_info.get(ref_key)
+                if ref:
+                    if isinstance(ref, bytes):
+                        return ref.decode('utf-8', errors='ignore')
+                    return str(ref)
+        except Exception:
+            pass
+        return None
+    
+    def _extract_date_taken(self, exif_data: dict) -> str:
+        """Extract date/time the photo was taken"""
+        try:
+            # Try different date fields
+            for key in ['DateTimeOriginal', 'DateTime', 'DateTimeDigitized']:
+                date_str = exif_data.get(key)
+                if date_str:
+                    if isinstance(date_str, bytes):
+                        return date_str.decode('utf-8', errors='ignore')
+                    return str(date_str)
+        except Exception:
+            pass
+        return None

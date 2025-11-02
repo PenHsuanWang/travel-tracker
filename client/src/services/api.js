@@ -17,6 +17,18 @@ export const uploadFile = async (file) => {
   return response.data;
 };
 
+export const getFileMetadata = async (metadataId) => {
+  const response = await apiClient.get(`/map/metadata/${metadataId}`);
+  return response.data;
+};
+
+export const deleteImage = async (filename, bucket = 'images') => {
+  const response = await apiClient.delete(`/map/delete/${encodeURIComponent(filename)}`, {
+    params: { bucket }
+  });
+  return response.data;
+};
+
 export const getMapLayers = async () => {
   const response = await apiClient.get('/map/layers');
   return response.data;

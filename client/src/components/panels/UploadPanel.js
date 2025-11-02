@@ -46,7 +46,17 @@ function UploadPanel() {
     try {
       const result = await uploadFile(file);
       console.log('Image file uploaded:', result);
-      alert(`Image uploaded successfully: ${result.filename}`);
+      
+      // Show more detailed success message
+      let message = `Image uploaded successfully: ${result.filename}`;
+      if (result.has_gps) {
+        message += `\n📍 GPS Location: ${result.gps.latitude.toFixed(4)}°, ${result.gps.longitude.toFixed(4)}°`;
+      }
+      if (result.date_taken) {
+        message += `\n📅 Date Taken: ${result.date_taken}`;
+      }
+      alert(message);
+      
       // Trigger a custom event to notify ImageGalleryPanel
       window.dispatchEvent(new CustomEvent('imageUploaded'));
     } catch (error) {

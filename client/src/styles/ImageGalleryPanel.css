@@ -83,6 +83,102 @@
   text-overflow: ellipsis;
 }
 
+.ImageGalleryPanel .gps-indicator {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: rgba(76, 175, 80, 0.9);
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  pointer-events: none;
+}
+
+.ImageGalleryPanel .delete-button {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  background: rgba(244, 67, 54, 0.9);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s, transform 0.1s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  z-index: 10;
+}
+
+.ImageGalleryPanel .image-thumbnail:hover .delete-button {
+  opacity: 1;
+}
+
+.ImageGalleryPanel .delete-button:hover {
+  background: rgba(211, 47, 47, 1);
+  transform: scale(1.1);
+}
+
+.ImageGalleryPanel .delete-button:active {
+  transform: scale(0.95);
+}
+
+.ImageGalleryPanel .delete-button:disabled {
+  background: rgba(158, 158, 158, 0.9);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Tooltip */
+.ImageGalleryPanel .image-tooltip {
+  background: rgba(0, 0, 0, 0.95);
+  color: white;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  max-width: 300px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  pointer-events: none;
+}
+
+.ImageGalleryPanel .tooltip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ImageGalleryPanel .tooltip-section {
+  border-top: 1px solid rgba(255,255,255,0.2);
+  padding-top: 8px;
+}
+
+.ImageGalleryPanel .tooltip-section:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.ImageGalleryPanel .tooltip-section strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #4CAF50;
+}
+
+.ImageGalleryPanel .tooltip-section div {
+  margin: 2px 0;
+  font-size: 12px;
+}
+
 /* Image Modal */
 .ImageGalleryPanel .image-modal {
   position: fixed;
@@ -100,22 +196,42 @@
 
 .ImageGalleryPanel .modal-content {
   position: relative;
-  max-width: 90%;
-  max-height: 90%;
+  max-width: 95%;
+  max-height: 95%;
   background: white;
-  padding: 20px;
   border-radius: 8px;
   cursor: default;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  overflow: hidden;
 }
 
-.ImageGalleryPanel .modal-content img {
+.ImageGalleryPanel .modal-layout {
+  display: flex;
+  width: 100%;
+  max-height: 90vh;
+}
+
+.ImageGalleryPanel .modal-image {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: #000;
+}
+
+.ImageGalleryPanel .modal-image img {
   max-width: 100%;
-  max-height: 70vh;
+  max-height: 85vh;
   object-fit: contain;
-  border-radius: 4px;
+}
+
+.ImageGalleryPanel .modal-sidebar {
+  width: 400px;
+  background: white;
+  padding: 20px;
+  overflow-y: auto;
+  border-left: 1px solid #ddd;
 }
 
 .ImageGalleryPanel .close-button {
@@ -141,6 +257,42 @@
   background: #cc0000;
 }
 
+.ImageGalleryPanel .modal-delete-button {
+  position: absolute;
+  top: 10px;
+  right: 60px;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.3s, transform 0.1s;
+  z-index: 1;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.ImageGalleryPanel .modal-delete-button:hover {
+  background: #d32f2f;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+}
+
+.ImageGalleryPanel .modal-delete-button:active {
+  transform: translateY(0);
+}
+
+.ImageGalleryPanel .modal-delete-button:disabled {
+  background: #9e9e9e;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .ImageGalleryPanel .image-info {
   margin-top: 15px;
   padding: 10px;
@@ -151,21 +303,120 @@
   word-break: break-all;
 }
 
+.ImageGalleryPanel .image-info-detailed h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  color: #333;
+  word-break: break-word;
+}
+
+.ImageGalleryPanel .metadata-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ImageGalleryPanel .metadata-section {
+  background: #f9f9f9;
+  padding: 15px;
+  border-radius: 6px;
+  border-left: 3px solid #4CAF50;
+}
+
+.ImageGalleryPanel .metadata-section.full-width {
+  grid-column: 1 / -1;
+}
+
+.ImageGalleryPanel .metadata-section h4 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #4CAF50;
+  font-weight: 600;
+}
+
+.ImageGalleryPanel .metadata-section p {
+  margin: 5px 0;
+  font-size: 13px;
+  color: #555;
+}
+
+.ImageGalleryPanel .view-on-map-btn {
+  margin-top: 10px;
+  padding: 8px 16px;
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  width: 100%;
+  transition: background 0.3s;
+}
+
+.ImageGalleryPanel .view-on-map-btn:hover {
+  background: #45a049;
+}
+
+.ImageGalleryPanel .exif-details {
+  margin-top: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 11px;
+}
+
+.ImageGalleryPanel .exif-row {
+  display: flex;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.ImageGalleryPanel .exif-key {
+  font-weight: 600;
+  color: #666;
+  min-width: 120px;
+}
+
+.ImageGalleryPanel .exif-value {
+  color: #333;
+  word-break: break-word;
+}
+
+.ImageGalleryPanel details summary {
+  cursor: pointer;
+  color: #4CAF50;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 5px 0;
+}
+
+.ImageGalleryPanel details summary:hover {
+  color: #45a049;
+}
+
 /* Scrollbar styling for images container */
-.ImageGalleryPanel .images-container::-webkit-scrollbar {
+.ImageGalleryPanel .images-container::-webkit-scrollbar,
+.ImageGalleryPanel .modal-sidebar::-webkit-scrollbar,
+.ImageGalleryPanel .exif-details::-webkit-scrollbar {
   width: 8px;
 }
 
-.ImageGalleryPanel .images-container::-webkit-scrollbar-track {
+.ImageGalleryPanel .images-container::-webkit-scrollbar-track,
+.ImageGalleryPanel .modal-sidebar::-webkit-scrollbar-track,
+.ImageGalleryPanel .exif-details::-webkit-scrollbar-track {
   background: #f1f1f1;
   border-radius: 4px;
 }
 
-.ImageGalleryPanel .images-container::-webkit-scrollbar-thumb {
+.ImageGalleryPanel .images-container::-webkit-scrollbar-thumb,
+.ImageGalleryPanel .modal-sidebar::-webkit-scrollbar-thumb,
+.ImageGalleryPanel .exif-details::-webkit-scrollbar-thumb {
   background: #888;
   border-radius: 4px;
 }
 
-.ImageGalleryPanel .images-container::-webkit-scrollbar-thumb:hover {
+.ImageGalleryPanel .images-container::-webkit-scrollbar-thumb:hover,
+.ImageGalleryPanel .modal-sidebar::-webkit-scrollbar-thumb:hover,
+.ImageGalleryPanel .exif-details::-webkit-scrollbar-thumb:hover {
   background: #555;
 }

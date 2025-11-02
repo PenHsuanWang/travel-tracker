@@ -2,6 +2,7 @@
 
 import os
 from src.utils.dbbutler.minio_adapter import MinIOAdapter
+from src.utils.dbbutler.mongodb_adapter import MongoDBAdapter
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -36,4 +37,21 @@ class AdapterFactory:
             access_key=access_key,
             secret_key=secret_key,
             secure=secure
+        )
+    
+    @staticmethod
+    def create_mongodb_adapter() -> MongoDBAdapter:
+        """
+        Create and configure a MongoDB adapter using environment variables.
+
+        :return: Configured MongoDBAdapter instance.
+        """
+        host = os.getenv("MONGODB_HOST", "localhost")
+        port = int(os.getenv("MONGODB_PORT", "27017"))
+        db_name = os.getenv("MONGODB_DATABASE", "travel_tracker")
+
+        return MongoDBAdapter(
+            host=host,
+            port=port,
+            db_name=db_name
         )
