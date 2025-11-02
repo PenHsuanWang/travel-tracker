@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Response  # type: ignore[import-not-found]
+from fastapi import APIRouter, HTTPException, Response, Query  # type: ignore[import-not-found]
 from pydantic import BaseModel  # type: ignore[import-not-found]
 
 from src.services.file_retrieval_service import FileRetrievalService
@@ -20,6 +20,14 @@ class FileListItem(BaseModel):
     has_metadata: bool
     metadata: Optional[Dict[str, Any]] = None
     warnings: List[str] = []
+
+class GeotaggedImage(BaseModel):
+    object_key: str
+    original_filename: str
+    lat: float
+    lon: float
+    thumb_url: str
+    metadata_id: Optional[str] = None
 
 @router.get("/list-files", response_model=List[str])
 async def list_files(bucket: str = "gps-data"):
@@ -41,6 +49,38 @@ async def list_files_with_metadata(bucket: str = "images"):
         return retrieval_service.list_files_with_metadata(bucket)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/images/geo", response_model=List[GeotaggedImage])
+async def get_geotagged_images(
+    bucket: str = "images",
+    minLon: Optional[float] = Query(None),
+    minLat: Optional[float] = Query(None),
+    maxLon: Optional[float] = Query(None),
+    maxLat: Optional[float] = Query(None)
+):
+    """
+    Retrieve geotagged images (images with GPS coordinates).
+    
+    :param bucket: The bucket to query (default: 'images')
+    :param minLon: Minimum longitude for bounding box filter
+    :param minLat: Minimum latitude for bounding box filter
+    :param maxLon: Maximum longitude for bounding box filter
+    :param maxLat: Maximum latitude for bounding box filter
+    :return: List of geotagged images with thumbnail URLs
+    """
+    try:
+        bbox = None
+        if all(v is not None for v in [minLon, minLat, maxLon, maxLat]):
+            bbox = {
+                'minLon': minLon,
+                'minLat': minLat,
+                'maxLon': maxLon,
+                'maxLat': maxLat
+            }
+        
+        return retrieval_service.list_geotagged_images(bucket, bbox)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/files/{filename}")
 async def get_file(filename: str, bucket: str = "gps-data"):

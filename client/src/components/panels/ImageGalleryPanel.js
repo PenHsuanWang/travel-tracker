@@ -129,6 +129,14 @@ function ImageGalleryPanel() {
         setSelectedImage(null);
       }
       
+      // Dispatch imageDeleted event for map layer and other listeners
+      window.dispatchEvent(new CustomEvent('imageDeleted', {
+        detail: {
+          object_key: filename,
+          filename: filename
+        }
+      }));
+      
       console.log(`[ImageGalleryPanel] Deleted image: ${filename}`);
     } catch (error) {
       console.error('[ImageGalleryPanel] Error deleting image:', error);
