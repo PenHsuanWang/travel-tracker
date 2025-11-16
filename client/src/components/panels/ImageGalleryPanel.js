@@ -246,6 +246,33 @@ function ImageGalleryPanel() {
     }
   }, [imageFiles, showImages]);
 
+  useEffect(() => {
+    const handleViewImageDetails = async (event) => {
+      const { object_key } = event.detail || {};
+      if (!object_key) return;
+
+      setSyncedSelection(object_key);
+      pendingScrollRef.current = object_key;
+
+      if (!showImagesRef.current) {
+        setShowImages(true);
+      }
+
+      const exists = imageFilesRef.current.some(
+        (item) => item?.object_key === object_key
+      );
+      if (!exists) {
+        await loadImages();
+      }
+
+      setSelectedImage(object_key);
+      await loadMetadataForImage(object_key);
+    };
+
+    window.addEventListener('viewImageDetails', handleViewImageDetails);
+    return () => window.removeEventListener('viewImageDetails', handleViewImageDetails);
+  }, [loadImages]);
+
   const renderTooltip = (filename) => {
     const metadata = getMetadataForImage(filename);
     if (!metadata) return null;
