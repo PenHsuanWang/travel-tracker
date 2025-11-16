@@ -130,7 +130,7 @@ function ImageGalleryPanel() {
     setHoveredImage(null);
   };
 
-  const handleViewOnMap = async (filename, event, metadataOverride = null) => {
+  const handleViewOnMap = async (filename, event, metadataOverride = null, options = {}) => {
     if (event) {
       event.stopPropagation();
     }
@@ -146,6 +146,10 @@ function ImageGalleryPanel() {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
       alert('This image does not have GPS coordinates to show on the map.');
       return;
+    }
+
+    if (options.closeDetail && selectedImage === filename) {
+      setSelectedImage(null);
     }
 
     setSyncedSelection(filename);
@@ -328,7 +332,7 @@ function ImageGalleryPanel() {
               {metadata.gps.altitude && <p>Altitude: {Number(metadata.gps.altitude).toFixed(1)}m</p>}
               <button 
                 className="view-on-map-btn"
-                onClick={(event) => handleViewOnMap(filename, event, metadata)}
+                onClick={(event) => handleViewOnMap(filename, event, metadata, { closeDetail: true })}
               >
                 View on Map
               </button>
