@@ -55,6 +55,11 @@
   background: #f5f5f5;
 }
 
+.ImageGalleryPanel .image-thumbnail.selected {
+  border-color: #1976d2;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}
+
 .ImageGalleryPanel .image-thumbnail:hover {
   transform: scale(1.05);
   border-color: #4CAF50;
@@ -75,9 +80,15 @@
   right: 0;
   background: rgba(0,0,0,0.7);
   color: white;
-  padding: 5px;
+  padding: 5px 6px;
   font-size: 11px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ImageGalleryPanel .image-name-text {
+  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -98,6 +109,30 @@
   font-size: 14px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
   pointer-events: none;
+}
+
+.ImageGalleryPanel .view-on-map-chip {
+  background: rgba(25, 118, 210, 0.9);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.ImageGalleryPanel .view-on-map-chip:hover:not(:disabled) {
+  background: rgba(25, 118, 210, 1);
+}
+
+.ImageGalleryPanel .view-on-map-chip:disabled {
+  background: rgba(120, 144, 156, 0.85);
+  cursor: not-allowed;
+  opacity: 0.75;
 }
 
 .ImageGalleryPanel .delete-button {

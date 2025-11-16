@@ -1,5 +1,5 @@
 // client/src/components/map/ImageLayer.js
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { getGeotaggedImages } from '../../services/api';
@@ -14,7 +14,56 @@ import '../../styles/ImageLayer.css';
 function ImageLayer({ onImageSelected = null }) {
   const map = useMap();
   const [markers, setMarkers] = useState({});
+  const markersRef = useRef({});
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    markersRef.current = markers;
+  }, [markers]);
+
+  const handleMarkerSelected = useCallback((image) => {
+    if (!image) {
+      return;
+    }
+
+    const detail = {
+      object_key: image.object_key,
+      original_filename: image.original_filename,
+      lat: Number(image.lat),
+      lon: Number(image.lon),
+      metadata_id: image.metadata_id || null,
+    };
+
+    window.dispatchEvent(new CustomEvent('mapImageSelected', { detail }));
+
+    if (typeof onImageSelected === 'function') {
+      onImageSelected(image);
+    }
+  }, [onImageSelected]);
+
+  const registerMarkerEvents = useCallback((marker, image) => {
+    const handler = () => handleMarkerSelected(image);
+    marker.on('click', handler);
+    marker.on('popupopen', handler);
+    return handler;
+  }, [handleMarkerSelected]);
+
+  const detachMarkerEntry = useCallback((entry) => {
+    if (!entry) return;
+    entry.marker.off('click', entry.handler);
+    entry.marker.off('popupopen', entry.handler);
+    try {
+      entry.marker.remove();
+    } catch (err) {
+      console.warn('[ImageLayer] Failed to remove marker cleanly', err);
+    }
+  }, []);
+
+  const clearAllMarkers = useCallback(() => {
+    Object.values(markersRef.current).forEach(detachMarkerEntry);
+    markersRef.current = {};
+    setMarkers({});
+  }, [detachMarkerEntry]);
 
   /**
    * Load geotagged images and create markers
@@ -28,6 +77,8 @@ function ImageLayer({ onImageSelected = null }) {
       console.log('[ImageLayer] Loading geotagged images...');
       const images = await getGeotaggedImages();
       console.log('[ImageLayer] Loaded', images.length, 'geotagged images');
+
+      clearAllMarkers();
 
       const newMarkers = {};
 
@@ -49,8 +100,9 @@ function ImageLayer({ onImageSelected = null }) {
           });
 
           // Create popup content with thumbnail
-          const popupContent = createPopupContent(image, onImageSelected);
+          const popupContent = createPopupContent(image, handleMarkerSelected);
           marker.bindPopup(popupContent, { maxWidth: 300 });
+          const handler = registerMarkerEvents(marker, image);
 
           // Add to map
           marker.addTo(map);
@@ -59,6 +111,7 @@ function ImageLayer({ onImageSelected = null }) {
           newMarkers[image.object_key] = {
             marker,
             image,
+            handler,
           };
 
           console.log('[ImageLayer] Created marker for:', image.original_filename, `(${lat}, ${lon})`);
@@ -68,6 +121,7 @@ function ImageLayer({ onImageSelected = null }) {
       });
 
       setMarkers(newMarkers);
+      markersRef.current = newMarkers;
     } catch (err) {
       console.error('[ImageLayer] Error loading geotagged images:', err);
     } finally {
@@ -118,14 +172,19 @@ function ImageLayer({ onImageSelected = null }) {
           metadata_id,
         };
 
-        const popupContent = createPopupContent(image, onImageSelected);
+        const popupContent = createPopupContent(image, handleMarkerSelected);
         marker.bindPopup(popupContent, { maxWidth: 300 });
+        const handler = registerMarkerEvents(marker, image);
         marker.addTo(map);
 
-        setMarkers((prev) => ({
-          ...prev,
-          [object_key]: { marker, image },
-        }));
+        setMarkers((prev) => {
+          const updated = {
+            ...prev,
+            [object_key]: { marker, image, handler },
+          };
+          markersRef.current = updated;
+          return updated;
+        });
 
         console.log('[ImageLayer] Added marker for newly uploaded image:', original_filename);
       } catch (err) {
@@ -135,7 +194,7 @@ function ImageLayer({ onImageSelected = null }) {
 
     window.addEventListener('imageUploadedWithGPS', handleImageUploadedWithGPS);
     return () => window.removeEventListener('imageUploadedWithGPS', handleImageUploadedWithGPS);
-  }, [map, onImageSelected]);
+  }, [map, onImageSelected, registerMarkerEvents]);
 
   /**
    * Listen for image delete events
@@ -145,24 +204,62 @@ function ImageLayer({ onImageSelected = null }) {
       console.log('[ImageLayer] Image deleted event received');
       const { object_key } = event.detail;
 
-      if (map && markers[object_key]) {
-        try {
-          markers[object_key].marker.remove();
-          setMarkers((prev) => {
-            const updated = { ...prev };
-            delete updated[object_key];
-            return updated;
-          });
-          console.log('[ImageLayer] Removed marker for deleted image:', object_key);
-        } catch (err) {
-          console.error('[ImageLayer] Error removing marker:', err);
-        }
+      if (!map) return;
+      const entry = markersRef.current[object_key];
+      if (!entry) return;
+
+      try {
+        detachMarkerEntry(entry);
+        setMarkers((prev) => {
+          const updated = { ...prev };
+          delete updated[object_key];
+          markersRef.current = updated;
+          return updated;
+        });
+        console.log('[ImageLayer] Removed marker for deleted image:', object_key);
+      } catch (err) {
+        console.error('[ImageLayer] Error removing marker:', err);
       }
     };
 
     window.addEventListener('imageDeleted', handleImageDeleted);
     return () => window.removeEventListener('imageDeleted', handleImageDeleted);
-  }, [map, markers]);
+  }, [map, detachMarkerEntry]);
+
+  /**
+   * Center and open popup when sidebar requests
+   */
+  useEffect(() => {
+    if (!map) return undefined;
+
+    const handleCenterMap = (event) => {
+      const detail = event.detail || {};
+      const objectKey = detail.object_key;
+      const entry = objectKey ? markersRef.current[objectKey] : null;
+
+      const latValue = detail.lat ?? detail.latitude;
+      const lngValue = detail.lng ?? detail.lon ?? detail.longitude;
+      const hasCoords = Number.isFinite(Number(latValue)) && Number.isFinite(Number(lngValue));
+      const fallbackLatLng = hasCoords ? L.latLng(Number(latValue), Number(lngValue)) : null;
+
+      const targetLatLng = entry ? entry.marker.getLatLng() : fallbackLatLng;
+      if (!targetLatLng) {
+        console.warn('[ImageLayer] Unable to center map — missing coordinates for', objectKey);
+        return;
+      }
+
+      const targetZoom = Math.max(map.getZoom(), 14);
+      map.flyTo(targetLatLng, targetZoom, { animate: true });
+
+      if (entry) {
+        entry.marker.openPopup();
+        handleMarkerSelected(entry.image);
+      }
+    };
+
+    window.addEventListener('centerMapOnLocation', handleCenterMap);
+    return () => window.removeEventListener('centerMapOnLocation', handleCenterMap);
+  }, [map, handleMarkerSelected]);
 
   // Component doesn't render anything itself, just manages map markers
   return null;
@@ -198,58 +295,122 @@ function getDisplayName(filename) {
 /**
  * Create HTML content for marker popup
  */
-function createPopupContent(image, onImageSelected) {
+function createPopupContent(image, onMarkerSelected) {
   const displayName = getDisplayName(image.original_filename);
   const truncatedName = displayName.length > 30
-    ? displayName.substring(0, 27) + '...'
+    ? `${displayName.substring(0, 27)}...`
     : displayName;
 
   const placeholderImage = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-size="16"%3ENo Image%3C/text%3E%3C/svg%3E';
 
-  // Get API base URL from environment or use default
-  const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002/api';
-  
-  // Build full thumbnail URL
-  let thumbUrl = image.thumb_url;
-  if (thumbUrl && !thumbUrl.startsWith('http')) {
-    // Relative URL - prepend base URL
-    thumbUrl = apiBaseUrl + thumbUrl;
-  }
+  const resolveThumbUrl = (url) => {
+    if (!url || typeof url !== 'string') {
+      return null;
+    }
 
-  // Create a unique ID for this popup's data
-  const popupId = `popup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  // Store image data globally for the onclick handler
-  window[popupId] = {
-    object_key: image.object_key,
-    original_filename: image.original_filename,
-    lat: image.lat,
-    lon: image.lon
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+
+    const baseCandidate =
+      process.env.REACT_APP_API_BASE_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : '');
+
+    if (!baseCandidate) {
+      return url;
+    }
+
+    try {
+      return new URL(url, baseCandidate).toString();
+    } catch (err) {
+      console.warn('[ImageLayer] Failed to resolve thumbnail URL', err);
+      return url;
+    }
   };
 
-  return `
-    <div class="image-popup">
-      <div class="image-popup-thumbnail">
-        <img 
-          src="${thumbUrl || placeholderImage}" 
-          alt="${displayName.replace(/"/g, '&quot;')}"
-          onerror="this.src='${placeholderImage}'"
-          style="display: none;"
-          onload="this.style.display='block'"
-        />
+  const resolvedThumbUrl = resolveThumbUrl(image.thumb_url);
+
+  if (typeof document === 'undefined') {
+    return `
+      <div class="image-popup">
+        <div class="image-popup-name">${truncatedName}</div>
+        <div class="image-popup-coords"><small>${Number(image.lat).toFixed(4)}°, ${Number(image.lon).toFixed(4)}°</small></div>
       </div>
-      <div class="image-popup-name" title="${displayName.replace(/"/g, '&quot;')}">
-        ${truncatedName}
-      </div>
-      <div class="image-popup-coords">
-        <small>${image.lat.toFixed(4)}°, ${image.lon.toFixed(4)}°</small>
-      </div>
-      <button class="image-popup-button" onclick="(function() { var data = window['${popupId}']; if (data) { window.dispatchEvent(new CustomEvent('viewImageDetails', { detail: data })); delete window['${popupId}']; } })()">
-        View Details
-      </button>
-    </div>
-  `;
+    `;
+  }
+
+  const detail = {
+    object_key: image.object_key,
+    original_filename: image.original_filename,
+    lat: Number(image.lat),
+    lon: Number(image.lon),
+    metadata_id: image.metadata_id || null,
+  };
+
+  const container = document.createElement('div');
+  container.className = 'image-popup';
+
+  const thumbnailWrapper = document.createElement('div');
+  thumbnailWrapper.className = 'image-popup-thumbnail';
+
+  const imageEl = document.createElement('img');
+  imageEl.alt = displayName;
+  imageEl.src = resolvedThumbUrl || placeholderImage;
+  imageEl.style.display = 'none';
+  imageEl.onload = () => {
+    imageEl.style.display = 'block';
+  };
+  imageEl.onerror = () => {
+    if (imageEl.src !== placeholderImage) {
+      imageEl.src = placeholderImage;
+    }
+    imageEl.style.display = 'block';
+  };
+  thumbnailWrapper.appendChild(imageEl);
+  container.appendChild(thumbnailWrapper);
+
+  const nameEl = document.createElement('div');
+  nameEl.className = 'image-popup-name';
+  nameEl.title = displayName;
+  nameEl.textContent = truncatedName;
+  container.appendChild(nameEl);
+
+  const coordsEl = document.createElement('div');
+  coordsEl.className = 'image-popup-coords';
+  const coordsText = document.createElement('small');
+  coordsText.textContent = `${detail.lat.toFixed(4)}°, ${detail.lon.toFixed(4)}°`;
+  coordsEl.appendChild(coordsText);
+  container.appendChild(coordsEl);
+
+  const buttonEl = document.createElement('button');
+  buttonEl.className = 'image-popup-button';
+  buttonEl.type = 'button';
+  buttonEl.textContent = 'View Details';
+  container.appendChild(buttonEl);
+
+  const dispatchSelection = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('mapImageSelected', { detail }));
+      window.dispatchEvent(new CustomEvent('viewImageDetails', { detail }));
+    }
+    if (typeof onMarkerSelected === 'function') {
+      onMarkerSelected(image);
+    }
+  };
+
+  const attachSelectionHandler = (node) => {
+    node.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dispatchSelection();
+    });
+  };
+
+  attachSelectionHandler(buttonEl);
+  attachSelectionHandler(thumbnailWrapper);
+  attachSelectionHandler(nameEl);
+
+  return container;
 }
 
 export default ImageLayer;
-

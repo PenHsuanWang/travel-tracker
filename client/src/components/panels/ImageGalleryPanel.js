@@ -1,5 +1,5 @@
 // client/src/components/panels/ImageGalleryPanel.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { listImageFiles, getImageUrl, getFileMetadata, deleteImage } from '../../services/api';
 import '../../styles/ImageGalleryPanel.css';
 
@@ -12,8 +12,21 @@ function ImageGalleryPanel() {
   const [hoveredImage, setHoveredImage] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [deleting, setDeleting] = useState(null);
+  const [syncedSelection, setSyncedSelection] = useState(null);
+  const imageItemRefs = useRef({});
+  const pendingScrollRef = useRef(null);
+  const imageFilesRef = useRef([]);
+  const showImagesRef = useRef(false);
 
-  const loadImages = async () => {
+  useEffect(() => {
+    imageFilesRef.current = imageFiles;
+  }, [imageFiles]);
+
+  useEffect(() => {
+    showImagesRef.current = showImages;
+  }, [showImages]);
+
+  const loadImages = useCallback(async () => {
     setLoading(true);
     try {
       const files = await listImageFiles();
@@ -28,7 +41,10 @@ function ImageGalleryPanel() {
       }, {});
 
       setImageFiles(normalizedFiles);
-      setImageMetadata(preloadedMetadata);
+      setImageMetadata((prev) => ({
+        ...prev,
+        ...preloadedMetadata,
+      }));
     } catch (error) {
       console.error('[ImageGalleryPanel] Error loading images:', error);
       setImageFiles([]);
@@ -36,7 +52,7 @@ function ImageGalleryPanel() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Listen for image upload events
   useEffect(() => {
@@ -48,7 +64,7 @@ function ImageGalleryPanel() {
     
     window.addEventListener('imageUploaded', handleImageUpload);
     return () => window.removeEventListener('imageUploaded', handleImageUpload);
-  }, [showImages]);
+  }, [showImages, loadImages]);
 
   const toggleImagesPanel = async () => {
     if (!showImages) {
@@ -57,8 +73,17 @@ function ImageGalleryPanel() {
     setShowImages(!showImages);
   };
 
+  const getMetadataForImage = (filename) => {
+    return (
+      imageMetadata[filename] ||
+      imageFiles.find((item) => item?.object_key === filename)?.metadata ||
+      null
+    );
+  };
+
   const handleImageClick = (filename) => {
     setSelectedImage(filename);
+    setSyncedSelection(filename);
     // Load metadata for the selected image
     loadMetadataForImage(filename);
   };
@@ -68,7 +93,7 @@ function ImageGalleryPanel() {
   };
 
   const loadMetadataForImage = async (filename) => {
-    const cached = imageMetadata[filename];
+    const cached = getMetadataForImage(filename);
     
     // Only skip refetch if GPS is already present and valid
     const hasValidGps =
@@ -76,7 +101,7 @@ function ImageGalleryPanel() {
       Number.isFinite(Number(cached.gps.latitude)) &&
       Number.isFinite(Number(cached.gps.longitude));
     
-    if (hasValidGps) return; // Only skip when GPS is good
+    if (hasValidGps) return cached; // Only skip when GPS is good
     
     try {
       const metadata = await getFileMetadata(filename);
@@ -84,8 +109,10 @@ function ImageGalleryPanel() {
         ...prev,
         [filename]: metadata
       }));
+      return metadata;
     } catch (error) {
       console.error('[ImageGalleryPanel] Error loading metadata:', error);
+      return cached || null;
     }
   };
 
@@ -94,13 +121,41 @@ function ImageGalleryPanel() {
     setTooltipPosition({ x: event.clientX, y: event.clientY });
     
     // Load metadata if not already loaded
-    if (!imageMetadata[filename]) {
+    if (!getMetadataForImage(filename)) {
       await loadMetadataForImage(filename);
     }
   };
 
   const handleImageLeave = () => {
     setHoveredImage(null);
+  };
+
+  const handleViewOnMap = async (filename, event, metadataOverride = null) => {
+    if (event) {
+      event.stopPropagation();
+    }
+
+    let metadata = metadataOverride || getMetadataForImage(filename);
+    if (!metadata) {
+      metadata = await loadMetadataForImage(filename);
+    }
+
+    const gps = metadata?.gps;
+    const lat = Number(gps?.latitude);
+    const lon = Number(gps?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      alert('This image does not have GPS coordinates to show on the map.');
+      return;
+    }
+
+    setSyncedSelection(filename);
+    window.dispatchEvent(new CustomEvent('centerMapOnLocation', {
+      detail: {
+        object_key: filename,
+        lat,
+        lng: lon,
+      }
+    }));
   };
 
   const handleDeleteImage = async (filename, event) => {
@@ -128,6 +183,10 @@ function ImageGalleryPanel() {
       if (selectedImage === filename) {
         setSelectedImage(null);
       }
+
+      if (syncedSelection === filename) {
+        setSyncedSelection(null);
+      }
       
       // Dispatch imageDeleted event for map layer and other listeners
       window.dispatchEvent(new CustomEvent('imageDeleted', {
@@ -146,8 +205,45 @@ function ImageGalleryPanel() {
     }
   };
 
+  useEffect(() => {
+    const handleMapImageSelected = async (event) => {
+      const { object_key } = event.detail || {};
+      if (!object_key) return;
+
+      setSyncedSelection(object_key);
+      pendingScrollRef.current = object_key;
+
+      if (!showImagesRef.current) {
+        setShowImages(true);
+      }
+
+      const exists = imageFilesRef.current.some(
+        (item) => item?.object_key === object_key
+      );
+      if (!exists) {
+        await loadImages();
+      }
+    };
+
+    window.addEventListener('mapImageSelected', handleMapImageSelected);
+    return () => window.removeEventListener('mapImageSelected', handleMapImageSelected);
+  }, [loadImages]);
+
+  useEffect(() => {
+    if (!pendingScrollRef.current || !showImages) {
+      return;
+    }
+
+    const targetKey = pendingScrollRef.current;
+    const node = imageItemRefs.current[targetKey];
+    if (node) {
+      node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      pendingScrollRef.current = null;
+    }
+  }, [imageFiles, showImages]);
+
   const renderTooltip = (filename) => {
-    const metadata = imageMetadata[filename];
+    const metadata = getMetadataForImage(filename);
     if (!metadata) return null;
 
     const hasLocation =
@@ -204,7 +300,7 @@ function ImageGalleryPanel() {
   };
 
   const renderImageInfo = (filename) => {
-    const metadata = imageMetadata[filename];
+    const metadata = getMetadataForImage(filename);
     if (!metadata) return <div className="image-info">{filename}</div>;
 
     const hasLocation =
@@ -232,15 +328,7 @@ function ImageGalleryPanel() {
               {metadata.gps.altitude && <p>Altitude: {Number(metadata.gps.altitude).toFixed(1)}m</p>}
               <button 
                 className="view-on-map-btn"
-                onClick={() => {
-                  // Dispatch event to center map on this location
-                  window.dispatchEvent(new CustomEvent('centerMapOnLocation', {
-                    detail: {
-                      lat: metadata.gps.latitude,
-                      lng: metadata.gps.longitude
-                    }
-                  }));
-                }}
+                onClick={(event) => handleViewOnMap(filename, event, metadata)}
               >
                 View on Map
               </button>
@@ -305,10 +393,24 @@ function ImageGalleryPanel() {
             <div className="image-grid">
               {imageFiles.map((item, idx) => {
                 const filename = item?.object_key || `image-${idx}`;
+                const metadata = getMetadataForImage(filename);
+                const hasValidGps =
+                  metadata?.gps &&
+                  Number.isFinite(Number(metadata.gps.latitude)) &&
+                  Number.isFinite(Number(metadata.gps.longitude));
+                const disableViewButton = Boolean(metadata) && !hasValidGps;
+
                 return (
                   <div 
                     key={filename}
-                    className="image-thumbnail"
+                    ref={(el) => {
+                      if (el) {
+                        imageItemRefs.current[filename] = el;
+                      } else {
+                        delete imageItemRefs.current[filename];
+                      }
+                    }}
+                    className={`image-thumbnail ${syncedSelection === filename ? 'selected' : ''}`}
                     onClick={() => handleImageClick(filename)}
                     onMouseEnter={(e) => handleImageHover(filename, e)}
                     onMouseLeave={handleImageLeave}
@@ -320,9 +422,19 @@ function ImageGalleryPanel() {
                       title={filename}
                     />
                     <div className="image-name">
-                      {imageMetadata[filename]?.original_filename || filename}
+                      <span className="image-name-text">
+                        {metadata?.original_filename || filename}
+                      </span>
+                      <button
+                        className="view-on-map-chip"
+                        onClick={(event) => handleViewOnMap(filename, event, metadata)}
+                        disabled={disableViewButton}
+                        title={disableViewButton ? 'No GPS location available' : 'View this image on the map'}
+                      >
+                        View on map
+                      </button>
                     </div>
-                    {imageMetadata[filename]?.gps && (
+                    {metadata?.gps && (
                       <div className="gps-indicator" title="Has GPS location">📍</div>
                     )}
                     <button
