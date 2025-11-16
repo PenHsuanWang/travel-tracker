@@ -60,8 +60,21 @@ function UploadPanel() {
       }
       alert(message);
       
-      // Trigger a custom event to notify ImageGalleryPanel
+      // Trigger custom events to notify listeners (ImageGalleryPanel, ImageLayer, etc.)
       window.dispatchEvent(new CustomEvent('imageUploaded'));
+      
+      // If image has GPS, also dispatch imageUploadedWithGPS for map layer
+      if (result.has_gps && result.gps) {
+        window.dispatchEvent(new CustomEvent('imageUploadedWithGPS', {
+          detail: {
+            object_key: result.metadata_id,
+            original_filename: result.filename,
+            gps: result.gps,
+            thumb_url: result.file_url,
+            metadata_id: result.metadata_id
+          }
+        }));
+      }
     } catch (error) {
       console.error('[UploadPanel] Error uploading image - Full error:', error);
       console.error('[UploadPanel] Error response:', error.response);

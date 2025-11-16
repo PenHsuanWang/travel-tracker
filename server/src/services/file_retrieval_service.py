@@ -113,6 +113,114 @@ class FileRetrievalService:
 
         return items
 
+    def list_geotagged_images(
+        self,
+        bucket_name: str = "images",
+        bbox: Optional[Dict[str, float]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        List images with GPS coordinates (geotagged images).
+        
+        :param bucket_name: The bucket name (default: 'images')
+        :param bbox: Bounding box filter {minLon, minLat, maxLon, maxLat} (optional)
+        :return: List of geotagged image data with thumbnail URLs
+        """
+        try:
+            mongodb_adapter = self.storage_manager.adapters.get('mongodb')
+            if not mongodb_adapter:
+                self.logger.warning("MongoDB adapter not available for geo query")
+                return []
+            
+            collection = mongodb_adapter.get_collection('file_metadata')
+            
+            # Build query for images with GPS
+            query: Dict[str, Any] = {
+                "bucket": bucket_name,
+                "gps": {"$exists": True, "$ne": None},
+                "gps.latitude": {"$exists": True, "$ne": None},
+                "gps.longitude": {"$exists": True, "$ne": None}
+            }
+            
+            # Apply bounding box filter if provided
+            if bbox:
+                min_lon = bbox.get('minLon')
+                min_lat = bbox.get('minLat')
+                max_lon = bbox.get('maxLon')
+                max_lat = bbox.get('maxLat')
+                
+                if all(v is not None for v in [min_lon, min_lat, max_lon, max_lat]):
+                    # MongoDB geospatial query for lat/lon within bbox
+                    query["gps.latitude"] = {
+                        "$gte": min_lat,
+                        "$lte": max_lat
+                    }
+                    query["gps.longitude"] = {
+                        "$gte": min_lon,
+                        "$lte": max_lon
+                    }
+            
+            cursor = collection.find(query)
+            items: List[Dict[str, Any]] = []
+            
+            for document in cursor:
+                try:
+                    parsed = FileMetadata(**document)
+                    
+                    # Validate GPS coordinates
+                    if not (parsed.gps and 
+                            parsed.gps.latitude is not None and 
+                            parsed.gps.longitude is not None):
+                        continue
+                    
+                    # Generate thumbnail URL (use object_key for now)
+                    # In production, this could use a thumbnail service or presigned URL
+                    thumb_url = self._generate_thumbnail_url(parsed.object_key, bucket_name)
+                    
+                    items.append({
+                        'object_key': parsed.object_key,
+                        'original_filename': parsed.filename or parsed.id,
+                        'lat': float(parsed.gps.latitude),
+                        'lon': float(parsed.gps.longitude),
+                        'thumb_url': thumb_url,
+                        'metadata_id': parsed.id
+                    })
+                except Exception as exc:
+                    self.logger.warning(
+                        "Error processing geotagged image %s: %s",
+                        document.get('_id'),
+                        exc
+                    )
+                    continue
+            
+            return items
+        except Exception as exc:
+            self.logger.error("Failed to retrieve geotagged images: %s", exc)
+            return []
+
+    def _generate_thumbnail_url(self, object_key: str, bucket_name: str) -> str:
+        """
+        Generate a thumbnail URL for an image.
+        
+        :param object_key: The object key in MinIO
+        :param bucket_name: The bucket name
+        :return: URL string (presigned URL or direct URL)
+        """
+        try:
+            from urllib.parse import quote
+            
+            minio_adapter = self.storage_manager.adapters.get('minio')
+            if not minio_adapter:
+                return f"/api/files/{quote(object_key, safe='')}?bucket={bucket_name}"
+            
+            # Try to generate presigned URL for thumbnail
+            # For MVP, just return the direct image URL with proper URL encoding
+            # TODO: Implement actual thumbnail generation or use presigned URLs
+            return f"/api/files/{quote(object_key, safe='')}?bucket={bucket_name}"
+        except Exception as exc:
+            self.logger.warning("Failed to generate thumbnail URL: %s", exc)
+            from urllib.parse import quote
+            return f"/api/files/{quote(object_key, safe='')}?bucket={bucket_name}"
+
     def get_file_bytes(self, bucket_name: str, filename: str) -> Optional[bytes]:
         """
         Retrieve the raw bytes of a file from MinIO.

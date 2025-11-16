@@ -108,6 +108,18 @@ export const listImageFiles = async () => {
   return response.data;
 };
 
+export const getGeotaggedImages = async (minLon, minLat, maxLon, maxLat, bucket = 'images') => {
+  const params = { bucket };
+  if (minLon !== undefined && minLat !== undefined && maxLon !== undefined && maxLat !== undefined) {
+    params.minLon = minLon;
+    params.minLat = minLat;
+    params.maxLon = maxLon;
+    params.maxLat = maxLat;
+  }
+  const response = await apiClient.get('/images/geo', { params });
+  return response.data;
+};
+
 export const getImageUrl = (filename) => {
   return `${apiClient.defaults.baseURL}/files/${encodeURIComponent(filename)}?bucket=images`;
 };
