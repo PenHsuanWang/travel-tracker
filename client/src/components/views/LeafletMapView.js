@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, GeoJSON, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { riversData, listGpxFiles, fetchGpxFile } from '../../services/api';
+import ImageLayer from '../map/ImageLayer';
 import 'leaflet/dist/leaflet.css';
 import '../../styles/LeafletMapView.css';
 
@@ -307,6 +308,9 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
             {/* Popup for track info */}
           </Polyline>
         ))}
+
+        {/* Image Layer - displays markers for geotagged images */}
+        <ImageLayer />
       </MapContainer>
     </div>
   );
