@@ -1,0 +1,74 @@
+.TripDetailPage {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+.trip-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 2rem;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  gap: 1.5rem;
+}
+
+.TripDetailPage .MainBlock {
+  flex: 1;
+  display: flex;
+  width: 100%;
+  min-height: 0;
+}
+
+.trip-detail-header__left {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+}
+
+.back-to-trips {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.back-to-trips:hover {
+  text-decoration: underline;
+}
+
+.trip-detail-label {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+}
+
+.trip-detail-title {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #111827;
+}
+
+.trip-detail-header__right {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.trip-detail-header__right label {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.trip-selector {
+  min-width: 220px;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid #cbd5f5;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}

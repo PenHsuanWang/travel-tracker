@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { listImageFiles, getImageUrl, getFileMetadata, deleteImage } from '../../services/api';
 import '../../styles/ImageGalleryPanel.css';
 
-function ImageGalleryPanel({ tripId }) {
+function ImageGalleryPanel({ tripId, onDataChange }) {
   const [imageFiles, setImageFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showImages, setShowImages] = useState(false);
@@ -59,6 +59,9 @@ function ImageGalleryPanel({ tripId }) {
     const handleImageUpload = () => {
       if (showImages) {
         loadImages();
+        if (typeof onDataChange === 'function') {
+          onDataChange();
+        }
       }
     };
 
@@ -201,6 +204,9 @@ function ImageGalleryPanel({ tripId }) {
       }));
 
       console.log(`[ImageGalleryPanel] Deleted image: ${filename}`);
+      if (typeof onDataChange === 'function') {
+        onDataChange();
+      }
     } catch (error) {
       console.error('[ImageGalleryPanel] Error deleting image:', error);
       alert(`Failed to delete image: ${error.response?.data?.detail?.message || error.message}`);

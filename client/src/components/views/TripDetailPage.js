@@ -1,16 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import LeafletMapView from './LeafletMapView';
 import TripSidebar from '../layout/TripSidebar';
-import { getTrip } from '../../services/api';
-import '../../styles/MainBlock.css'; // Reuse MainBlock styles for layout
+import { getTrip, getTrips, listGpxFiles, listImageFiles } from '../../services/api';
+import '../../styles/MainBlock.css';
+import '../../styles/TripDetailPage.css';
 
 const TripDetailPage = () => {
     const { tripId } = useParams();
     const [trip, setTrip] = useState(null);
+    const [allTrips, setAllTrips] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedLayer, setSelectedLayer] = useState('openstreetmap');
     const [selectedRivers, setSelectedRivers] = useState([]);
+    const [tripStats, setTripStats] = useState({ photos: 0, tracks: 0 });
+    const navigate = useNavigate();
 
     useEffect(() => {
         const fetchTripDetails = async () => {
@@ -29,6 +33,49 @@ const TripDetailPage = () => {
         }
     }, [tripId]);
 
+    useEffect(() => {
+        const fetchTripsList = async () => {
+            try {
+                const data = await getTrips();
+                setAllTrips(data);
+            } catch (error) {
+                console.error('Failed to fetch trips list:', error);
+            }
+        };
+
+        fetchTripsList();
+    }, []);
+
+    const refreshTripStats = useCallback(async () => {
+        if (!tripId) {
+            return;
+        }
+
+        try {
+            const [images, gpxFiles] = await Promise.all([
+                listImageFiles(tripId),
+                listGpxFiles(tripId)
+            ]);
+            setTripStats({
+                photos: Array.isArray(images) ? images.length : 0,
+                tracks: Array.isArray(gpxFiles) ? gpxFiles.length : 0
+            });
+        } catch (error) {
+            console.error('Failed to load trip stats:', error);
+        }
+    }, [tripId]);
+
+    useEffect(() => {
+        refreshTripStats();
+    }, [refreshTripStats]);
+
+    const handleTripChange = (event) => {
+        const newTripId = event.target.value;
+        if (newTripId && newTripId !== tripId) {
+            navigate(`/trips/${newTripId}`);
+        }
+    };
+
     if (loading) {
         return <div className="loading">Loading trip details...</div>;
     }
@@ -38,34 +85,49 @@ const TripDetailPage = () => {
     }
 
     return (
-        <div className="MainBlock">
-            <TripSidebar
-                tripId={tripId}
-                selectedRivers={selectedRivers}
-                setSelectedRivers={setSelectedRivers}
-            />
-            <main className="MapArea">
-                <div className="trip-header-overlay" style={{
-                    position: 'absolute',
-                    top: '10px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    zIndex: 1000,
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    padding: '0.5rem 1rem',
-                    borderRadius: '20px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                    pointerEvents: 'none' // Allow clicking through to map
-                }}>
-                    <h2 style={{ margin: 0, fontSize: '1.2rem', color: '#333' }}>{trip.name}</h2>
+        <div className="TripDetailPage">
+            <div className="trip-detail-header">
+                <div className="trip-detail-header__left">
+                    <Link to="/trips" className="back-to-trips">← Back to My Trips</Link>
+                    <div>
+                        <p className="trip-detail-label">Currently viewing</p>
+                        <h1 className="trip-detail-title">{trip.name}</h1>
+                    </div>
                 </div>
-                <LeafletMapView
-                    selectedLayer={selectedLayer}
-                    setSelectedLayer={setSelectedLayer}
-                    selectedRivers={selectedRivers}
+                <div className="trip-detail-header__right">
+                    <label htmlFor="trip-selector">Quick switch</label>
+                    <select
+                        id="trip-selector"
+                        className="trip-selector"
+                        value={tripId}
+                        onChange={handleTripChange}
+                    >
+                        {(allTrips.length ? allTrips : [trip]).map((listTrip) => (
+                            <option key={listTrip.id} value={listTrip.id}>
+                                {listTrip.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+            <div className="MainBlock">
+                <TripSidebar
                     tripId={tripId}
+                    trip={trip}
+                    selectedRivers={selectedRivers}
+                    setSelectedRivers={setSelectedRivers}
+                    stats={tripStats}
+                    onTripDataChange={refreshTripStats}
                 />
-            </main>
+                <main className="MapArea">
+                    <LeafletMapView
+                        selectedLayer={selectedLayer}
+                        setSelectedLayer={setSelectedLayer}
+                        selectedRivers={selectedRivers}
+                        tripId={tripId}
+                    />
+                </main>
+            </div>
         </div>
     );
 };

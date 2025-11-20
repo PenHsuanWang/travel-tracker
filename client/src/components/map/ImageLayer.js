@@ -75,15 +75,23 @@ function ImageLayer({ onImageSelected = null, tripId = null }) {
     if (!map) return;
 
     try {
-      console.log('[ImageLayer] Loading geotagged images...');
-      const images = await getGeotaggedImages(undefined, undefined, undefined, undefined, 'images', tripId);
-      console.log('[ImageLayer] Loaded', images.length, 'geotagged images');
+      const tripContextLog = tripId ? ` for trip ${tripId}` : '';
+      console.log(`[ImageLayer] Loading geotagged images${tripContextLog}...`);
+      let images = await getGeotaggedImages(undefined, undefined, undefined, undefined, 'images', tripId);
+
+      // Legacy safeguard: fall back to global images if trip filtering returns nothing
+      if (tripId && (!Array.isArray(images) || images.length === 0)) {
+        console.warn('[ImageLayer] No geotagged images returned for trip; falling back to global images');
+        images = await getGeotaggedImages(undefined, undefined, undefined, undefined, 'images', null);
+      }
+
+      console.log('[ImageLayer] Loaded', images?.length || 0, 'geotagged images');
 
       clearAllMarkers();
 
       const newMarkers = {};
 
-      images.forEach((image) => {
+      (images || []).forEach((image) => {
         try {
           // Validate GPS coordinates
           if (!Number.isFinite(Number(image.lat)) || !Number.isFinite(Number(image.lon))) {

@@ -59,27 +59,25 @@ function CategoriesPanel({ selectedRivers, setSelectedRivers }) {
           {/* SEARCH BAR: type here to filter the river names */}
           <input
             type="text"
+            className="CategoriesPanel-search"
             placeholder="Search..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ width: '100%', marginBottom: '10px' }}
           />
 
-          <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+          <div className="river-list">
             {filteredRivers.length === 0 ? (
               <p>No rivers found.</p>
             ) : (
               filteredRivers.map((river, idx) => (
-                <div key={idx}>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={selectedRivers.includes(river)}
-                      onChange={() => handleRiverChange(river)}
-                    />
-                    {river}
-                  </label>
-                </div>
+                <label key={idx} className="river-option">
+                  <input
+                    type="checkbox"
+                    checked={selectedRivers.includes(river)}
+                    onChange={() => handleRiverChange(river)}
+                  />
+                  <span>{river}</span>
+                </label>
               ))
             )}
           </div>

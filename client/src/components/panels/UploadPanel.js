@@ -3,7 +3,7 @@ import React, { useRef, useState } from 'react';
 import { uploadFile, listGpxFiles } from '../../services/api';
 import '../../styles/UploadPanel.css';
 
-function UploadPanel({ tripId }) {
+function UploadPanel({ tripId, onUploadComplete }) {
   const gpsInputRef = useRef(null);
   const imageInputRef = useRef(null);
 
@@ -27,6 +27,9 @@ function UploadPanel({ tripId }) {
       if (showUploadedData) {
         const gpxFiles = await listGpxFiles(tripId);
         setGpxList(gpxFiles || []);
+      }
+      if (typeof onUploadComplete === 'function') {
+        onUploadComplete();
       }
     } catch (error) {
       console.error('Error uploading GPS file:', error);
@@ -74,6 +77,10 @@ function UploadPanel({ tripId }) {
             metadata_id: result.metadata_id
           }
         }));
+      }
+
+      if (typeof onUploadComplete === 'function') {
+        onUploadComplete();
       }
     } catch (error) {
       console.error('[UploadPanel] Error uploading image - Full error:', error);
