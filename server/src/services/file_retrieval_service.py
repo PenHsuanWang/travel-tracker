@@ -69,6 +69,8 @@ class FileRetrievalService:
 
                     metadata_payload = parsed.model_dump()
                     metadata_payload['created_at'] = parsed.created_at.isoformat()
+                    if parsed.captured_at:
+                        metadata_payload['captured_at'] = parsed.captured_at.isoformat()
                     metadata_map[parsed.id] = metadata_payload
             except Exception as exc:  # pragma: no cover - resilience guard
                 self.logger.warning("Failed to load metadata for bucket %s: %s", bucket_name, exc)
@@ -188,7 +190,9 @@ class FileRetrievalService:
                         'lat': float(parsed.gps.latitude),
                         'lon': float(parsed.gps.longitude),
                         'thumb_url': thumb_url,
-                        'metadata_id': parsed.id
+                        'metadata_id': parsed.id,
+                        'captured_at': parsed.captured_at.isoformat() if parsed.captured_at else None,
+                        'captured_source': parsed.captured_source,
                     })
                 except Exception as exc:
                     self.logger.warning(

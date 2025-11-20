@@ -2,12 +2,14 @@
 
 import uuid
 import tempfile
+import logging
+from datetime import datetime, timezone
 from fastapi import UploadFile
 from typing import Optional
 from src.services.data_io_handlers.base_handler import BaseHandler
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
-from src.utils.exif_utils import extract_exif_from_stream, get_lat_lon_from_exif
+from src.utils.exif_utils import extract_exif_from_stream, get_lat_lon_from_exif, parse_exif_datetime
 from src.models.file_metadata import HandlerResult, GPSData
 
 
@@ -34,6 +36,8 @@ class ImageHandler(BaseHandler):
         bucket_name = 'images'
         original_filename = file.filename
         file_extension = original_filename.split('.')[-1].lower()
+        upload_time = datetime.now(timezone.utc)
+        logger = logging.getLogger(__name__)
         
         # Generate unique object key
         unique_id = str(uuid.uuid4())
@@ -62,6 +66,10 @@ class ImageHandler(BaseHandler):
                 )
             
             date_taken = self._extract_date_taken(exif_data)
+            captured_at = parse_exif_datetime(date_taken, assume_tz=timezone.utc)
+            captured_source = 'exif' if captured_at else 'fallback'
+            if not captured_at:
+                captured_at = upload_time
             camera_make = exif_data.get('Make')
             camera_model = exif_data.get('Model')
             
@@ -82,6 +90,14 @@ class ImageHandler(BaseHandler):
         )
         
         # Return HandlerResult
+        logger.info(
+            "[ImageHandler] extracted capture time for %s: raw=%s parsed=%s source=%s",
+            original_filename,
+            date_taken,
+            captured_at.isoformat() if captured_at else None,
+            captured_source,
+        )
+
         return HandlerResult(
             object_key=object_key,
             bucket=bucket_name,
@@ -93,6 +109,8 @@ class ImageHandler(BaseHandler):
             exif=exif_data if exif_data else None,
             gps=gps_data,
             date_taken=date_taken,
+            captured_at=captured_at,
+            captured_source=captured_source,
             camera_make=camera_make,
             camera_model=camera_model,
             trip_id=trip_id,

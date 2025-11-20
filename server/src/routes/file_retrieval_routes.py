@@ -28,6 +28,8 @@ class GeotaggedImage(BaseModel):
     lon: float
     thumb_url: str
     metadata_id: Optional[str] = None
+    captured_at: Optional[str] = None
+    captured_source: Optional[str] = None
 
 @router.get("/list-files", response_model=List[str])
 async def list_files(bucket: str = "gps-data"):

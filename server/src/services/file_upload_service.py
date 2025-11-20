@@ -5,7 +5,7 @@ from src.services.data_io_handlers.handler_factory import HandlerFactory
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
 from src.models.file_metadata import HandlerResult, FileMetadata
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 import logging
 
@@ -71,9 +71,11 @@ class FileUploadService:
                 exif=result.exif,
                 gps=result.gps,
                 date_taken=result.date_taken,
+                captured_at=result.captured_at,
+                captured_source=result.captured_source,
                 camera_make=result.camera_make,
                 camera_model=result.camera_model,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 uploader_id=uploader_id,
                 trip_id=trip_id,
                 status=result.status
@@ -97,6 +99,8 @@ class FileUploadService:
                 "has_gps": result.gps is not None,
                 "gps": result.gps.model_dump() if result.gps else None,
                 "date_taken": result.date_taken,
+                "captured_at": result.captured_at.isoformat() if result.captured_at else None,
+                "captured_source": result.captured_source,
                 "camera_make": result.camera_make,
                 "camera_model": result.camera_model,
                 "status": result.status

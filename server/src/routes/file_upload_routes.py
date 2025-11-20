@@ -17,6 +17,8 @@ class UploadResponse(BaseModel):
     has_gps: Optional[bool] = None
     gps: Optional[Dict[str, Any]] = None
     date_taken: Optional[str] = None
+    captured_at: Optional[str] = None
+    captured_source: Optional[str] = None
     camera_make: Optional[str] = None
     camera_model: Optional[str] = None
 
@@ -56,6 +58,8 @@ async def upload_file(
             "has_gps": result.get("has_gps"),
             "gps": result.get("gps"),
             "date_taken": result.get("date_taken"),
+            "captured_at": result.get("captured_at"),
+            "captured_source": result.get("captured_source"),
             "camera_make": result.get("camera_make"),
             "camera_model": result.get("camera_model")
         }

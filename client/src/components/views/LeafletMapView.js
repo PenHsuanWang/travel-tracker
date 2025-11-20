@@ -54,7 +54,7 @@ function GPXCenterController({ gpxCenter }) {
   return null;
 }
 
-function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripId }) {
+function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripId, onImageSelected }) {
   const [riverGeoJSON, setRiverGeoJSON] = useState({});
   const [loading, setLoading] = useState(true);
   const [gpxFiles, setGpxFiles] = useState([]);
@@ -310,7 +310,7 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
         ))}
 
         {/* Image Layer - displays markers for geotagged images */}
-        <ImageLayer tripId={tripId} />
+        <ImageLayer tripId={tripId} onImageSelected={onImageSelected} />
       </MapContainer>
     </div>
   );

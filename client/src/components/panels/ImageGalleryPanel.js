@@ -76,6 +76,19 @@ function ImageGalleryPanel({ tripId, onDataChange }) {
     setShowImages(!showImages);
   };
 
+  const getCapturedValue = (metadata) => {
+    return metadata?.captured_at || metadata?.date_taken || null;
+  };
+
+  const formatCapturedLabel = (value) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+    return parsed.toLocaleString();
+  };
+
   const getMetadataForImage = (filename) => {
     return (
       imageMetadata[filename] ||
@@ -317,10 +330,10 @@ function ImageGalleryPanel({ tripId, onDataChange }) {
             </div>
           )}
 
-          {metadata.date_taken && (
+          {getCapturedValue(metadata) && (
             <div className="tooltip-section">
-              <strong>📅 Date Taken</strong>
-              <div>{metadata.date_taken}</div>
+              <strong>⏱ Captured At</strong>
+              <div>{formatCapturedLabel(getCapturedValue(metadata))}</div>
             </div>
           )}
 
@@ -372,10 +385,10 @@ function ImageGalleryPanel({ tripId, onDataChange }) {
             </div>
           )}
 
-          {metadata.date_taken && (
+          {getCapturedValue(metadata) && (
             <div className="metadata-section">
               <h4>Date & Time</h4>
-              <p>{metadata.date_taken}</p>
+              <p>{formatCapturedLabel(getCapturedValue(metadata))}</p>
             </div>
           )}
 

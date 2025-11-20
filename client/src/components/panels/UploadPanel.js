@@ -58,8 +58,11 @@ function UploadPanel({ tripId, onUploadComplete }) {
       if (result.has_gps) {
         message += `\n📍 GPS Location: ${result.gps.latitude.toFixed(4)}°, ${result.gps.longitude.toFixed(4)}°`;
       }
-      if (result.date_taken) {
-        message += `\n📅 Date Taken: ${result.date_taken}`;
+      if (result.captured_at || result.date_taken) {
+        const capturedLabel = result.captured_at
+          ? new Date(result.captured_at).toLocaleString()
+          : result.date_taken;
+        message += `\n📅 Captured At: ${capturedLabel}`;
       }
       alert(message);
 
