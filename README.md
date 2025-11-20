@@ -39,9 +39,11 @@ A web-based application for visualizing GPS tracking data and geographic informa
 ## 🚀 Quick Start
 
 ### Prerequisites
+- Docker and Docker Compose
 - Python 3.8+
 - Node.js 14+
 - npm or yarn
+- MinIO Client (mc) for bucket setup
 
 ### Installation
 
@@ -51,37 +53,100 @@ A web-based application for visualizing GPS tracking data and geographic informa
    cd travel-tracker
    ```
 
-2. **Set up Python backend**
+2. **Start Docker services**
    ```bash
-   cd server
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
+   # Start MinIO and MongoDB
+   docker-compose up -d
+   
+   # Verify services are running
+   docker ps
    ```
 
-3. **Set up React frontend**
+3. **Setup MinIO buckets**
+   ```bash
+   # Install MinIO Client if not already installed
+   # Linux/macOS:
+   wget https://dl.min.io/client/mc/release/linux-amd64/mc
+   chmod +x mc
+   sudo mv mc /usr/local/bin/
+   
+   # Run automated bucket setup
+   cd databases/minio
+   ./setup-buckets.sh
+   cd ../..
+   ```
+   
+   This will create and configure:
+   - `gps-data` bucket for GPX files
+   - `images` bucket for geotagged photos
+   - `gis-data` bucket for GIS data (rivers, maps)
+
+4. **Upload GIS data (optional)**
+   ```bash
+   # If you have river data file
+   export PATH="/path/to/minio-binaries:$PATH"
+   mc cp /path/to/taiwan-river.pickle myminio/gis-data/
+   ```
+
+5. **Set up Python backend**
+   ```bash
+   cd server
+   
+   # Create and activate virtual environment
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   
+   # Install dependencies
+   pip install -r requirements.txt
+   
+   # Create .env file with MinIO credentials
+   cat > .env << EOF
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_SECURE=false
+EOF
+   ```
+
+6. **Set up React frontend**
    ```bash
    cd ../client
    npm install
+   
+   # Create .env file
+   echo "REACT_APP_API_BASE_URL=http://localhost:8000/api" > .env
    ```
 
-4. **Start the backend server**
+7. **Start the backend server**
    ```bash
    cd ../server
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    python server.py
    ```
-   Backend runs on http://localhost:5002
+   Backend runs on http://localhost:8000
 
-5. **Start the frontend development server**
+8. **Start the frontend development server**
    ```bash
    cd ../client
    npm start
    ```
    Frontend runs on http://localhost:3000
 
-6. **Open your browser**
+9. **Open your browser**
    Navigate to http://localhost:3000
+
+### Quick Start with Script (Alternative)
+
+```bash
+# Use the convenience script
+./start-dev.sh
+
+# This will:
+# - Start Docker services
+# - Setup MinIO buckets (if mc is available)
+# - Start backend server
+# - Start frontend server
+```
 
 ## 📖 User Guide
 
@@ -151,8 +216,10 @@ A web-based application for visualizing GPS tracking data and geographic informa
 
 ### Backend
 - **Python 3.8+** - Server runtime
-- **Flask** - Web framework and API
-- **Flask-CORS** - Cross-origin resource sharing
+- **FastAPI** - Modern web framework and API
+- **Uvicorn** - ASGI server
+- **MinIO** - Object storage for files
+- **MongoDB** - Metadata storage (optional)
 
 ### Frontend
 - **React 18** - UI framework
@@ -160,10 +227,19 @@ A web-based application for visualizing GPS tracking data and geographic informa
 - **React-Leaflet** - React bindings for Leaflet
 - **JavaScript ES6+** - Modern JavaScript features
 
+### Infrastructure
+- **Docker** - Containerization
+- **Docker Compose** - Multi-container orchestration
+- **MinIO** - S3-compatible object storage
+- **MongoDB** - Document database
+
 ### Data Storage
-- **Local file system** - GPX files and GeoJSON data
-- **JSON** - River data format
-- **GeoJSON** - Geographic data standard
+- **MinIO Buckets**:
+  - `gps-data` - GPX files and GPS tracks
+  - `images` - Geotagged photos with EXIF metadata
+  - `gis-data` - GIS data (rivers, shapefiles, pickle files)
+- **MongoDB** - File metadata and application data
+- **Local file system** - Legacy support
 
 ## 📁 Project Structure
 
@@ -174,39 +250,99 @@ travel-tracker/
 │   ├── src/
 │   │   ├── components/    # React components
 │   │   │   ├── sidebar/   # Sidebar components (Rivers panel)
-│   │   │   └── views/     # Map view components
+│   │   │   ├── panels/    # UI panels (Image gallery, etc.)
+│   │   │   └── map/       # Map components and layers
 │   │   ├── services/      # API service layer
 │   │   ├── styles/        # CSS stylesheets
 │   │   └── App.js         # Main application component
+│   ├── .env               # Frontend environment variables
 │   └── package.json       # Frontend dependencies
 ├── server/                # Python backend
-│   ├── server.py          # Flask application
+│   ├── src/
+│   │   ├── routes/        # API route handlers
+│   │   ├── controllers/   # Business logic controllers
+│   │   ├── services/      # Service layer
+│   │   │   └── data_io_handlers/  # File upload handlers
+│   │   ├── utils/         # Utility functions
+│   │   │   └── dbbutler/  # Storage adapters
+│   │   └── models/        # Data models
+│   ├── .env               # Backend environment variables
+│   ├── server.py          # FastAPI application
 │   ├── requirements.txt   # Python dependencies
 │   └── venv/              # Python virtual environment
-├── databases/             # Data storage
-│   ├── gis/               # Geographic data
-│   │   └── rivers_data/   # River GeoJSON files
-│   └── gps-data/          # GPX tracking files
-└── README.md             # This file
+├── databases/             # Database configuration
+│   ├── minio/             # MinIO setup
+│   │   ├── setup-buckets.sh   # Automated bucket setup
+│   │   ├── minio-setup.sh     # Container init script
+│   │   └── README.md          # MinIO documentation
+│   └── mongodb/           # MongoDB configuration
+├── docker-compose.yml     # Docker services configuration
+├── start-dev.sh           # Development startup script
+├── stop-dev.sh            # Development shutdown script
+└── README.md              # This file
 ```
 
 ## 🔧 Configuration
 
 ### Backend Configuration
-- **Host**: `0.0.0.0` (accessible from network)
-- **Port**: `5002`
-- **Debug Mode**: Enabled for development
+
+**Environment Variables (server/.env):**
+```env
+# MinIO Configuration
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_SECURE=false
+
+# MongoDB Configuration (optional)
+MONGODB_URI=mongodb://localhost:27017/
+MONGODB_DB=travel_tracker
+
+# Server Configuration
+HOST=0.0.0.0
+PORT=8000
+DEBUG=true
+```
 
 ### Frontend Configuration
-- **Development Port**: `3000`
-- **API Proxy**: Configured in `package.json` to proxy to backend
 
-### Environment Variables
-Create a `.env` file in the project root for custom configuration:
+**Environment Variables (client/.env):**
+```env
+# API Configuration
+REACT_APP_API_BASE_URL=http://localhost:8000/api
+
+# Map Configuration (optional)
+REACT_APP_MAPBOX_TOKEN=your_mapbox_token_here
 ```
-REACT_APP_API_URL=http://localhost:5002
-MAPBOX_ACCESS_TOKEN=your_token_here  # Optional, for Mapbox layer
-```
+
+### Docker Configuration
+
+**Services in docker-compose.yml:**
+- **MinIO**: Object storage on ports 9000 (API) and 9001 (Console)
+- **MongoDB**: Document database on port 27017
+
+**MinIO Access:**
+- Console: http://localhost:9001
+- Username: minioadmin
+- Password: minioadmin
+
+### MinIO Bucket Configuration
+
+Three buckets are automatically created:
+
+1. **gps-data** - GPX track files
+   - Access: Public read
+   - Purpose: Store uploaded GPS tracks
+
+2. **images** - Geotagged photos
+   - Access: Public read
+   - Purpose: Store photos with EXIF metadata
+   - Features: GPS extraction, camera info
+
+3. **gis-data** - GIS data
+   - Access: Public read
+   - Purpose: Store rivers, shapefiles, pickle files
+   - Example: taiwan-river.pickle (1,626 rivers)
 
 ## 🧪 Testing
 
@@ -228,19 +364,66 @@ Refer to `TEST_RESULTS_20251030.md` for comprehensive test scenarios and results
 
 ## 📊 Data Management
 
-### Adding GPX Files
-1. Place `.gpx` files in `databases/gps-data/`
-2. Files are automatically detected by the backend
-3. Restart the backend if adding files while running
+### MinIO Bucket Management
 
-### Adding River Data
-1. Place GeoJSON files in `databases/gis/rivers_data/`
-2. Files should follow the naming pattern: `[river_name].json`
-3. Reload the rivers data via the API
+**List files:**
+```bash
+mc ls myminio/images/
+mc ls myminio/gps-data/
+mc ls myminio/gis-data/
+```
+
+**Upload files:**
+```bash
+# Upload GPX file
+mc cp track.gpx myminio/gps-data/
+
+# Upload image
+mc cp photo.jpg myminio/images/
+
+# Upload GIS data
+mc cp taiwan-river.pickle myminio/gis-data/
+```
+
+**Download files:**
+```bash
+mc cp myminio/images/photo.jpg ./
+```
+
+**Check bucket size:**
+```bash
+mc du myminio/images
+```
+
+See [databases/minio/README.md](databases/minio/README.md) for detailed MinIO management.
+
+### API Endpoints
+
+**File Upload:**
+- `POST /api/map/upload` - Upload files (auto-detects type)
+  - Accepts: GPX, JPEG, PNG, GIF, BMP
+  - Returns: File metadata, EXIF data, GPS coordinates
+
+**File Retrieval:**
+- `GET /api/list-files?bucket=images` - List files in bucket
+- `GET /api/list-files/detail?bucket=images` - List with metadata
+- `GET /api/files/{filename}?bucket=images` - Download file
+
+**Geotagged Images:**
+- `GET /api/images/geo` - Get all geotagged images
+- `GET /api/images/geo?minLon=120&minLat=23&maxLon=122&maxLat=25` - Filter by bounding box
+
+**GIS Data:**
+- `GET /api/gis/list_rivers` - List all rivers (1,626 rivers)
+- `GET /api/gis/rivers_data` - Get full river GeoJSON data
+
+**File Management:**
+- `DELETE /api/map/delete/{filename}?bucket=images` - Delete file
+- `GET /api/map/metadata/{metadata_id}` - Get file metadata
 
 ### Data Format Requirements
 
-**GPX Files**:
+**GPX Files:**
 ```xml
 <?xml version="1.0"?>
 <gpx version="1.1">
@@ -251,22 +434,25 @@ Refer to `TEST_RESULTS_20251030.md` for comprehensive test scenarios and results
         <ele>100</ele>
         <time>2024-01-01T12:00:00Z</time>
       </trkpt>
-      <!-- More track points -->
     </trkseg>
   </trk>
 </gpx>
 ```
 
-**River GeoJSON**:
+**Geotagged Images:**
+- JPEG/JPG with EXIF metadata
+- Required: GPS coordinates in EXIF
+- Optional: Camera make/model, date taken, altitude
+- Automatic GPS extraction and thumbnail generation
+
+**River GeoJSON:**
 ```json
 {
   "type": "FeatureCollection",
   "features": [
     {
       "type": "Feature",
-      "properties": {
-        "name": "River Name"
-      },
+      "properties": {"name": "River Name"},
       "geometry": {
         "type": "LineString",
         "coordinates": [[lon, lat], ...]
@@ -278,28 +464,40 @@ Refer to `TEST_RESULTS_20251030.md` for comprehensive test scenarios and results
 
 ## 🚧 Known Issues
 
-- Photo upload functionality is not yet implemented
+- Frontend first compilation can take several minutes
 - Large GPX files (>10MB) may take time to load
 - Internet connection required for base map tiles
 - Mapbox layer requires access token
+- MinIO console may show "Network Error" if accessed before MinIO is fully started
 
 ## 🗺️ Roadmap
 
-### Version 2.0 (Planned)
-- [ ] Photo upload and geotagging
-- [ ] Photo markers on map
+### Version 2.0 (In Progress)
+- [x] Docker-based infrastructure
+- [x] MinIO object storage integration
+- [x] File upload API with EXIF extraction
+- [x] Geotagged image display on map
+- [x] Image metadata management
+- [ ] GPX track upload via web UI
+- [ ] Photo markers with thumbnails
+- [ ] Image gallery panel
+
+### Version 2.1 (Planned)
 - [ ] Track statistics (distance, elevation, duration)
 - [ ] Elevation profile charts
 - [ ] Track editing capabilities
 - [ ] Export combined maps as images
+- [ ] Batch file upload
+- [ ] File versioning
 
-### Version 2.1 (Future)
+### Version 2.2 (Future)
 - [ ] User accounts and authentication
 - [ ] Cloud storage integration
 - [ ] Mobile app (React Native)
 - [ ] Real-time GPS tracking
 - [ ] Social sharing features
 - [ ] Track comparison tools
+- [ ] Advanced search and filtering
 
 ## 🤝 Contributing
 
@@ -344,9 +542,18 @@ For questions, issues, or suggestions:
 - [Project Repository](https://github.com/yourusername/travel-tracker)
 - [Issue Tracker](https://github.com/yourusername/travel-tracker/issues)
 - [Quick Start Guide](QUICK_START.md)
+- [MinIO Setup Guide](databases/minio/README.md)
+- [MinIO Bucket Review](MINIO_BUCKET_REVIEW.md)
 - [Implementation Summary](IMPLEMENTATION_SUMMARY.md)
+
+## 📚 Additional Documentation
+
+- **[MINIO_BUCKET_REVIEW.md](MINIO_BUCKET_REVIEW.md)** - Comprehensive MinIO setup and API review
+- **[databases/minio/README.md](databases/minio/README.md)** - MinIO configuration and management
+- **[QUICK_START.md](QUICK_START.md)** - Quick start guide for development
+- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Technical implementation details
 
 ---
 
-**Last Updated**: October 30, 2024  
-**Version**: 1.1.0
+**Last Updated**: November 20, 2025  
+**Version**: 2.0.0
