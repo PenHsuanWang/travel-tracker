@@ -54,22 +54,28 @@
   flex: 1;
 }
 
-label {
+/* Keep the modal form styles scoped so checkboxes elsewhere stay untouched */
+.modal-content label {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
   color: #444;
 }
 
-input, textarea {
+.modal-content input[type="text"],
+.modal-content input[type="date"],
+.modal-content textarea {
   width: 100%;
   padding: 0.5rem;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 1rem;
+  box-sizing: border-box;
 }
 
-input:focus, textarea:focus {
+.modal-content input[type="text"]:focus,
+.modal-content input[type="date"]:focus,
+.modal-content textarea:focus {
   outline: none;
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
