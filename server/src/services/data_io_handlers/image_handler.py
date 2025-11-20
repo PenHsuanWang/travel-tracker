@@ -3,6 +3,7 @@
 import uuid
 import tempfile
 from fastapi import UploadFile
+from typing import Optional
 from src.services.data_io_handlers.base_handler import BaseHandler
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
@@ -22,11 +23,12 @@ class ImageHandler(BaseHandler):
         minio_adapter = AdapterFactory.create_minio_adapter()
         self.storage_manager.add_adapter('minio', minio_adapter)
 
-    def handle(self, file: UploadFile) -> HandlerResult:
+    def handle(self, file: UploadFile, trip_id: Optional[str] = None) -> HandlerResult:
         """
         Handle the uploaded image file and extract EXIF metadata.
 
         :param file: The uploaded image file.
+        :param trip_id: Optional ID of the trip this file belongs to.
         :return: HandlerResult containing file info and EXIF data.
         """
         bucket_name = 'images'
@@ -93,6 +95,7 @@ class ImageHandler(BaseHandler):
             date_taken=date_taken,
             camera_make=camera_make,
             camera_model=camera_model,
+            trip_id=trip_id,
             status='success'
         )
     

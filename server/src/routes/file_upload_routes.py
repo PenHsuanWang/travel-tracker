@@ -24,18 +24,20 @@ class UploadResponse(BaseModel):
 @router.post("/upload", response_model=UploadResponse)
 async def upload_file(
     file: UploadFile = File(...),
-    uploader_id: Optional[str] = Query(None)
+    uploader_id: Optional[str] = Query(None),
+    trip_id: Optional[str] = Query(None)
 ):
     """
     Upload a file and return metadata including EXIF data for images.
 
     :param file: The uploaded file.
     :param uploader_id: Optional user ID.
+    :param trip_id: Optional trip ID.
     :return: Upload response with file info and metadata.
     :raises HTTPException: If the file upload fails.
     """
     try:
-        result = FileUploadController.upload_file(file, uploader_id)
+        result = FileUploadController.upload_file(file, uploader_id, trip_id)
         
         # Handle legacy response format
         if "file_path" in result and "metadata_id" not in result:

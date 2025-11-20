@@ -31,6 +31,7 @@ class FileMetadata(BaseModel):
     camera_model: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     uploader_id: Optional[str] = None
+    trip_id: Optional[str] = None
     status: str = "active"
     
     class Config:
@@ -51,5 +52,6 @@ class HandlerResult(BaseModel):
     date_taken: Optional[str] = None
     camera_make: Optional[str] = None
     camera_model: Optional[str] = None
+    trip_id: Optional[str] = None
     status: str = "success"
     error: Optional[str] = None

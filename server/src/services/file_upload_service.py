@@ -32,19 +32,20 @@ class FileUploadService:
             logging.getLogger(__name__).warning(f"MinIO adapter not initialized: {e}")
     
     @classmethod
-    def save_file(cls, file: UploadFile, uploader_id: Optional[str] = None) -> Dict[str, Any]:
+    def save_file(cls, file: UploadFile, uploader_id: Optional[str] = None, trip_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Save the uploaded file using the appropriate handler and persist metadata.
 
         :param file: The uploaded file.
         :param uploader_id: Optional ID of the user uploading the file.
+        :param trip_id: Optional ID of the trip this file belongs to.
         :return: Dictionary containing file info and metadata.
         """
         service = cls()
         file_extension = file.filename.split('.')[-1].lower()
         handler = HandlerFactory.get_handler(file_extension)
         
-        result = handler.handle(file)
+        result = handler.handle(file, trip_id=trip_id)
         
         # Handle legacy handlers that return strings
         if isinstance(result, str):
@@ -74,6 +75,7 @@ class FileUploadService:
                 camera_model=result.camera_model,
                 created_at=datetime.utcnow(),
                 uploader_id=uploader_id,
+                trip_id=trip_id,
                 status=result.status
             )
             

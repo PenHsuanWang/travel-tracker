@@ -11,11 +11,11 @@ import '../../styles/ImageLayer.css';
  * Renders markers for geotagged images on the map using react-leaflet.
  * This component works with the Leaflet map from react-leaflet's useMap hook.
  */
-function ImageLayer({ onImageSelected = null }) {
+function ImageLayer({ onImageSelected = null, tripId = null }) {
   const map = useMap();
   const [markers, setMarkers] = useState({});
   const markersRef = useRef({});
-  const [loading, setLoading] = useState(false);
+
 
   useEffect(() => {
     markersRef.current = markers;
@@ -68,14 +68,15 @@ function ImageLayer({ onImageSelected = null }) {
   /**
    * Load geotagged images and create markers
    */
-  const loadGeotaggedImages = async () => {
+  /**
+   * Load geotagged images and create markers
+   */
+  const loadGeotaggedImages = useCallback(async () => {
     if (!map) return;
-
-    setLoading(true);
 
     try {
       console.log('[ImageLayer] Loading geotagged images...');
-      const images = await getGeotaggedImages();
+      const images = await getGeotaggedImages(undefined, undefined, undefined, undefined, 'images', tripId);
       console.log('[ImageLayer] Loaded', images.length, 'geotagged images');
 
       clearAllMarkers();
@@ -124,10 +125,8 @@ function ImageLayer({ onImageSelected = null }) {
       markersRef.current = newMarkers;
     } catch (err) {
       console.error('[ImageLayer] Error loading geotagged images:', err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [map, tripId, clearAllMarkers, handleMarkerSelected, registerMarkerEvents]);
 
   /**
    * Initial load when map is ready
@@ -136,7 +135,7 @@ function ImageLayer({ onImageSelected = null }) {
     if (map) {
       loadGeotaggedImages();
     }
-  }, [map]);
+  }, [map, loadGeotaggedImages]);
 
   /**
    * Listen for image upload events with GPS data
@@ -194,7 +193,7 @@ function ImageLayer({ onImageSelected = null }) {
 
     window.addEventListener('imageUploadedWithGPS', handleImageUploadedWithGPS);
     return () => window.removeEventListener('imageUploadedWithGPS', handleImageUploadedWithGPS);
-  }, [map, onImageSelected, registerMarkerEvents]);
+  }, [map, onImageSelected, registerMarkerEvents, handleMarkerSelected]);
 
   /**
    * Listen for image delete events
@@ -275,19 +274,19 @@ function getDisplayName(filename) {
   if (uuidDashPattern && uuidDashPattern[1]) {
     return uuidDashPattern[1];
   }
-  
+
   // Pattern 2: 32-character UUID without dashes: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx_name
   const uuidNoDashPattern = filename.match(/^[a-f0-9]{32}_(.+)$/i);
   if (uuidNoDashPattern && uuidNoDashPattern[1]) {
     return uuidNoDashPattern[1];
   }
-  
+
   // Pattern 3: Shorter alphanumeric ID: xxxxxxxx_name (at least 8 chars, then underscore)
   const alphaPattern = filename.match(/^[a-z0-9]{8,}_(.+)$/i);
   if (alphaPattern && alphaPattern[1]) {
     return alphaPattern[1];
   }
-  
+
   // Pattern 4: No UUID/ID, return as-is
   return filename;
 }

@@ -3,7 +3,7 @@ import React, { useRef, useState } from 'react';
 import { uploadFile, listGpxFiles } from '../../services/api';
 import '../../styles/UploadPanel.css';
 
-function UploadPanel() {
+function UploadPanel({ tripId }) {
   const gpsInputRef = useRef(null);
   const imageInputRef = useRef(null);
 
@@ -21,11 +21,11 @@ function UploadPanel() {
     const file = e.target.files[0];
     if (!file) return;
     try {
-      const result = await uploadFile(file);
+      const result = await uploadFile(file, tripId);
       console.log('GPS file uploaded:', result);
       // Refresh the list after upload
       if (showUploadedData) {
-        const gpxFiles = await listGpxFiles();
+        const gpxFiles = await listGpxFiles(tripId);
         setGpxList(gpxFiles || []);
       }
     } catch (error) {
@@ -43,13 +43,13 @@ function UploadPanel() {
   const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
+
     console.log('[UploadPanel] Starting image upload:', file.name, file.type, file.size);
-    
+
     try {
-      const result = await uploadFile(file);
+      const result = await uploadFile(file, tripId);
       console.log('[UploadPanel] Image file uploaded successfully:', result);
-      
+
       // Show more detailed success message
       let message = `Image uploaded successfully: ${result.filename}`;
       if (result.has_gps) {
@@ -59,10 +59,10 @@ function UploadPanel() {
         message += `\n📅 Date Taken: ${result.date_taken}`;
       }
       alert(message);
-      
+
       // Trigger custom events to notify listeners (ImageGalleryPanel, ImageLayer, etc.)
       window.dispatchEvent(new CustomEvent('imageUploaded'));
-      
+
       // If image has GPS, also dispatch imageUploadedWithGPS for map layer
       if (result.has_gps && result.gps) {
         window.dispatchEvent(new CustomEvent('imageUploadedWithGPS', {
@@ -79,7 +79,7 @@ function UploadPanel() {
       console.error('[UploadPanel] Error uploading image - Full error:', error);
       console.error('[UploadPanel] Error response:', error.response);
       console.error('[UploadPanel] Error message:', error.message);
-      
+
       // Show more detailed error message
       let errorMessage = 'Failed to upload image. ';
       if (error.response) {
@@ -89,7 +89,7 @@ function UploadPanel() {
       } else {
         errorMessage += `Error: ${error.message}`;
       }
-      
+
       alert(errorMessage);
     }
   };
@@ -97,7 +97,7 @@ function UploadPanel() {
   const toggleUploadedData = async () => {
     if (!showUploadedData) {
       try {
-        const gpxFiles = await listGpxFiles();
+        const gpxFiles = await listGpxFiles(tripId);
         console.log('[UploadPanel] GPX files:', gpxFiles);
         setGpxList(gpxFiles || []);
       } catch (error) {

@@ -1,9 +1,9 @@
-# src/services/data_io_handlers/gpx_handler.py
-
+from typing import Optional
 from fastapi import UploadFile
 from src.services.data_io_handlers.base_handler import BaseHandler
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
+from src.models.file_metadata import HandlerResult
 
 
 class GPXHandler(BaseHandler):
@@ -18,16 +18,17 @@ class GPXHandler(BaseHandler):
         minio_adapter = AdapterFactory.create_minio_adapter()
         self.storage_manager.add_adapter('minio', minio_adapter)
 
-    def handle(self, file: UploadFile) -> str:
+    def handle(self, file: UploadFile, trip_id: Optional[str] = None) -> HandlerResult:
         """
         Handle the uploaded GPX file.
 
         :param file: The uploaded GPX file.
-        :return: The file path where the GPX file is stored.
+        :param trip_id: Optional ID of the trip this file belongs to.
+        :return: HandlerResult containing file info.
         """
         file_data = file.file.read()
         file_name = file.filename
-        file_extension = file_name.split('.')[-1]
+        file_extension = file_name.split('.')[-1].lower()
         bucket_name = 'gps-data'
 
         print("gpx handler been invoked")
@@ -35,18 +36,15 @@ class GPXHandler(BaseHandler):
         # Save raw GPX file data to MinIO using the 'minio' adapter and the bucket 'gps-data'
         self.storage_manager.save_data(file_name, file_data, adapter_name='minio', bucket=bucket_name)
 
-        # If you later want to process or analyze the GPX file, you can uncomment and update the code below.
-        # analysis = analyze_file(file_data, file_extension)
-        # metadata = {
-        #     'name': file_name,
-        #     'file_path': f'{bucket_name}/{file_name}',
-        #     **analysis
-        # }
-        #
-        # # Optionally, save metadata to MongoDB
-        # self.storage_manager.save_data(file_name, metadata, adapter_name='mongodb', collection_name='metadata')
-        #
-        # # Optionally, save parsed GPX data to MongoDB
-        # self.storage_manager.save_data(file_name, analysis, adapter_name='mongodb', collection=f"{bucket_name}_analyzed")
-
-        return f'{bucket_name}/{file_name}'
+        # Return HandlerResult so FileUploadService can save metadata
+        return HandlerResult(
+            object_key=file_name,
+            bucket=bucket_name,
+            filename=file_name,
+            original_filename=file_name,
+            size=len(file_data),
+            mime_type='application/gpx+xml',
+            file_extension=file_extension,
+            trip_id=trip_id,
+            status='success'
+        )

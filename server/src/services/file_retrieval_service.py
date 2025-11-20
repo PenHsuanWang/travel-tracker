@@ -45,7 +45,7 @@ class FileRetrievalService:
             raise RuntimeError("MinIO adapter not configured")
         return self.storage_manager.list_keys('minio', prefix="", bucket=bucket_name)
 
-    def list_files_with_metadata(self, bucket_name: str) -> List[Dict[str, Any]]:
+    def list_files_with_metadata(self, bucket_name: str, trip_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """List files and merge in metadata when available."""
         if 'minio' not in self.storage_manager.adapters:
             raise RuntimeError("MinIO adapter not configured")
@@ -56,7 +56,10 @@ class FileRetrievalService:
         if mongodb_adapter:
             try:
                 collection = mongodb_adapter.get_collection('file_metadata')
-                cursor = collection.find({"bucket": bucket_name})
+                query = {"bucket": bucket_name}
+                if trip_id:
+                    query["trip_id"] = trip_id
+                cursor = collection.find(query)
                 for document in cursor:
                     try:
                         parsed = FileMetadata(**document)
@@ -116,7 +119,8 @@ class FileRetrievalService:
     def list_geotagged_images(
         self,
         bucket_name: str = "images",
-        bbox: Optional[Dict[str, float]] = None
+        bbox: Optional[Dict[str, float]] = None,
+        trip_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         List images with GPS coordinates (geotagged images).
@@ -135,11 +139,13 @@ class FileRetrievalService:
             
             # Build query for images with GPS
             query: Dict[str, Any] = {
-                "bucket": bucket_name,
                 "gps": {"$exists": True, "$ne": None},
                 "gps.latitude": {"$exists": True, "$ne": None},
                 "gps.longitude": {"$exists": True, "$ne": None}
             }
+            
+            if trip_id:
+                query["trip_id"] = trip_id
             
             # Apply bounding box filter if provided
             if bbox:

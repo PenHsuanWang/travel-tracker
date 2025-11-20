@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { listImageFiles, getImageUrl, getFileMetadata, deleteImage } from '../../services/api';
 import '../../styles/ImageGalleryPanel.css';
 
-function ImageGalleryPanel() {
+function ImageGalleryPanel({ tripId }) {
   const [imageFiles, setImageFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showImages, setShowImages] = useState(false);
@@ -29,7 +29,7 @@ function ImageGalleryPanel() {
   const loadImages = useCallback(async () => {
     setLoading(true);
     try {
-      const files = await listImageFiles();
+      const files = await listImageFiles(tripId);
       const normalizedFiles = Array.isArray(files) ? files : [];
       console.log('[ImageGalleryPanel] Loaded images:', normalizedFiles);
 
@@ -52,7 +52,7 @@ function ImageGalleryPanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tripId]);
 
   // Listen for image upload events
   useEffect(() => {
@@ -61,7 +61,7 @@ function ImageGalleryPanel() {
         loadImages();
       }
     };
-    
+
     window.addEventListener('imageUploaded', handleImageUpload);
     return () => window.removeEventListener('imageUploaded', handleImageUpload);
   }, [showImages, loadImages]);
@@ -92,17 +92,17 @@ function ImageGalleryPanel() {
     setSelectedImage(null);
   };
 
-  const loadMetadataForImage = async (filename) => {
+  const loadMetadataForImage = useCallback(async (filename) => {
     const cached = getMetadataForImage(filename);
-    
+
     // Only skip refetch if GPS is already present and valid
     const hasValidGps =
       cached?.gps &&
       Number.isFinite(Number(cached.gps.latitude)) &&
       Number.isFinite(Number(cached.gps.longitude));
-    
+
     if (hasValidGps) return cached; // Only skip when GPS is good
-    
+
     try {
       const metadata = await getFileMetadata(filename);
       setImageMetadata(prev => ({
@@ -114,12 +114,12 @@ function ImageGalleryPanel() {
       console.error('[ImageGalleryPanel] Error loading metadata:', error);
       return cached || null;
     }
-  };
+  }, [imageMetadata, imageFiles]);
 
   const handleImageHover = async (filename, event) => {
     setHoveredImage(filename);
     setTooltipPosition({ x: event.clientX, y: event.clientY });
-    
+
     // Load metadata if not already loaded
     if (!getMetadataForImage(filename)) {
       await loadMetadataForImage(filename);
@@ -164,25 +164,25 @@ function ImageGalleryPanel() {
 
   const handleDeleteImage = async (filename, event) => {
     event.stopPropagation(); // Prevent opening modal
-    
+
     if (!window.confirm(`Are you sure you want to delete "${filename}"?`)) {
       return;
     }
-    
+
     setDeleting(filename);
     try {
       await deleteImage(filename, 'images');
 
       // Remove from state
       setImageFiles(prev => prev.filter(item => item.object_key !== filename));
-      
+
       // Remove metadata from cache
       setImageMetadata(prev => {
         const newMetadata = { ...prev };
         delete newMetadata[filename];
         return newMetadata;
       });
-      
+
       // Close modal if this image was open
       if (selectedImage === filename) {
         setSelectedImage(null);
@@ -191,7 +191,7 @@ function ImageGalleryPanel() {
       if (syncedSelection === filename) {
         setSyncedSelection(null);
       }
-      
+
       // Dispatch imageDeleted event for map layer and other listeners
       window.dispatchEvent(new CustomEvent('imageDeleted', {
         detail: {
@@ -199,7 +199,7 @@ function ImageGalleryPanel() {
           filename: filename
         }
       }));
-      
+
       console.log(`[ImageGalleryPanel] Deleted image: ${filename}`);
     } catch (error) {
       console.error('[ImageGalleryPanel] Error deleting image:', error);
@@ -271,7 +271,7 @@ function ImageGalleryPanel() {
 
     window.addEventListener('viewImageDetails', handleViewImageDetails);
     return () => window.removeEventListener('viewImageDetails', handleViewImageDetails);
-  }, [loadImages]);
+  }, [loadImages, loadMetadataForImage]);
 
   const renderTooltip = (filename) => {
     const metadata = getMetadataForImage(filename);
@@ -281,9 +281,9 @@ function ImageGalleryPanel() {
       metadata?.gps &&
       Number.isFinite(Number(metadata.gps.latitude)) &&
       Number.isFinite(Number(metadata.gps.longitude));
-    
+
     return (
-      <div 
+      <div
         className="image-tooltip"
         style={{
           position: 'fixed',
@@ -299,7 +299,7 @@ function ImageGalleryPanel() {
             {metadata.size && <div>Size: {(metadata.size / 1024).toFixed(1)} KB</div>}
             {metadata.mime_type && <div>Type: {metadata.mime_type}</div>}
           </div>
-          
+
           {hasLocation && (
             <div className="tooltip-section">
               <strong>📍 Location</strong>
@@ -310,14 +310,14 @@ function ImageGalleryPanel() {
               )}
             </div>
           )}
-          
+
           {metadata.date_taken && (
             <div className="tooltip-section">
               <strong>📅 Date Taken</strong>
               <div>{metadata.date_taken}</div>
             </div>
           )}
-          
+
           {(metadata.camera_make || metadata.camera_model) && (
             <div className="tooltip-section">
               <strong>📷 Camera</strong>
@@ -338,11 +338,11 @@ function ImageGalleryPanel() {
       metadata?.gps &&
       Number.isFinite(Number(metadata.gps.latitude)) &&
       Number.isFinite(Number(metadata.gps.longitude));
-    
+
     return (
       <div className="image-info-detailed">
         <h3>{metadata.original_filename || filename}</h3>
-        
+
         <div className="metadata-grid">
           <div className="metadata-section">
             <h4>File Information</h4>
@@ -357,7 +357,7 @@ function ImageGalleryPanel() {
               <p>Latitude: {Number(metadata.gps.latitude).toFixed(6)}°</p>
               <p>Longitude: {Number(metadata.gps.longitude).toFixed(6)}°</p>
               {metadata.gps.altitude && <p>Altitude: {Number(metadata.gps.altitude).toFixed(1)}m</p>}
-              <button 
+              <button
                 className="view-on-map-btn"
                 onClick={(event) => handleViewOnMap(filename, event, metadata, { closeDetail: true })}
               >
@@ -415,7 +415,7 @@ function ImageGalleryPanel() {
       {showImages && (
         <div className="images-container">
           <h4>Uploaded Images ({imageFiles.length})</h4>
-          
+
           {loading ? (
             <p>Loading images...</p>
           ) : imageFiles.length === 0 ? (
@@ -432,7 +432,7 @@ function ImageGalleryPanel() {
                 const disableViewButton = Boolean(metadata) && !hasValidGps;
 
                 return (
-                  <div 
+                  <div
                     key={filename}
                     ref={(el) => {
                       if (el) {
@@ -447,8 +447,8 @@ function ImageGalleryPanel() {
                     onMouseLeave={handleImageLeave}
                     onMouseMove={(e) => setTooltipPosition({ x: e.clientX, y: e.clientY })}
                   >
-                    <img 
-                      src={getImageUrl(filename)} 
+                    <img
+                      src={getImageUrl(filename)}
                       alt={filename}
                       title={filename}
                     />
@@ -492,8 +492,8 @@ function ImageGalleryPanel() {
         <div className="image-modal" onClick={closeImageModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <button className="close-button" onClick={closeImageModal}>×</button>
-            <button 
-              className="modal-delete-button" 
+            <button
+              className="modal-delete-button"
               onClick={(e) => handleDeleteImage(selectedImage, e)}
               disabled={deleting === selectedImage}
               title="Delete image"
@@ -502,8 +502,8 @@ function ImageGalleryPanel() {
             </button>
             <div className="modal-layout">
               <div className="modal-image">
-                <img 
-                  src={getImageUrl(selectedImage)} 
+                <img
+                  src={getImageUrl(selectedImage)}
                   alt={selectedImage}
                 />
               </div>
