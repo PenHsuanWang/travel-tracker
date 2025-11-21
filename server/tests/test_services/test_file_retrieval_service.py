@@ -11,7 +11,7 @@ class FakeMinioAdapter:
         self._keys = keys
 
     def list_keys(self, prefix: str = "", **kwargs):
-        return list(self._keys)
+        return [key for key in self._keys if key.startswith(prefix)]
 
 
 class FakeCollection:
@@ -88,3 +88,50 @@ def test_list_files_with_metadata_merges_storage_and_metadata(monkeypatch, metad
     assert orphan_item["has_metadata"] is False
     assert orphan_item["has_storage_object"] is True
     assert orphan_item["warnings"] == ["metadata_missing"]
+
+
+def test_list_files_with_metadata_filters_by_trip(monkeypatch):
+    fake_minio = FakeMinioAdapter(
+        {
+            "trip-a/photo-a.jpg",
+            "trip-b/photo-b.jpg",
+            "trip-a/photo-c.jpg",
+        }
+    )
+    trip_a_doc = {
+        "_id": "trip-a/photo-a.jpg",
+        "object_key": "trip-a/photo-a.jpg",
+        "bucket": "images",
+        "filename": "trip-a/photo-a.jpg",
+        "original_filename": "photo-a.jpg",
+        "size": 1024,
+        "mime_type": "image/jpeg",
+        "file_extension": "jpg",
+        "created_at": datetime.datetime(2024, 1, 1, 12, 0, 0),
+        "trip_id": "trip-a",
+        "status": "active",
+    }
+    trip_b_doc = {
+        "_id": "trip-b/photo-b.jpg",
+        "object_key": "trip-b/photo-b.jpg",
+        "bucket": "images",
+        "filename": "trip-b/photo-b.jpg",
+        "original_filename": "photo-b.jpg",
+        "size": 2048,
+        "mime_type": "image/jpeg",
+        "file_extension": "jpg",
+        "created_at": datetime.datetime(2024, 1, 2, 12, 0, 0),
+        "trip_id": "trip-b",
+        "status": "active",
+    }
+    fake_mongo = FakeMongoAdapter([trip_a_doc, trip_b_doc])
+
+    monkeypatch.setattr(adapter_factory.AdapterFactory, "create_minio_adapter", lambda: fake_minio)
+    monkeypatch.setattr(adapter_factory.AdapterFactory, "create_mongodb_adapter", lambda: fake_mongo)
+
+    service = FileRetrievalService()
+    results = service.list_files_with_metadata("images", trip_id="trip-a")
+
+    assert {item["object_key"] for item in results} == {"trip-a/photo-a.jpg", "trip-a/photo-c.jpg"}
+    # Ensure trip-b data is excluded entirely
+    assert all(item["metadata_id"].startswith("trip-a/") for item in results)

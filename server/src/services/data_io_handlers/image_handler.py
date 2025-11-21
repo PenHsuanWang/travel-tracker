@@ -33,6 +33,9 @@ class ImageHandler(BaseHandler):
         :param trip_id: Optional ID of the trip this file belongs to.
         :return: HandlerResult containing file info and EXIF data.
         """
+        if not trip_id:
+            raise ValueError("trip_id is required when uploading images so they can be scoped to a trip")
+
         bucket_name = 'images'
         original_filename = file.filename
         file_extension = original_filename.split('.')[-1].lower()
@@ -41,7 +44,8 @@ class ImageHandler(BaseHandler):
         
         # Generate unique object key
         unique_id = str(uuid.uuid4())
-        object_key = f"{unique_id}_{original_filename}"
+        safe_original = (original_filename or "image").replace("/", "_")
+        object_key = f"{trip_id}/{unique_id}_{safe_original}"
         
         # Use SpooledTemporaryFile for memory-efficient handling
         with tempfile.SpooledTemporaryFile(max_size=10*1024*1024) as temp_file:

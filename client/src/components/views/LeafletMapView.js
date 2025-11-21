@@ -108,7 +108,7 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
     setSelectedGpxFiles((prev) => [...prev, objectKey]);
 
     try {
-      const trackData = await fetchGpxAnalysis(objectKey);
+      const trackData = await fetchGpxAnalysis(objectKey, tripId);
       if (trackData.coordinates && trackData.coordinates.length > 0) {
         setGpxTracks((prev) => ({
           ...prev,
