@@ -9,12 +9,14 @@ from pydantic import BaseModel  # type: ignore[import-not-found]
 
 from src.services.file_retrieval_service import FileRetrievalService
 from src.services.gpx_analysis_retrieval_service import GpxAnalysisRetrievalService
+from src.services.photo_note_service import PhotoNoteService
 from src.models.file_metadata import FileMetadata
 
 router = APIRouter()
 
 retrieval_service = FileRetrievalService()
 analysis_retrieval_service = GpxAnalysisRetrievalService()
+photo_note_service = PhotoNoteService()
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,9 @@ class GeotaggedImage(BaseModel):
     metadata_id: Optional[str] = None
     captured_at: Optional[str] = None
     captured_source: Optional[str] = None
+    note: Optional[str] = None
+    note_title: Optional[str] = None
+    order_index: Optional[int] = None
 
 
 class GpxAnalysisResponse(BaseModel):
@@ -49,6 +54,15 @@ class GpxAnalysisResponse(BaseModel):
     coordinates: List[List[float]]
     waypoints: List[Dict[str, Any]] = []
     rest_points: List[Dict[str, Any]] = []
+
+
+class PhotoNotePayload(BaseModel):
+    note: Optional[str] = None
+    note_title: Optional[str] = None
+
+
+class PhotoOrderPayload(BaseModel):
+    order_index: int
 
 @router.get("/list-files", response_model=List[str])
 async def list_files(bucket: str = "gps-data", trip_id: Optional[str] = Query(None)):
@@ -277,3 +291,35 @@ async def get_file(filename: str, bucket: str = "gps-data"):
     
     # Return raw bytes with proper media type
     return Response(content=file_bytes, media_type=media_type)
+
+
+@router.patch("/photos/{metadata_id:path}/note")
+async def update_photo_note(metadata_id: str, payload: PhotoNotePayload):
+    """
+    Update the note/note_title for a photo metadata entry.
+    """
+    try:
+        updated = photo_note_service.update_note(
+            metadata_id,
+            note=payload.note,
+            note_title=payload.note_title,
+        )
+        return updated
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.patch("/photos/{metadata_id:path}/order")
+async def update_photo_order(metadata_id: str, payload: PhotoOrderPayload):
+    """
+    Update the order index for a photo metadata entry.
+    """
+    try:
+        updated = photo_note_service.update_order(metadata_id, order_index=payload.order_index)
+        return updated
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

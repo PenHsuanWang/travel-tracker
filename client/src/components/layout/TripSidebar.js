@@ -52,11 +52,17 @@ function TripSidebar({
     selectedRivers,
     setSelectedRivers,
     stats,
-    onTripDataChange
+    onTripDataChange,
+    notice
 }) {
     return (
         <aside className="Sidebar">
             <TripSummaryCard trip={trip} stats={stats} />
+            {notice && (
+                <div className="TripNotice" role="status">
+                    {notice}
+                </div>
+            )}
 
             <UploadPanel tripId={tripId} onUploadComplete={onTripDataChange} />
 

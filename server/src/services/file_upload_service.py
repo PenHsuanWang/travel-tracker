@@ -6,8 +6,9 @@ from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
 from src.models.file_metadata import HandlerResult, FileMetadata
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 import logging
+from src.services.trip_service import TripService
 
 
 class FileUploadService:
@@ -30,6 +31,111 @@ class FileUploadService:
             self.storage_manager.add_adapter('minio', minio_adapter)
         except Exception as e:
             logging.getLogger(__name__).warning(f"MinIO adapter not initialized: {e}")
+
+        # Trip service is used for downstream updates (e.g., auto-filling trip dates from GPX)
+        self.trip_service = TripService()
+
+    # --- GPX date helpers ---
+    @staticmethod
+    def _parse_iso_datetime(value: Optional[Any]) -> Optional[datetime]:
+        """
+        Parse an ISO-like timestamp into a datetime. Returns None for invalid inputs.
+        """
+        if not value:
+            return None
+        if isinstance(value, datetime):
+            return value
+        text = str(value)
+
+        candidates = [text]
+        if text.endswith("Z"):
+            candidates.append(text.replace("Z", "+00:00"))
+
+        for candidate in candidates:
+            try:
+                return datetime.fromisoformat(candidate)
+            except ValueError:
+                continue
+        return None
+
+    @classmethod
+    def _extract_gpx_bounds(cls, track_summary: Optional[Dict[str, Any]]) -> Tuple[Optional[datetime], Optional[datetime], bool]:
+        """
+        Extract start/end timestamps from a track summary produced by GPX analysis.
+        Returns (start, end, metadata_extracted).
+        """
+        if not track_summary or not isinstance(track_summary, dict):
+            return None, None, False
+
+        start_dt = cls._parse_iso_datetime(track_summary.get("start_time"))
+        end_dt = cls._parse_iso_datetime(track_summary.get("end_time"))
+        metadata_extracted = bool(start_dt or end_dt)
+        return start_dt, end_dt, metadata_extracted
+
+    @staticmethod
+    def _floor_to_date(dt: datetime) -> datetime:
+        """Trim a datetime down to midnight. If tz-aware, normalize to UTC then drop tzinfo."""
+        if dt.tzinfo:
+            dt = dt.astimezone(timezone.utc)
+        return datetime.combine(dt.date(), datetime.min.time())
+
+    def _maybe_autofill_trip_dates(
+        self,
+        trip_id: str,
+        track_summary: Optional[Dict[str, Any]],
+        metadata_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        If the trip has no dates set, populate them from GPX timestamps.
+        Returns details for the API response.
+        """
+        start_dt, end_dt, metadata_extracted = self._extract_gpx_bounds(track_summary)
+        result: Dict[str, Any] = {
+            "applied": False,
+            "reason": None,
+            "metadata_extracted": metadata_extracted,
+            "start_datetime": start_dt.isoformat() if start_dt else None,
+            "end_datetime": end_dt.isoformat() if end_dt else None,
+            "trip": None,
+        }
+
+        if not metadata_extracted:
+            result["reason"] = "no_timestamps"
+            return result
+
+        if not start_dt or not end_dt:
+            result["reason"] = "partial_timestamps"
+            return result
+
+        try:
+            trip = self.trip_service.get_trip(trip_id)
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "Trip lookup failed for %s (metadata_id=%s): %s", trip_id, metadata_id, exc
+            )
+            result["reason"] = "trip_lookup_failed"
+            return result
+
+        if not trip:
+            result["reason"] = "trip_not_found"
+            return result
+
+        if trip.start_date or trip.end_date:
+            result["reason"] = "trip_dates_already_set"
+            result["trip"] = trip.model_dump(by_alias=True)
+            return result
+
+        update_payload = {
+            "start_date": self._floor_to_date(start_dt),
+            "end_date": self._floor_to_date(end_dt),
+        }
+        updated_trip = self.trip_service.update_trip(trip_id, update_payload)
+        if updated_trip:
+            result["applied"] = True
+            result["trip"] = updated_trip.model_dump(by_alias=True)
+        else:
+            result["reason"] = "trip_update_failed"
+        return result
     
     @classmethod
     def save_file(cls, file: UploadFile, uploader_id: Optional[str] = None, trip_id: Optional[str] = None) -> Dict[str, Any]:
@@ -99,7 +205,7 @@ class FileUploadService:
                 collection_name='file_metadata'
             )
             
-            return {
+            response_payload: Dict[str, Any] = {
                 "metadata_id": metadata_id,
                 "object_key": result.object_key,
                 "filename": result.original_filename,
@@ -121,6 +227,18 @@ class FileUploadService:
                 "analysis_error": result.analysis_error,
                 "track_summary": result.track_summary,
             }
+
+            if getattr(result, "file_extension", "") and result.file_extension.lower() == "gpx" and trip_id:
+                auto_fill_details = service._maybe_autofill_trip_dates(trip_id, result.track_summary, metadata_id)
+                response_payload["trip_dates_auto_filled"] = auto_fill_details.get("applied")
+                response_payload["auto_fill_reason"] = auto_fill_details.get("reason")
+                response_payload["gpx_metadata_extracted"] = auto_fill_details.get("metadata_extracted")
+                response_payload["gpx_start_datetime"] = auto_fill_details.get("start_datetime")
+                response_payload["gpx_end_datetime"] = auto_fill_details.get("end_datetime")
+                if auto_fill_details.get("trip"):
+                    response_payload["trip"] = auto_fill_details["trip"]
+
+            return response_payload
         
         return {
             "filename": file.filename,

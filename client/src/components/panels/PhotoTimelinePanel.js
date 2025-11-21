@@ -1,5 +1,5 @@
 // client/src/components/panels/PhotoTimelinePanel.js
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import '../../styles/PhotoTimelinePanel.css';
 
 const sortChronologically = (a, b) => {
@@ -56,6 +56,7 @@ function PhotoTimelinePanel({
   photos = [],
   selectedPhotoId = null,
   onSelectPhoto,
+  onEditNote,
   isOpen = true,
   mode = 'side', // side | overlay | sheet
   onClose,
@@ -63,6 +64,8 @@ function PhotoTimelinePanel({
 }) {
   const listRef = useRef(null);
   const rowRefs = useRef({});
+  const [editingId, setEditingId] = useState(null);
+  const [draftNote, setDraftNote] = useState('');
 
   const orderedPhotos = useMemo(() => {
     return [...photos].sort(sortChronologically);
@@ -77,6 +80,46 @@ function PhotoTimelinePanel({
       node.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [selectedPhotoId, isOpen]);
+
+  const deriveTitle = (photo) => {
+    if (photo?.noteTitle) return photo.noteTitle;
+    if (photo?.note) {
+      const firstLine = String(photo.note).split('\n')[0].trim();
+      if (firstLine) return firstLine;
+    }
+    return photo?.fileName || '';
+  };
+
+  const deriveSnippet = (photo) => {
+    if (!photo?.note) return '';
+    const snippet = photo.note.slice(0, 160);
+    return photo.note.length > 160 ? `${snippet}…` : snippet;
+  };
+
+  const startEdit = (photo, event) => {
+    if (event) event.stopPropagation();
+    setEditingId(photo.id);
+    setDraftNote(photo.note || '');
+  };
+
+  const cancelEdit = (event) => {
+    if (event) event.stopPropagation();
+    setEditingId(null);
+    setDraftNote('');
+  };
+
+  const saveEdit = (photo, event) => {
+    if (event) event.stopPropagation();
+    if (typeof onEditNote === 'function') {
+      onEditNote({
+        photoId: photo.id,
+        metadataId: photo.metadataId,
+        note: draftNote,
+        noteTitle: deriveTitle({ ...photo, note: draftNote }),
+      });
+    }
+    setEditingId(null);
+  };
 
   if (!isOpen && mode !== 'side') {
     return null;
@@ -114,8 +157,12 @@ function PhotoTimelinePanel({
             </div>
             {group.photos.map((photo) => {
               const isSelected = selectedPhotoId === photo.id;
+              const isEditing = editingId === photo.id;
+              const title = deriveTitle(photo);
+              const snippet = deriveSnippet(photo);
+
               return (
-                <button
+                <div
                   key={photo.id}
                   ref={(el) => {
                     if (el) {
@@ -125,24 +172,56 @@ function PhotoTimelinePanel({
                     }
                   }}
                   className={`timeline-row ${isSelected ? 'selected' : ''}`}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onSelectPhoto && onSelectPhoto(photo)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      onSelectPhoto && onSelectPhoto(photo);
+                    }
+                  }}
                 >
                   <div className="time-cell">{formatTime(photo.capturedDate)}</div>
                   <div className="thumb-cell">
                     <img src={photo.thumbnailUrl || photo.imageUrl} alt={photo.fileName} />
                   </div>
                   <div className="text-cell">
-                    <div className="primary">{photo.fileName}</div>
-                    {photo.caption && <div className="secondary">{photo.caption}</div>}
+                    <div className="primary">{title || photo.fileName}</div>
+                    {isEditing ? (
+                      <div className="note-editor" onClick={(e) => e.stopPropagation()}>
+                        <textarea
+                          value={draftNote}
+                          onChange={(e) => setDraftNote(e.target.value)}
+                          placeholder="Add a note about this moment…"
+                          rows={3}
+                        />
+                        <div className="note-actions">
+                          <button type="button" onClick={(e) => saveEdit(photo, e)}>
+                            Save
+                          </button>
+                          <button type="button" className="ghost" onClick={cancelEdit}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="secondary">
+                        {snippet || <span className="muted">Add a note</span>}
+                      </div>
+                    )}
                     {photo.capturedSource === 'fallback' && (
                       <div className="meta-pill" title="Date Taken missing; using upload time">
                         Fallback time
                       </div>
                     )}
                   </div>
+                  <div className="actions-cell" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className="ghost small" onClick={(e) => startEdit(photo, e)}>
+                      {isEditing ? 'Editing' : 'Edit note'}
+                    </button>
+                  </div>
                   {isSelected && <span className="accent-bar" aria-hidden="true" />}
-                </button>
+                </div>
               );
             })}
           </div>

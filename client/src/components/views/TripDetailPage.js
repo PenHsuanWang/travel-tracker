@@ -4,7 +4,7 @@ import LeafletMapView from './LeafletMapView';
 import TripSidebar from '../layout/TripSidebar';
 import PhotoTimelinePanel from '../panels/PhotoTimelinePanel';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
-import { getTrip, getTrips, deleteTrip, listGpxFiles, listImageFiles, getImageUrl } from '../../services/api';
+import { getTrip, getTrips, deleteTrip, listGpxFiles, listImageFiles, getImageUrl, updatePhotoNote } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
 
@@ -38,6 +38,8 @@ const parseDateSafe = (value) => {
 const normalizePhoto = (item) => {
     if (!item) return null;
     const metadata = item.metadata || {};
+    const note = metadata.note || metadata.caption || metadata.notes || null;
+    const noteTitle = metadata.note_title || (note ? note.split('\n')[0] : null);
     const capturedDate = parseDateSafe(metadata.captured_at || metadata.date_taken || metadata.created_at);
     const lat = Number(metadata?.gps?.latitude ?? metadata?.gps?.lat ?? item.lat);
     const lon = Number(metadata?.gps?.longitude ?? metadata?.gps?.lon ?? item.lon);
@@ -56,6 +58,9 @@ const normalizePhoto = (item) => {
         lon: hasCoords ? lon : null,
         metadataId: item.metadata_id || null,
         caption: metadata.caption || metadata.notes || null,
+        note,
+        noteTitle,
+        orderIndex: metadata.order_index ?? null,
     };
 };
 
@@ -82,6 +87,7 @@ const TripDetailPage = () => {
     const [selectedLayer, setSelectedLayer] = useState('openstreetmap');
     const [selectedRivers, setSelectedRivers] = useState([]);
     const [tripStats, setTripStats] = useState({ photos: 0, tracks: 0 });
+    const [tripNotice, setTripNotice] = useState('');
     const [photos, setPhotos] = useState([]);
     const [photosLoading, setPhotosLoading] = useState(false);
     const [selectedPhotoId, setSelectedPhotoId] = useState(null);
@@ -214,6 +220,14 @@ const TripDetailPage = () => {
     }, [tripId]);
 
     useEffect(() => {
+        if (!tripNotice) {
+            return undefined;
+        }
+        const timer = setTimeout(() => setTripNotice(''), 6000);
+        return () => clearTimeout(timer);
+    }, [tripNotice]);
+
+    useEffect(() => {
         if (selectedPhotoId && orderedPhotos.length > 0) {
             const exists = orderedPhotos.some((photo) => photo.id === selectedPhotoId);
             if (!exists) {
@@ -276,10 +290,88 @@ const TripDetailPage = () => {
         }
     }, [orderedPhotos, selectedPhotoIndex, handleSelectPhoto]);
 
-    const handleTripDataChange = useCallback(() => {
+    const handleTripDataChange = useCallback((payload = {}) => {
+        if (payload.trip) {
+            setTrip(payload.trip);
+        }
+        if (payload.notice) {
+            setTripNotice(payload.notice);
+        }
         refreshTripStats();
         loadTripPhotos();
     }, [refreshTripStats, loadTripPhotos]);
+
+    const deriveNoteTitle = (noteTitleValue, noteValue) => {
+        if (noteTitleValue) return noteTitleValue;
+        if (noteValue) {
+            const firstLine = String(noteValue).split('\n')[0].trim();
+            return firstLine || null;
+        }
+        return null;
+    };
+
+    const applyNoteToPhotoState = useCallback((photoId, { note, noteTitle }) => {
+        setPhotos((prev) =>
+            prev.map((p) =>
+                p.id === photoId
+                    ? {
+                          ...p,
+                          note,
+                          noteTitle: deriveNoteTitle(noteTitle, note),
+                      }
+                    : p
+            )
+        );
+    }, []);
+
+    const handleNoteSave = useCallback(
+        async ({ photoId, metadataId, note, noteTitle }) => {
+            if (!photoId && !metadataId) return;
+            const targetId = metadataId || photoId;
+            const previous = photos.find((p) => p.id === photoId);
+            applyNoteToPhotoState(photoId, { note, noteTitle });
+            try {
+                const result = await updatePhotoNote(targetId, {
+                    note,
+                    note_title: noteTitle,
+                });
+                const updatedNote = result.note ?? note;
+                const updatedTitle = result.note_title ?? noteTitle;
+                applyNoteToPhotoState(photoId, { note: updatedNote, noteTitle: updatedTitle });
+                // notify other listeners (e.g., map layer)
+                window.dispatchEvent(
+                    new CustomEvent('photoNoteUpdated', {
+                        detail: {
+                            object_key: photoId,
+                            metadata_id: targetId,
+                            note: updatedNote,
+                            note_title: updatedTitle,
+                        },
+                    })
+                );
+            } catch (error) {
+                console.error('Failed to save note', error);
+                if (previous) {
+                    applyNoteToPhotoState(photoId, { note: previous.note, noteTitle: previous.noteTitle });
+                }
+                alert('Failed to save note. Please try again.');
+            }
+        },
+        [applyNoteToPhotoState, photos]
+    );
+
+    useEffect(() => {
+        const handleExternalNoteUpdate = (event) => {
+            const detail = event.detail || {};
+            if (!detail.object_key) return;
+            applyNoteToPhotoState(detail.object_key, {
+                note: detail.note,
+                noteTitle: detail.note_title,
+            });
+        };
+        window.addEventListener('photoNoteUpdated', handleExternalNoteUpdate);
+        return () => window.removeEventListener('photoNoteUpdated', handleExternalNoteUpdate);
+    }, [applyNoteToPhotoState]);
 
     const handleTripChange = (event) => {
         const newTripId = event.target.value;
@@ -349,6 +441,7 @@ const TripDetailPage = () => {
                     setSelectedRivers={setSelectedRivers}
                     stats={tripStats}
                     onTripDataChange={handleTripDataChange}
+                    notice={tripNotice}
                 />
                 <div
                     className={`MapAndTimeline ${timelineMode !== 'side' ? 'timeline-floating' : ''} ${timelineMode === 'sheet' ? 'timeline-sheet' : ''}`}
@@ -378,6 +471,7 @@ const TripDetailPage = () => {
                             isOpen
                             mode="side"
                             loading={photosLoading}
+                            onEditNote={handleNoteSave}
                         />
                     )}
                     {timelineMode !== 'side' && (
@@ -389,6 +483,7 @@ const TripDetailPage = () => {
                             mode={timelineMode === 'sheet' ? 'sheet' : 'overlay'}
                             onClose={() => setTimelineOpen(false)}
                             loading={photosLoading}
+                            onEditNote={handleNoteSave}
                         />
                     )}
                 </div>

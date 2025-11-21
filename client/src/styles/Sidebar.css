@@ -47,3 +47,14 @@
   align-items: center;
   gap: 6px;
 }
+
+.TripNotice {
+  margin-top: -4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #dbeafe;
+  line-height: 1.4;
+  font-size: 0.9rem;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}

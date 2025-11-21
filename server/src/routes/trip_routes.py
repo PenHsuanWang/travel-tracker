@@ -1,10 +1,24 @@
-from fastapi import APIRouter, HTTPException, status
-from typing import List, Dict, Any
+from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form
+from typing import List, Dict, Any, Optional
+from pydantic import BaseModel
 from src.models.trip import Trip
 from src.services.trip_service import TripService
+from src.services.file_upload_service import FileUploadService
+from datetime import datetime
 
 router = APIRouter()
 trip_service = TripService()
+
+
+class TripCreateWithGpxResponse(BaseModel):
+    trip: Trip
+    gpx_metadata_extracted: Optional[bool] = None
+    gpx_start_datetime: Optional[str] = None
+    gpx_end_datetime: Optional[str] = None
+    trip_dates_auto_filled: Optional[bool] = None
+    auto_fill_reason: Optional[str] = None
+    gpx_error: Optional[str] = None
+    upload_metadata: Optional[Dict[str, Any]] = None
 
 @router.post("/", response_model=Trip, status_code=status.HTTP_201_CREATED)
 async def create_trip(trip: Trip):
@@ -13,6 +27,81 @@ async def create_trip(trip: Trip):
     """
     try:
         return trip_service.create_trip(trip)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _parse_date_field(value: Optional[str]) -> Optional[datetime]:
+    """Parse YYYY-MM-DD style inputs to datetime; return None for falsy/invalid."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+@router.post("/with-gpx", response_model=TripCreateWithGpxResponse, status_code=status.HTTP_201_CREATED)
+async def create_trip_with_gpx(
+    name: str = Form(...),
+    start_date: Optional[str] = Form(None),
+    end_date: Optional[str] = Form(None),
+    region: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    gpx_file: Optional[UploadFile] = File(None),
+):
+    """
+    Create a new trip, optionally ingesting a GPX file to auto-fill dates.
+    Dates provided by the user are never overridden in v1.
+    """
+    try:
+        parsed_start = _parse_date_field(start_date)
+        parsed_end = _parse_date_field(end_date)
+        trip = Trip(
+            name=name,
+            start_date=parsed_start,
+            end_date=parsed_end,
+            region=region,
+            notes=notes,
+        )
+        created_trip = trip_service.create_trip(trip)
+
+        gpx_metadata_extracted = None
+        gpx_start_datetime = None
+        gpx_end_datetime = None
+        trip_dates_auto_filled = None
+        auto_fill_reason = None
+        upload_metadata: Optional[Dict[str, Any]] = None
+        gpx_error: Optional[str] = None
+
+        if gpx_file:
+            try:
+                result = FileUploadService.save_file(gpx_file, trip_id=created_trip.id)
+                upload_metadata = result
+                gpx_metadata_extracted = result.get("gpx_metadata_extracted")
+                gpx_start_datetime = result.get("gpx_start_datetime")
+                gpx_end_datetime = result.get("gpx_end_datetime")
+                trip_dates_auto_filled = result.get("trip_dates_auto_filled")
+                auto_fill_reason = result.get("auto_fill_reason")
+
+                # If auto-fill updated the trip, refresh it
+                if result.get("trip"):
+                    created_trip = Trip(**result["trip"])
+            except Exception as exc:
+                gpx_error = f"GPX upload or parse failed: {exc}"
+
+        return TripCreateWithGpxResponse(
+            trip=created_trip,
+            gpx_metadata_extracted=gpx_metadata_extracted,
+            gpx_start_datetime=gpx_start_datetime,
+            gpx_end_datetime=gpx_end_datetime,
+            trip_dates_auto_filled=trip_dates_auto_filled,
+            auto_fill_reason=auto_fill_reason,
+            gpx_error=gpx_error,
+            upload_metadata=upload_metadata,
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

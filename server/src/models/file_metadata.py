@@ -41,6 +41,9 @@ class FileMetadata(BaseModel):
     analysis_error: Optional[str] = None
     track_summary: Optional[Dict[str, Any]] = None
     status: str = "active"
+    note: Optional[str] = None
+    note_title: Optional[str] = None
+    order_index: Optional[int] = None
     
     class Config:
         populate_by_name = True

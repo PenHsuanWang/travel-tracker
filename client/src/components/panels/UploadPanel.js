@@ -9,6 +9,7 @@ function UploadPanel({ tripId, onUploadComplete }) {
 
   const [showUploadedData, setShowUploadedData] = useState(false);
   const [gpxList, setGpxList] = useState([]);
+  const [gpxHint, setGpxHint] = useState('');
 
   const handleGpsClick = () => {
     if (gpsInputRef.current) {
@@ -27,16 +28,33 @@ function UploadPanel({ tripId, onUploadComplete }) {
     try {
       const result = await uploadFile(file, tripId);
       console.log('GPS file uploaded:', result);
+      let notice = '';
+      if (result.trip_dates_auto_filled) {
+        notice = 'Trip dates auto-filled from GPX track. You can adjust them in the trip header.';
+      } else if (result.gpx_metadata_extracted === false) {
+        notice = 'We could not read dates from this GPX file. Please enter the trip dates manually.';
+      } else if (result.analysis_status === 'failed') {
+        notice = `GPX analysis failed: ${result.analysis_error || 'unknown error'}.`;
+      }
+
+      setGpxHint(notice);
+
       // Refresh the list after upload
       if (showUploadedData) {
         const gpxFiles = await listGpxFiles(tripId);
         setGpxList(gpxFiles || []);
       }
       if (typeof onUploadComplete === 'function') {
-        onUploadComplete();
+        onUploadComplete({
+          trip: result.trip,
+          notice,
+          uploadResult: result,
+          uploadType: 'gpx'
+        });
       }
     } catch (error) {
       console.error('Error uploading GPS file:', error);
+      setGpxHint('');
     }
   };
 
@@ -91,7 +109,7 @@ function UploadPanel({ tripId, onUploadComplete }) {
       }
 
       if (typeof onUploadComplete === 'function') {
-        onUploadComplete();
+        onUploadComplete({ uploadType: 'image' });
       }
     } catch (error) {
       console.error('[UploadPanel] Error uploading image - Full error:', error);
@@ -153,6 +171,12 @@ function UploadPanel({ tripId, onUploadComplete }) {
           accept="image/*"
         />
       </div>
+
+      {gpxHint && (
+        <div className="upload-panel-hint" role="status">
+          {gpxHint}
+        </div>
+      )}
 
       <button onClick={toggleUploadedData} style={{ marginTop: '10px' }}>
         {showUploadedData ? 'Hide Uploaded Data' : 'Show Uploaded Data'}
