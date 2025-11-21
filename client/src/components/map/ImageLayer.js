@@ -5,6 +5,11 @@ import L from 'leaflet';
 import { getGeotaggedImages } from '../../services/api';
 import '../../styles/ImageLayer.css';
 
+export async function fetchGeotaggedImagesForTrip(fetcher = getGeotaggedImages, tripId = null) {
+  const images = await fetcher(undefined, undefined, undefined, undefined, 'images', tripId);
+  return Array.isArray(images) ? images : [];
+}
+
 /**
  * ImageLayer Component
  * 
@@ -77,17 +82,9 @@ function ImageLayer({ onImageSelected = null, tripId = null }) {
     try {
       const tripContextLog = tripId ? ` for trip ${tripId}` : '';
       console.log(`[ImageLayer] Loading geotagged images${tripContextLog}...`);
-      let images = await getGeotaggedImages(undefined, undefined, undefined, undefined, 'images', tripId);
-
-      // Legacy safeguard: fall back to global images if trip filtering returns nothing
-      if (tripId && (!Array.isArray(images) || images.length === 0)) {
-        console.warn('[ImageLayer] No geotagged images returned for trip; falling back to global images');
-        images = await getGeotaggedImages(undefined, undefined, undefined, undefined, 'images', null);
-      }
-
-      console.log('[ImageLayer] Loaded', images?.length || 0, 'geotagged images');
-
       clearAllMarkers();
+      const images = await fetchGeotaggedImagesForTrip(getGeotaggedImages, tripId);
+      console.log('[ImageLayer] Loaded', images?.length || 0, 'geotagged images for trip context');
 
       const newMarkers = {};
 

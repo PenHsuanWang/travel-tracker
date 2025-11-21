@@ -20,6 +20,10 @@ function UploadPanel({ tripId, onUploadComplete }) {
   const handleGpsChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (!tripId) {
+      alert('Select or create a trip before uploading GPX files.');
+      return;
+    }
     try {
       const result = await uploadFile(file, tripId);
       console.log('GPS file uploaded:', result);
@@ -46,6 +50,10 @@ function UploadPanel({ tripId, onUploadComplete }) {
   const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (!tripId) {
+      alert('Select or create a trip before uploading images.');
+      return;
+    }
 
     console.log('[UploadPanel] Starting image upload:', file.name, file.type, file.size);
 
@@ -105,6 +113,10 @@ function UploadPanel({ tripId, onUploadComplete }) {
   };
 
   const toggleUploadedData = async () => {
+    if (!tripId) {
+      alert('Select or create a trip before viewing uploaded data.');
+      return;
+    }
     if (!showUploadedData) {
       try {
         const gpxFiles = await listGpxFiles(tripId);

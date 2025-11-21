@@ -155,8 +155,12 @@ export const fetchGpxFile = async (filename, bucket = 'gps-data') => {
   return response.data;
 };
 
-export const fetchGpxAnalysis = async (filename) => {
-  const response = await apiClient.get(`/gpx/${encodeURIComponent(filename)}/analysis`);
+export const fetchGpxAnalysis = async (filename, tripId = null) => {
+  const params = {};
+  if (tripId) {
+    params.trip_id = tripId;
+  }
+  const response = await apiClient.get(`/gpx/${encodeURIComponent(filename)}/analysis`, { params });
   return response.data;
 };
 

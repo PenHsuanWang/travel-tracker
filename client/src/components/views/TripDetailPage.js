@@ -209,6 +209,8 @@ const TripDetailPage = () => {
     useEffect(() => {
         setSelectedPhotoId(null);
         setIsViewerOpen(false);
+        setPhotos([]);
+        setTripStats({ photos: 0, tracks: 0 });
     }, [tripId]);
 
     useEffect(() => {
@@ -287,7 +289,7 @@ const TripDetailPage = () => {
     };
 
     const handleDeleteTrip = async () => {
-        const confirmed = window.confirm('Delete this trip? This will remove the trip record but not files already uploaded.');
+        const confirmed = window.confirm('Delete this trip and all associated GPX tracks and photos? This will remove uploaded files and analysis data.');
         if (!confirmed) return;
         try {
             await deleteTrip(tripId);

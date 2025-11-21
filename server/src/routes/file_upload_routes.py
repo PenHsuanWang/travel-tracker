@@ -79,7 +79,7 @@ async def upload_file(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/metadata/{metadata_id}")
+@router.get("/metadata/{metadata_id:path}")
 async def get_file_metadata(metadata_id: str):
     """
     Get metadata for an uploaded file.
@@ -99,7 +99,7 @@ async def get_file_metadata(metadata_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/delete/{filename}")
+@router.delete("/delete/{filename:path}")
 async def delete_file(filename: str, bucket: str = Query(default="images")):
     """
     Delete an image file and its metadata.

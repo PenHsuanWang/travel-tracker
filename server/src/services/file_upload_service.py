@@ -44,6 +44,10 @@ class FileUploadService:
         service = cls()
         file_extension = file.filename.split('.')[-1].lower()
         handler = HandlerFactory.get_handler(file_extension)
+
+        # Enforce trip scoping for GPX and image uploads to avoid cross-trip leakage
+        if file_extension in {"gpx", "jpg", "jpeg", "png", "gif"} and not trip_id:
+            raise ValueError("trip_id is required when uploading GPX tracks or photos")
         
         result = handler.handle(file, trip_id=trip_id)
         

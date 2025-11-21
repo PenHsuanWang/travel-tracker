@@ -51,13 +51,13 @@ class GpxAnalysisResponse(BaseModel):
     rest_points: List[Dict[str, Any]] = []
 
 @router.get("/list-files", response_model=List[str])
-async def list_files(bucket: str = "gps-data"):
+async def list_files(bucket: str = "gps-data", trip_id: Optional[str] = Query(None)):
     """
     List object keys in the specified MinIO bucket.
     Defaults to 'gps-data'.
     """
     try:
-        keys = retrieval_service.list_files(bucket)
+        keys = retrieval_service.list_files(bucket, trip_id=trip_id)
         return keys
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -163,8 +163,8 @@ async def get_geotagged_images(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/gpx/{filename}/analysis", response_model=GpxAnalysisResponse)
-async def get_gpx_analysis(filename: str):
+@router.get("/gpx/{filename:path}/analysis", response_model=GpxAnalysisResponse)
+async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
     """
     Retrieve analyzed GPX data (coordinates, summary, waypoints, rest points).
     Falls back to parsing the raw GPX when no analysis artifact is available.
@@ -185,6 +185,12 @@ async def get_gpx_analysis(filename: str):
             metadata_doc = mongodb_adapter.load_data(filename, collection_name='file_metadata')
             if metadata_doc:
                 metadata = FileMetadata(**metadata_doc)
+                if trip_id and metadata.trip_id and metadata.trip_id != trip_id:
+                    raise HTTPException(status_code=404, detail="GPX file not found for this trip")
+                if trip_id and not metadata.trip_id:
+                    raise HTTPException(status_code=404, detail="GPX file not scoped to this trip")
+                if metadata.trip_id and trip_id is None:
+                    raise HTTPException(status_code=400, detail="trip_id is required to fetch trip-scoped GPX data")
                 display_name = metadata.filename or metadata.object_key or filename
                 analysis_status = metadata.analysis_status
                 has_gpx_analysis = metadata.has_gpx_analysis
@@ -192,8 +198,13 @@ async def get_gpx_analysis(filename: str):
                 analysis_bucket = metadata.analysis_bucket or analysis_bucket
                 bucket = metadata.bucket or bucket
                 track_summary = metadata.track_summary
+        except HTTPException:
+            raise
         except Exception as exc:
             logger.warning("Failed to load metadata for %s: %s", filename, exc)
+
+    if trip_id and metadata is None:
+        raise HTTPException(status_code=404, detail="GPX file not found for this trip")
 
     # Try to load the persisted analyzed track
     if analysis_object_key and analysis_status == 'success':
@@ -246,7 +257,7 @@ async def get_gpx_analysis(filename: str):
         rest_points=[]
     )
 
-@router.get("/files/{filename}")
+@router.get("/files/{filename:path}")
 async def get_file(filename: str, bucket: str = "gps-data"):
     """
     Retrieve a file from MinIO by filename.

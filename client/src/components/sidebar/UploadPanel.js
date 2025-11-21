@@ -2,11 +2,15 @@ import React from 'react';
 import '../../styles/UploadPanel.css';
 import { uploadFile } from '../../services/api';
 
-function UploadPanel({ setMapHtml }) {
+function UploadPanel({ setMapHtml, tripId = null }) {
   const handleFile = async e => {
     const file = e.target.files[0];
     if (!file) return;
-    await uploadFile(file);
+    if (!tripId) {
+      alert('Select a trip before uploading files.');
+      return;
+    }
+    await uploadFile(file, tripId);
     // Optionally re-fetch map or notify user
   };
 

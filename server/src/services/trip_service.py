@@ -15,6 +15,11 @@ class TripService:
         # Initialize MongoDB adapter
         mongodb_adapter = AdapterFactory.create_mongodb_adapter()
         self.storage_manager.add_adapter('mongodb', mongodb_adapter)
+        try:
+            minio_adapter = AdapterFactory.create_minio_adapter()
+            self.storage_manager.add_adapter('minio', minio_adapter)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("MinIO adapter not initialized for TripService: %s", exc)
         self.collection_name = 'trips'
 
     def create_trip(self, trip_data: Trip) -> Trip:
@@ -113,12 +118,65 @@ class TripService:
 
     def delete_trip(self, trip_id: str) -> bool:
         """
-        Delete a trip.
+        Delete a trip and cascade-delete associated files/metadata.
         """
-        # TODO: Cascade delete files associated with this trip?
-        # For now, just delete the trip record.
-        return self.storage_manager.delete_data(
+        adapter = self.storage_manager.adapters.get('mongodb')
+        if not adapter:
+            raise RuntimeError("MongoDB adapter not initialized")
+
+        minio_adapter = self.storage_manager.adapters.get('minio')
+        deleted_objects = []
+        errors = []
+
+        metadata_collection = None
+        # Collect all file metadata for the trip so we can clean both metadata and storage.
+        try:
+            metadata_collection = adapter.get_collection('file_metadata')
+            metadata_docs = list(metadata_collection.find({"trip_id": trip_id}))
+        except Exception as exc:
+            metadata_docs = []
+            metadata_collection = None
+            errors.append(f"Failed to enumerate file metadata for trip {trip_id}: {exc}")
+
+        # Delete storage objects first (original + analyzed artifacts)
+        if minio_adapter and metadata_docs:
+            for doc in metadata_docs:
+                object_key = doc.get("object_key")
+                bucket = doc.get("bucket")
+                if object_key and bucket:
+                    try:
+                        minio_adapter.delete_data(object_key, bucket=bucket)
+                        deleted_objects.append(f"{bucket}/{object_key}")
+                    except Exception as exc:
+                        errors.append(f"Failed to delete {bucket}/{object_key}: {exc}")
+                analysis_key = doc.get("analysis_object_key")
+                analysis_bucket = doc.get("analysis_bucket")
+                if analysis_key and analysis_bucket:
+                    try:
+                        minio_adapter.delete_data(analysis_key, bucket=analysis_bucket)
+                        deleted_objects.append(f"{analysis_bucket}/{analysis_key}")
+                    except Exception as exc:
+                        errors.append(f"Failed to delete {analysis_bucket}/{analysis_key}: {exc}")
+
+        # Remove metadata documents for the trip
+        if metadata_collection:
+            try:
+                metadata_collection.delete_many({"trip_id": trip_id})
+            except Exception as exc:
+                errors.append(f"Failed to delete metadata for trip {trip_id}: {exc}")
+
+        # Delete the trip record itself
+        trip_deleted = self.storage_manager.delete_data(
             trip_id,
             adapter_name='mongodb',
             collection_name=self.collection_name
         )
+
+        if errors:
+            logging.getLogger(__name__).warning(
+                "Trip %s deletion completed with warnings. deleted=%s errors=%s",
+                trip_id,
+                len(deleted_objects),
+                errors,
+            )
+        return bool(trip_deleted)

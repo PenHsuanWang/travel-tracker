@@ -37,19 +37,28 @@ class FileRetrievalService:
         except Exception as exc:  # pragma: no cover - defensive guard
             self.logger.warning("MongoDB adapter not initialized: %s", exc)
 
-    def list_files(self, bucket_name: str) -> List[str]:
+    def list_files(self, bucket_name: str, trip_id: Optional[str] = None) -> List[str]:
         """
         List object keys in the given bucket.
         """
         if 'minio' not in self.storage_manager.adapters:
             raise RuntimeError("MinIO adapter not configured")
-        return self.storage_manager.list_keys('minio', prefix="", bucket=bucket_name)
+        prefix = f"{trip_id}/" if trip_id else ""
+        return self.storage_manager.list_keys('minio', prefix=prefix, bucket=bucket_name)
 
     def list_files_with_metadata(self, bucket_name: str, trip_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List files and merge in metadata when available."""
+        """
+        List files and merge in metadata when available.
+
+        When trip_id is provided, only files explicitly associated with that
+        trip are returned. Objects from other trips (or orphan objects with no
+        metadata) are intentionally hidden to prevent cross-trip leakage.
+        """
         if 'minio' not in self.storage_manager.adapters:
             raise RuntimeError("MinIO adapter not configured")
-        object_keys = set(self.storage_manager.list_keys('minio', prefix="", bucket=bucket_name))
+
+        prefix = f"{trip_id}/" if trip_id else ""
+        object_keys = set(self.storage_manager.list_keys('minio', prefix=prefix, bucket=bucket_name))
         metadata_map: Dict[str, Dict[str, Any]] = {}
 
         mongodb_adapter = self.storage_manager.adapters.get('mongodb')
@@ -143,7 +152,8 @@ class FileRetrievalService:
             query: Dict[str, Any] = {
                 "gps": {"$exists": True, "$ne": None},
                 "gps.latitude": {"$exists": True, "$ne": None},
-                "gps.longitude": {"$exists": True, "$ne": None}
+                "gps.longitude": {"$exists": True, "$ne": None},
+                "bucket": bucket_name
             }
             
             if trip_id:
@@ -182,7 +192,7 @@ class FileRetrievalService:
                     
                     # Generate thumbnail URL (use object_key for now)
                     # In production, this could use a thumbnail service or presigned URL
-                    thumb_url = self._generate_thumbnail_url(parsed.object_key, bucket_name)
+                    thumb_url = self._generate_thumbnail_url(parsed.object_key, parsed.bucket or bucket_name)
                     
                     items.append({
                         'object_key': parsed.object_key,

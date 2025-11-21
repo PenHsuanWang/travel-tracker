@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { uploadFile } from '../../services/api';
 
-function UploadComponent() {
+function UploadComponent({ tripId = null }) {
   const [gpsFile, setGpsFile] = useState(null);
   const [imageFile, setImageFile] = useState(null);
 
@@ -15,8 +15,12 @@ function UploadComponent() {
 
   const handleUpload = async (file) => {
     if (!file) return;
+    if (!tripId) {
+      alert('Select a trip before uploading files.');
+      return;
+    }
     try {
-      const data = await uploadFile(file);
+      const data = await uploadFile(file, tripId);
       console.log('File uploaded successfully:', data);
     } catch (error) {
       console.error('Error uploading file:', error);
