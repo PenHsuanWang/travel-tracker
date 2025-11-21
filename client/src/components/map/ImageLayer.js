@@ -1,5 +1,5 @@
 // client/src/components/map/ImageLayer.js
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { getGeotaggedImages } from '../../services/api';

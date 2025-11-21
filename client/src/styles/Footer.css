@@ -1,7 +1,35 @@
 /* client/src/styles/Footer.css */
-.App-footer {
-  background-color: #282c34;
-  color: #fff;
-  padding: 10px;
-  text-align: center;
+.main-footer {
+  background: #111827;
+  color: #e5e7eb;
+  height: 48px;
+  display: flex;
+  align-items: center;
+}
+
+.footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 100%;
+}
+
+.footer-links {
+  display: flex;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.footer-links a {
+  color: #e5e7eb;
+  text-decoration: none;
+}
+
+.footer-links a:hover {
+  text-decoration: underline;
 }

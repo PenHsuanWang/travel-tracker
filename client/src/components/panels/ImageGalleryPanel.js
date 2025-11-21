@@ -67,7 +67,7 @@ function ImageGalleryPanel({ tripId, onDataChange }) {
 
     window.addEventListener('imageUploaded', handleImageUpload);
     return () => window.removeEventListener('imageUploaded', handleImageUpload);
-  }, [showImages, loadImages]);
+  }, [showImages, loadImages, onDataChange]);
 
   const toggleImagesPanel = async () => {
     if (!showImages) {
@@ -89,13 +89,13 @@ function ImageGalleryPanel({ tripId, onDataChange }) {
     return parsed.toLocaleString();
   };
 
-  const getMetadataForImage = (filename) => {
+  const getMetadataForImage = useCallback((filename) => {
     return (
       imageMetadata[filename] ||
       imageFiles.find((item) => item?.object_key === filename)?.metadata ||
       null
     );
-  };
+  }, [imageMetadata, imageFiles]);
 
   const handleImageClick = (filename) => {
     setSelectedImage(filename);
@@ -130,7 +130,7 @@ function ImageGalleryPanel({ tripId, onDataChange }) {
       console.error('[ImageGalleryPanel] Error loading metadata:', error);
       return cached || null;
     }
-  }, [imageMetadata, imageFiles]);
+  }, [getMetadataForImage]);
 
   const handleImageHover = async (filename, event) => {
     setHoveredImage(filename);
