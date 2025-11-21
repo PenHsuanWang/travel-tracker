@@ -2,17 +2,54 @@
 .MainBlock {
   flex: 1;
   display: flex;
-  flex-direction: row; /* Map on the left, Data on the right, or row-reverse if you want reversed */
+  flex-direction: row;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.MapAndTimeline {
+  flex: 1;
+  display: flex;
+  position: relative;
+  min-width: 0;
 }
 
 .MapArea {
-  flex: 2;
+  flex: 1;
   position: relative;
   overflow: hidden;
+  background: #0f172a;
+  min-height: 0;
+  min-width: 640px;
+  min-height: 500px;
+}
+
+.MapAndTimeline.timeline-floating .MapArea,
+.MapAndTimeline.timeline-sheet .MapArea {
+  min-width: 0;
 }
 
 .DataListArea {
   flex: 1;
   padding: 10px;
   background-color: #f0f0f0;
+}
+
+@media (max-width: 1439px) {
+  .MapArea {
+    min-width: 600px;
+  }
+}
+
+@media (max-width: 1279px) {
+  .MapArea {
+    min-width: 560px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .MapArea {
+    min-height: 420px;
+  }
 }

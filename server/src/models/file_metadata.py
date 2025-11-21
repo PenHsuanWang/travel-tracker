@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class GPSData(BaseModel):
@@ -27,10 +27,13 @@ class FileMetadata(BaseModel):
     exif: Optional[Dict[str, Any]] = None
     gps: Optional[GPSData] = None
     date_taken: Optional[str] = None
+    captured_at: Optional[datetime] = None
+    captured_source: Optional[str] = None
     camera_make: Optional[str] = None
     camera_model: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     uploader_id: Optional[str] = None
+    trip_id: Optional[str] = None
     status: str = "active"
     
     class Config:
@@ -49,7 +52,10 @@ class HandlerResult(BaseModel):
     exif: Optional[Dict[str, Any]] = None
     gps: Optional[GPSData] = None
     date_taken: Optional[str] = None
+    captured_at: Optional[datetime] = None
+    captured_source: Optional[str] = None
     camera_make: Optional[str] = None
     camera_model: Optional[str] = None
+    trip_id: Optional[str] = None
     status: str = "success"
     error: Optional[str] = None

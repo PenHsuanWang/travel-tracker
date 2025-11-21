@@ -28,6 +28,8 @@ class GeotaggedImage(BaseModel):
     lon: float
     thumb_url: str
     metadata_id: Optional[str] = None
+    captured_at: Optional[str] = None
+    captured_source: Optional[str] = None
 
 @router.get("/list-files", response_model=List[str])
 async def list_files(bucket: str = "gps-data"):
@@ -43,10 +45,10 @@ async def list_files(bucket: str = "gps-data"):
 
 
 @router.get("/list-files/detail", response_model=List[FileListItem])
-async def list_files_with_metadata(bucket: str = "images"):
+async def list_files_with_metadata(bucket: str = "images", trip_id: Optional[str] = Query(None)):
     """List files alongside any metadata captured during upload."""
     try:
-        return retrieval_service.list_files_with_metadata(bucket)
+        return retrieval_service.list_files_with_metadata(bucket, trip_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -56,7 +58,8 @@ async def get_geotagged_images(
     minLon: Optional[float] = Query(None),
     minLat: Optional[float] = Query(None),
     maxLon: Optional[float] = Query(None),
-    maxLat: Optional[float] = Query(None)
+    maxLat: Optional[float] = Query(None),
+    trip_id: Optional[str] = Query(None)
 ):
     """
     Retrieve geotagged images (images with GPS coordinates).
@@ -78,7 +81,7 @@ async def get_geotagged_images(
                 'maxLat': maxLat
             }
         
-        return retrieval_service.list_geotagged_images(bucket, bbox)
+        return retrieval_service.list_geotagged_images(bucket, bbox, trip_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

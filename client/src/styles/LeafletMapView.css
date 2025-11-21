@@ -45,7 +45,7 @@
   top: 50px;
   right: 10px;
   z-index: 1000;
-  background: white;
+  background: rgba(255, 255, 255, 0.95);
   border: 2px solid rgba(0,0,0,0.2);
   border-radius: 4px;
   width: 220px;
@@ -53,6 +53,7 @@
   overflow-y: auto;
   padding: 10px;
   box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+  text-align: left;
 }
 
 .leaflet-map-view .gpx-dropdown ul {
@@ -65,29 +66,34 @@
   margin: 5px 0;
   padding: 8px;
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: 6px;
   font-size: 13px;
   display: flex;
   align-items: center;
+  gap: 8px;
+  background: rgba(248, 250, 252, 0.65);
 }
 
 .leaflet-map-view .gpx-dropdown li:hover {
-  background-color: #e0e0e0;
+  background-color: #e2e8f0;
 }
 
 .leaflet-map-view .gpx-dropdown li.selected {
-  background-color: #d0e8f0;
-  font-weight: bold;
+  background-color: #c2e7ff;
+  font-weight: 600;
 }
 
 .leaflet-map-view .gpx-dropdown li input[type="checkbox"] {
   cursor: pointer;
   margin: 0;
+  accent-color: #38bdf8;
 }
 
 .leaflet-map-view .gpx-dropdown li span {
-  margin-left: 8px;
   flex: 1;
+  color: #0f172a;
+  line-height: 1.3;
+  word-break: break-word;
 }
 
 /* Loading overlay */

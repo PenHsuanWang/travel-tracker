@@ -10,7 +10,7 @@ import '../../styles/LeafletMapView.css';
 // Component to handle map layer changes
 function MapLayerController({ selectedLayer }) {
   const map = useMap();
-  
+
   useEffect(() => {
     // Remove all tile layers
     map.eachLayer((layer) => {
@@ -18,43 +18,43 @@ function MapLayerController({ selectedLayer }) {
         map.removeLayer(layer);
       }
     });
-    
+
     // Add new tile layer based on selection
     const tileUrls = {
       'openstreetmap': 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       'rudy map': 'https://tile.happyman.idv.tw/map/rudy/{z}/{x}/{y}.png',
       'mapbox': 'https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}'
     };
-    
+
     const attributions = {
       'openstreetmap': '© OpenStreetMap contributors',
       'rudy map': 'Map data © Rudy contributors',
       'mapbox': '© Mapbox contributors'
     };
-    
+
     L.tileLayer(tileUrls[selectedLayer] || tileUrls['openstreetmap'], {
       attribution: attributions[selectedLayer] || attributions['openstreetmap'],
       maxZoom: 19
     }).addTo(map);
   }, [selectedLayer, map]);
-  
+
   return null;
 }
 
 // Component to handle GPX file centering
 function GPXCenterController({ gpxCenter }) {
   const map = useMap();
-  
+
   useEffect(() => {
     if (gpxCenter) {
       map.setView(gpxCenter, 15);
     }
   }, [gpxCenter, map]);
-  
+
   return null;
 }
 
-function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
+function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripId, onImageSelected }) {
   const [riverGeoJSON, setRiverGeoJSON] = useState({});
   const [loading, setLoading] = useState(true);
   const [gpxFiles, setGpxFiles] = useState([]);
@@ -84,7 +84,7 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
   const toggleGpxDropdown = async () => {
     if (!showGpx) {
       try {
-        const files = await listGpxFiles();
+        const files = await listGpxFiles(tripId);
         setGpxFiles(files);
       } catch (err) {
         console.error('Error listing GPX files:', err);
@@ -97,7 +97,7 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
     // Toggle selection
     const isSelected = selectedGpxFiles.includes(filename);
     let newSelection;
-    
+
     if (isSelected) {
       // Deselect: remove from selection and remove track data
       newSelection = selectedGpxFiles.filter(f => f !== filename);
@@ -109,17 +109,17 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
       // Select: add to selection and load track data
       newSelection = [...selectedGpxFiles, filename];
       setSelectedGpxFiles(newSelection);
-      
+
       try {
         const arrayBuffer = await fetchGpxFile(filename, 'gps-data');
         const trackData = parseGpxTrack(arrayBuffer);
-        
+
         if (trackData.coordinates.length > 0) {
           setGpxTracks(prev => ({
             ...prev,
             [filename]: trackData
           }));
-          
+
           // Center map to first point of newly loaded track
           setGpxCenter(trackData.coordinates[0]);
           console.log(`GPX track loaded: ${filename}, ${trackData.coordinates.length} points`);
@@ -137,16 +137,16 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
     const gpxText = decoder.decode(arrayBuffer);
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(gpxText, 'application/xml');
-    
+
     const coordinates = [];
     let trackName = 'Unnamed Track';
-    
+
     // Try to get track name
     const nameElement = xmlDoc.querySelector('trk > name');
     if (nameElement && nameElement.textContent) {
       trackName = nameElement.textContent;
     }
-    
+
     // Get all track points
     const trkpts = xmlDoc.querySelectorAll('trkpt');
     trkpts.forEach(trkpt => {
@@ -156,7 +156,7 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
         coordinates.push([lat, lon]);
       }
     });
-    
+
     return {
       name: trackName,
       coordinates: coordinates
@@ -199,7 +199,7 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
   return (
     <div className="leaflet-map-view">
       {/* Layer selector in top-left */}
-      <select 
+      <select
         className="layer-selector"
         value={selectedLayer}
         onChange={(e) => setSelectedLayer(e.target.value)}
@@ -233,7 +233,7 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
                     onChange={() => handleGpxClick(file)}
                     onClick={(e) => e.stopPropagation()}
                   />
-                  <span style={{ 
+                  <span style={{
                     color: selectedGpxFiles.includes(file) ? getGpxTrackColor(file) : 'inherit',
                     marginLeft: '8px'
                   }}>
@@ -262,10 +262,10 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
       >
         {/* Map layer controller */}
         <MapLayerController selectedLayer={selectedLayer} />
-        
+
         {/* GPX center controller */}
         <GPXCenterController gpxCenter={gpxCenter} />
-        
+
         {/* Default tile layer (will be replaced by MapLayerController) */}
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -276,7 +276,7 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
         {!loading && selectedRivers.map((riverName) => {
           const geoJson = riverGeoJSON[riverName];
           if (!geoJson) return null;
-          
+
           return (
             <GeoJSON
               key={riverName}
@@ -310,7 +310,7 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers }) {
         ))}
 
         {/* Image Layer - displays markers for geotagged images */}
-        <ImageLayer />
+        <ImageLayer tripId={tripId} onImageSelected={onImageSelected} />
       </MapContainer>
     </div>
   );
