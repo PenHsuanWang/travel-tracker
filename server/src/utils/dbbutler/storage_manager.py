@@ -57,14 +57,25 @@ class StorageManager:
             return adapter.load_data(key, **kwargs)
         return None
 
-    def delete_data(self, key: str, **kwargs) -> None:
+    def delete_data(self, key: str, adapter_name: str = None, **kwargs) -> bool:
         """
-        Delete data from all configured storage adapters.
+        Delete data from a specific adapter or all configured adapters.
 
         :param key: The key for the data to be deleted.
+        :param adapter_name: If provided, delete from this adapter only.
+        :return: True if any adapter reports a successful deletion, False otherwise.
         """
+        if adapter_name:
+            adapter = self.adapters.get(adapter_name)
+            if not adapter:
+                raise ValueError(f"Adapter '{adapter_name}' not registered")
+            result = adapter.delete_data(key, **kwargs)
+            return bool(result)
+
+        results = []
         for adapter in self.adapters.values():
-            adapter.delete_data(key, **kwargs)
+            results.append(adapter.delete_data(key, **kwargs))
+        return any(bool(result) for result in results)
 
     def save_batch_data(self, data: dict, **kwargs) -> None:
         """
@@ -122,4 +133,3 @@ class StorageManager:
         if adapter:
             return adapter.list_keys(prefix, **kwargs)
         return []
-
