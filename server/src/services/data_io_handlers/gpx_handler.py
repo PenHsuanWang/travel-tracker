@@ -1,9 +1,11 @@
+import logging
 from typing import Optional
 from fastapi import UploadFile
 from src.services.data_io_handlers.base_handler import BaseHandler
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
 from src.models.file_metadata import HandlerResult
+from src.services.gpx_analysis_service import GpxAnalysisService
 
 
 class GPXHandler(BaseHandler):
@@ -26,6 +28,7 @@ class GPXHandler(BaseHandler):
         :param trip_id: Optional ID of the trip this file belongs to.
         :return: HandlerResult containing file info.
         """
+        logger = logging.getLogger(__name__)
         file_data = file.file.read()
         file_name = file.filename
         file_extension = file_name.split('.')[-1].lower()
@@ -35,6 +38,32 @@ class GPXHandler(BaseHandler):
 
         # Save raw GPX file data to MinIO using the 'minio' adapter and the bucket 'gps-data'
         self.storage_manager.save_data(file_name, file_data, adapter_name='minio', bucket=bucket_name)
+
+        # Analyze GPX data and persist analysis artifact separately.
+        analysis_status = 'not_attempted'
+        analysis_error: Optional[str] = None
+        analysis_object_key: Optional[str] = None
+        analysis_bucket: Optional[str] = None
+        analysis_result = None
+
+        try:
+            analysis_result = GpxAnalysisService.analyze_gpx_data(file_data, file_name)
+            analysis_bucket = 'gps-analysis-data'
+            analysis_object_key = f"{file_name}.analyzed.pkl"
+
+            self.storage_manager.save_data(
+                analysis_object_key,
+                analysis_result.serialized_object,
+                adapter_name='minio',
+                bucket=analysis_bucket
+            )
+            analysis_status = 'success'
+        except Exception as exc:
+            analysis_status = 'failed'
+            analysis_error = str(exc)
+            logger.error("GPX analysis failed for %s: %s", file_name, exc)
+            analysis_object_key = None
+            analysis_bucket = None
 
         # Return HandlerResult so FileUploadService can save metadata
         return HandlerResult(
@@ -46,5 +75,11 @@ class GPXHandler(BaseHandler):
             mime_type='application/gpx+xml',
             file_extension=file_extension,
             trip_id=trip_id,
-            status='success'
+            status='success',
+            has_gpx_analysis=(analysis_status == 'success'),
+            analysis_object_key=analysis_object_key,
+            analysis_bucket=analysis_bucket,
+            analysis_status=analysis_status,
+            analysis_error=analysis_error,
+            track_summary=analysis_result.summary if analysis_result else None
         )

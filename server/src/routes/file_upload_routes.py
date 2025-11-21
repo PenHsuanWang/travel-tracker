@@ -21,6 +21,12 @@ class UploadResponse(BaseModel):
     captured_source: Optional[str] = None
     camera_make: Optional[str] = None
     camera_model: Optional[str] = None
+    has_gpx_analysis: Optional[bool] = None
+    analysis_status: Optional[str] = None
+    analysis_bucket: Optional[str] = None
+    analysis_object_key: Optional[str] = None
+    analysis_error: Optional[str] = None
+    track_summary: Optional[Dict[str, Any]] = None
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -61,7 +67,13 @@ async def upload_file(
             "captured_at": result.get("captured_at"),
             "captured_source": result.get("captured_source"),
             "camera_make": result.get("camera_make"),
-            "camera_model": result.get("camera_model")
+            "camera_model": result.get("camera_model"),
+            "has_gpx_analysis": result.get("has_gpx_analysis"),
+            "analysis_status": result.get("analysis_status"),
+            "analysis_bucket": result.get("analysis_bucket"),
+            "analysis_object_key": result.get("analysis_object_key"),
+            "analysis_error": result.get("analysis_error"),
+            "track_summary": result.get("track_summary"),
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -131,6 +131,15 @@
   border-color: #d1d5db;
 }
 
+.ghost-button.danger {
+  color: #b91c1c;
+  border-color: #fca5a5;
+}
+
+.ghost-button.danger:hover {
+  background: #fff1f2;
+}
+
 .ghost-icon {
   width: 40px;
   display: inline-flex;

@@ -34,6 +34,12 @@ class FileMetadata(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     uploader_id: Optional[str] = None
     trip_id: Optional[str] = None
+    has_gpx_analysis: Optional[bool] = None
+    analysis_object_key: Optional[str] = None
+    analysis_bucket: Optional[str] = None
+    analysis_status: Optional[str] = None  # 'success', 'failed', 'not_attempted'
+    analysis_error: Optional[str] = None
+    track_summary: Optional[Dict[str, Any]] = None
     status: str = "active"
     
     class Config:
@@ -59,3 +65,9 @@ class HandlerResult(BaseModel):
     trip_id: Optional[str] = None
     status: str = "success"
     error: Optional[str] = None
+    has_gpx_analysis: Optional[bool] = None
+    analysis_object_key: Optional[str] = None
+    analysis_bucket: Optional[str] = None
+    analysis_status: Optional[str] = None
+    analysis_error: Optional[str] = None
+    track_summary: Optional[Dict[str, Any]] = None

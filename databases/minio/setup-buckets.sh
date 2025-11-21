@@ -23,7 +23,7 @@ MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-minioadmin}"
 MINIO_ALIAS="myminio"
 
 # Bucket names
-BUCKETS=("gps-data" "images" "gis-data")
+BUCKETS=("gps-data" "gps-analysis-data" "images" "gis-data")
 
 # Function to print colored messages
 print_info() {
@@ -255,6 +255,7 @@ main() {
     echo ""
     echo "Buckets:"
     echo "  • gps-data   - For GPX track files"
+    echo "  • gps-analysis-data - For analyzed GPX pickle artifacts"
     echo "  • images     - For geotagged photos (with EXIF data)"
     echo "  • gis-data   - For GIS data (rivers, shapefiles, etc.)"
     echo ""

@@ -27,6 +27,12 @@ else
     echo "✓ Bucket already exists: gps-data"
 fi
 
+if mc mb myminio/gps-analysis-data 2>/dev/null; then
+    echo "✓ Created bucket: gps-analysis-data"
+else
+    echo "✓ Bucket already exists: gps-analysis-data"
+fi
+
 if mc mb myminio/images 2>/dev/null; then
     echo "✓ Created bucket: images"
 else
@@ -44,6 +50,9 @@ echo ""
 echo "Setting bucket access policies..."
 mc anonymous set download myminio/gps-data
 echo "✓ Set public read access: gps-data"
+
+mc anonymous set download myminio/gps-analysis-data
+echo "✓ Set public read access: gps-analysis-data"
 
 mc anonymous set download myminio/images
 echo "✓ Set public read access: images"
@@ -67,6 +76,7 @@ echo "  - Password: minioadmin"
 echo ""
 echo "Buckets created:"
 echo "  - gps-data   : For GPX track files"
+echo "  - gps-analysis-data : For analyzed GPX objects (pickled)"
 echo "  - images     : For geotagged photos"
 echo "  - gis-data   : For GIS data (rivers, maps)"
 echo ""
