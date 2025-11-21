@@ -36,6 +36,15 @@ export const deleteTrip = async (tripId) => {
 
 // --- File API ---
 
+export const deleteFile = async (filename, bucket = 'images') => {
+  const response = await apiClient.delete(`/map/delete/${encodeURIComponent(filename)}`, {
+    params: { bucket }
+  });
+  return response.data;
+};
+
+export const deleteGpxFile = async (filename) => deleteFile(filename, 'gps-data');
+
 export const uploadFile = async (file, tripId = null) => {
   try {
     console.log('[API] Uploading file:', file.name, file.type, file.size, 'Trip:', tripId);
@@ -129,11 +138,25 @@ export const listGpxFiles = async (tripId = null) => {
   return response.data.map(item => item.object_key);
 };
 
+export const listGpxFilesWithMeta = async (tripId = null) => {
+  const params = { bucket: 'gps-data' };
+  if (tripId) {
+    params.trip_id = tripId;
+  }
+  const response = await apiClient.get('/list-files/detail', { params });
+  return response.data;
+};
+
 export const fetchGpxFile = async (filename, bucket = 'gps-data') => {
   const response = await apiClient.get(`/files/${encodeURIComponent(filename)}`, {
     params: { bucket },
     responseType: 'arraybuffer',
   });
+  return response.data;
+};
+
+export const fetchGpxAnalysis = async (filename) => {
+  const response = await apiClient.get(`/gpx/${encodeURIComponent(filename)}/analysis`);
   return response.data;
 };
 

@@ -4,7 +4,7 @@ import LeafletMapView from './LeafletMapView';
 import TripSidebar from '../layout/TripSidebar';
 import PhotoTimelinePanel from '../panels/PhotoTimelinePanel';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
-import { getTrip, getTrips, listGpxFiles, listImageFiles, getImageUrl } from '../../services/api';
+import { getTrip, getTrips, deleteTrip, listGpxFiles, listImageFiles, getImageUrl } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
 
@@ -286,6 +286,18 @@ const TripDetailPage = () => {
         }
     };
 
+    const handleDeleteTrip = async () => {
+        const confirmed = window.confirm('Delete this trip? This will remove the trip record but not files already uploaded.');
+        if (!confirmed) return;
+        try {
+            await deleteTrip(tripId);
+            navigate('/trips');
+        } catch (error) {
+            console.error('Failed to delete trip', error);
+            alert('Failed to delete trip. Please try again.');
+        }
+    };
+
     if (loading) {
         return <div className="loading">Loading trip details...</div>;
     }
@@ -318,6 +330,13 @@ const TripDetailPage = () => {
                             </option>
                         ))}
                     </select>
+                    <button
+                        type="button"
+                        className="ghost-button danger-button"
+                        onClick={handleDeleteTrip}
+                    >
+                        Delete Trip
+                    </button>
                 </div>
             </div>
             <div className="MainBlock">

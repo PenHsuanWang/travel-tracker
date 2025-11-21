@@ -74,6 +74,18 @@
   font-size: 0.95rem;
 }
 
+.danger-button {
+  margin-top: 0.25rem;
+  align-self: flex-start;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+  background: #fff1f2;
+}
+
+.danger-button:hover {
+  background: #ffe4e6;
+}
+
 .MapAndTimeline {
   gap: 0;
 }

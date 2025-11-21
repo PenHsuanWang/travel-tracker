@@ -55,6 +55,7 @@ const TripCard = ({
     selected,
     onSelectToggle,
     onOpenCover,
+    onDelete,
 }) => {
     const coverUrl =
         trip.cover_image_url ||
@@ -201,6 +202,16 @@ const TripCard = ({
                     >
                         Open Map
                     </Link>
+                    <button
+                        type="button"
+                        className="ghost-button danger"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete?.(trip.id);
+                        }}
+                    >
+                        Delete
+                    </button>
                     <button
                         type="button"
                         className="ghost-button ghost-icon"
@@ -794,6 +805,22 @@ const TripsPage = () => {
         }
     };
 
+    const handleDeleteTrip = async (tripId) => {
+        const confirmDelete = window.confirm('Delete this trip? This action cannot be undone.');
+        if (!confirmDelete) return;
+        setBusyMessage('Deleting trip…');
+        try {
+            await deleteTrip(tripId);
+            setTrips((prev) => prev.filter((t) => t.id !== tripId));
+            setSelectedTripIds((prev) => prev.filter((id) => id !== tripId));
+        } catch (error) {
+            console.error('Failed to delete trip', error);
+            alert('Failed to delete trip. Please try again.');
+        } finally {
+            setBusyMessage('');
+        }
+    };
+
     const handleBulkArchive = () => {
         // TODO: API endpoint for archival once backend supports it.
         alert('Archive action will be wired to backend API.'); // eslint-disable-line no-alert
@@ -875,6 +902,7 @@ const TripsPage = () => {
                             selected={selectedTripIds.includes(trip.id)}
                             onSelectToggle={handleSelectToggle}
                             onOpenCover={setCoverModalTrip}
+                            onDelete={handleDeleteTrip}
                         />
                     ))}
                 </div>

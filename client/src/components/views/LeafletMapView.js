@@ -1,8 +1,8 @@
 // client/src/components/views/LeafletMapView.js
 import React, { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, GeoJSON, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, Polyline, CircleMarker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { riversData, listGpxFiles, fetchGpxFile } from '../../services/api';
+import { riversData, listGpxFilesWithMeta, fetchGpxAnalysis, deleteFile } from '../../services/api';
 import ImageLayer from '../map/ImageLayer';
 import 'leaflet/dist/leaflet.css';
 import '../../styles/LeafletMapView.css';
@@ -57,7 +57,7 @@ function GPXCenterController({ gpxCenter }) {
 function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripId, onImageSelected }) {
   const [riverGeoJSON, setRiverGeoJSON] = useState({});
   const [loading, setLoading] = useState(true);
-  const [gpxFiles, setGpxFiles] = useState([]);
+  const [gpxFiles, setGpxFiles] = useState([]); // detailed metadata entries
   const [showGpx, setShowGpx] = useState(false);
   const [selectedGpxFiles, setSelectedGpxFiles] = useState([]);
   const [gpxTracks, setGpxTracks] = useState({});
@@ -84,7 +84,7 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
   const toggleGpxDropdown = async () => {
     if (!showGpx) {
       try {
-        const files = await listGpxFiles(tripId);
+        const files = await listGpxFilesWithMeta(tripId);
         setGpxFiles(files);
       } catch (err) {
         console.error('Error listing GPX files:', err);
@@ -93,77 +93,79 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
     setShowGpx(!showGpx);
   };
 
-  const handleGpxClick = async (filename) => {
-    // Toggle selection
-    const isSelected = selectedGpxFiles.includes(filename);
-    let newSelection;
+  const handleGpxClick = async (objectKey) => {
+    const isSelected = selectedGpxFiles.includes(objectKey);
 
     if (isSelected) {
-      // Deselect: remove from selection and remove track data
-      newSelection = selectedGpxFiles.filter(f => f !== filename);
+      const newSelection = selectedGpxFiles.filter((f) => f !== objectKey);
       const newTracks = { ...gpxTracks };
-      delete newTracks[filename];
+      delete newTracks[objectKey];
+      setSelectedGpxFiles(newSelection);
       setGpxTracks(newTracks);
-      setSelectedGpxFiles(newSelection);
-    } else {
-      // Select: add to selection and load track data
-      newSelection = [...selectedGpxFiles, filename];
-      setSelectedGpxFiles(newSelection);
+      return;
+    }
 
-      try {
-        const arrayBuffer = await fetchGpxFile(filename, 'gps-data');
-        const trackData = parseGpxTrack(arrayBuffer);
+    setSelectedGpxFiles((prev) => [...prev, objectKey]);
 
-        if (trackData.coordinates.length > 0) {
-          setGpxTracks(prev => ({
-            ...prev,
-            [filename]: trackData
-          }));
+    try {
+      const trackData = await fetchGpxAnalysis(objectKey);
+      if (trackData.coordinates && trackData.coordinates.length > 0) {
+        setGpxTracks((prev) => ({
+          ...prev,
+          [objectKey]: {
+            coordinates: trackData.coordinates,
+            summary: trackData.track_summary,
+            source: trackData.source,
+            displayName: trackData.display_name || objectKey,
+            waypoints: trackData.waypoints || [],
+            rest_points: trackData.rest_points || []
+          }
+        }));
 
-          // Center map to first point of newly loaded track
-          setGpxCenter(trackData.coordinates[0]);
-          console.log(`GPX track loaded: ${filename}, ${trackData.coordinates.length} points`);
-        } else {
-          console.warn('No valid track points found in GPX file:', filename);
+        setGpxCenter(trackData.coordinates[0]);
+        console.log(`GPX track loaded: ${objectKey}, ${trackData.coordinates.length} points via ${trackData.source}`);
+      } else {
+        console.warn('No valid track points found in GPX file:', objectKey);
+      }
+    } catch (err) {
+      console.error('Error fetching analyzed GPX data:', err);
+    }
+  };
+
+  const handleDeleteGpx = async (fileItem) => {
+    const objectKey = typeof fileItem === 'string' ? fileItem : fileItem.object_key;
+    const analysisKey = fileItem?.metadata?.analysis_object_key;
+    const analysisBucket = fileItem?.metadata?.analysis_bucket || 'gps-analysis-data';
+
+    const confirmed = window.confirm(`Delete GPX file "${objectKey}"? This will remove the original file, metadata, and analyzed object.`);
+    if (!confirmed) return;
+
+    try {
+      await deleteFile(objectKey, 'gps-data');
+      if (analysisKey) {
+        try {
+          await deleteFile(analysisKey, analysisBucket);
+        } catch (innerErr) {
+          console.warn(`Failed to delete analysis object ${analysisKey}:`, innerErr);
         }
-      } catch (err) {
-        console.error('Error fetching gpx file:', err);
       }
+      setGpxFiles((prev) => prev.filter((item) => {
+        const key = typeof item === 'string' ? item : item.object_key;
+        return key !== objectKey;
+      }));
+      setSelectedGpxFiles((prev) => prev.filter((key) => key !== objectKey));
+      setGpxTracks((prev) => {
+        const next = { ...prev };
+        delete next[objectKey];
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to delete GPX file:', err);
+      alert('Failed to delete GPX file. Please try again.');
     }
   };
 
-  const parseGpxTrack = (arrayBuffer) => {
-    const decoder = new TextDecoder('utf-8');
-    const gpxText = decoder.decode(arrayBuffer);
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(gpxText, 'application/xml');
-
-    const coordinates = [];
-    let trackName = 'Unnamed Track';
-
-    // Try to get track name
-    const nameElement = xmlDoc.querySelector('trk > name');
-    if (nameElement && nameElement.textContent) {
-      trackName = nameElement.textContent;
-    }
-
-    // Get all track points
-    const trkpts = xmlDoc.querySelectorAll('trkpt');
-    trkpts.forEach(trkpt => {
-      const lat = parseFloat(trkpt.getAttribute('lat'));
-      const lon = parseFloat(trkpt.getAttribute('lon'));
-      if (!isNaN(lat) && !isNaN(lon)) {
-        coordinates.push([lat, lon]);
-      }
-    });
-
-    return {
-      name: trackName,
-      coordinates: coordinates
-    };
-  };
-
-  const getGpxTrackColor = (filename) => {
+  const getGpxTrackColor = (objectKey) => {
     // Different colors for different GPX tracks
     const colors = [
       '#ff0000', // red
@@ -177,7 +179,10 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
       '#ff0088', // pink
       '#00ff88'  // mint
     ];
-    const index = gpxFiles.indexOf(filename);
+    const index = gpxFiles.findIndex((item) => {
+      const key = typeof item === 'string' ? item : item.object_key;
+      return key === objectKey;
+    });
     return colors[index % colors.length];
   };
 
@@ -221,26 +226,61 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
             {gpxFiles.length === 0 ? (
               <li>No GPX files found.</li>
             ) : (
-              gpxFiles.map((file, idx) => (
+              gpxFiles.map((file) => {
+                const objectKey = typeof file === 'string' ? file : file.object_key;
+                const label = typeof file === 'string'
+                  ? file
+                  : (file.metadata?.original_filename || file.metadata?.filename || file.object_key);
+                const summary = file.metadata?.track_summary;
+                const distanceLabel = summary?.total_distance_km
+                  ? `${Number(summary.total_distance_km).toFixed(1)} km`
+                  : summary?.total_distance_m
+                    ? `${(Number(summary.total_distance_m) / 1000).toFixed(1)} km`
+                    : null;
+                const restCount = summary?.rest_points_count;
+                const sourceLabel = file.metadata?.analysis_status === 'success' ? 'Analyzed' : 'Raw';
+
+                return (
                 <li
-                  key={idx}
-                  onClick={() => handleGpxClick(file)}
-                  className={selectedGpxFiles.includes(file) ? 'selected' : ''}
+                  key={objectKey}
+                  onClick={() => handleGpxClick(objectKey)}
+                  className={selectedGpxFiles.includes(objectKey) ? 'selected' : ''}
                 >
                   <input
                     type="checkbox"
-                    checked={selectedGpxFiles.includes(file)}
-                    onChange={() => handleGpxClick(file)}
+                    checked={selectedGpxFiles.includes(objectKey)}
+                    onChange={() => handleGpxClick(objectKey)}
                     onClick={(e) => e.stopPropagation()}
                   />
-                  <span style={{
-                    color: selectedGpxFiles.includes(file) ? getGpxTrackColor(file) : 'inherit',
-                    marginLeft: '8px'
-                  }}>
-                    {file}
-                  </span>
+                  <div className="gpx-info">
+                    <div
+                      className="gpx-title"
+                      style={{
+                        color: selectedGpxFiles.includes(objectKey) ? getGpxTrackColor(objectKey) : 'inherit',
+                      }}
+                    >
+                      {label}
+                    </div>
+                    <div className="gpx-meta-row">
+                      {distanceLabel && <span className="gpx-chip">{distanceLabel}</span>}
+                      {typeof restCount === 'number' && <span className="gpx-chip">{restCount} rests</span>}
+                      {sourceLabel && <span className="gpx-chip muted">{sourceLabel}</span>}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="gpx-delete-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteGpx(file);
+                    }}
+                    title="Delete GPX"
+                  >
+                    x
+                  </button>
                 </li>
-              ))
+                );
+              })
             )}
           </ul>
         </div>
@@ -307,6 +347,51 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
           >
             {/* Popup for track info */}
           </Polyline>
+        ))}
+
+        {/* Render analyzed waypoints and rest points */}
+        {Object.entries(gpxTracks).map(([filename, trackData]) => (
+          <React.Fragment key={`${filename}-markers`}>
+            {(trackData.waypoints || []).map((wp, idx) => (
+              <CircleMarker
+                key={`${filename}-wp-${idx}`}
+                center={[wp.lat, wp.lon]}
+                radius={6}
+                pathOptions={{ color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.9 }}
+              >
+                <Popup>
+                  <div>
+                    <strong>Waypoint</strong>
+                    <div>{trackData.displayName || filename}</div>
+                    {wp.note && <div>Note: {wp.note}</div>}
+                    {wp.time && <div>Time: {wp.time}</div>}
+                    {wp.elev !== undefined && wp.elev !== null && <div>Elev: {wp.elev} m</div>}
+                  </div>
+                </Popup>
+              </CircleMarker>
+            ))}
+            {(trackData.rest_points || []).map((rp, idx) => (
+              <CircleMarker
+                key={`${filename}-rest-${idx}`}
+                center={[rp.lat, rp.lon]}
+                radius={7}
+                pathOptions={{ color: '#d97706', fillColor: '#f59e0b', fillOpacity: 0.95 }}
+              >
+                <Popup>
+                  <div>
+                    <strong>Rest point</strong>
+                    <div>{trackData.displayName || filename}</div>
+                    {rp.start_time && <div>Start: {rp.start_time}</div>}
+                    {rp.end_time && <div>End: {rp.end_time}</div>}
+                    {rp.rest_minutes !== undefined && rp.rest_minutes !== null && (
+                      <div>Rest: {rp.rest_minutes} min</div>
+                    )}
+                    {rp.elev !== undefined && rp.elev !== null && <div>Elev: {rp.elev} m</div>}
+                  </div>
+                </Popup>
+              </CircleMarker>
+            ))}
+          </React.Fragment>
         ))}
 
         {/* Image Layer - displays markers for geotagged images */}

@@ -84,11 +84,12 @@ Open http://localhost:9001 in your browser
 
 ## Bucket Structure
 
-The application uses three buckets:
+The application uses these buckets:
 
 | Bucket | Purpose | Data Types | Access |
 |--------|---------|------------|--------|
 | `gps-data` | GPS track files | GPX files | Public read |
+| `gps-analysis-data` | Analyzed GPX artifacts | Pickled `AnalyzedTrackObject` | Public read |
 | `images` | Geotagged photos | JPEG, PNG with EXIF | Public read |
 | `gis-data` | GIS data | Rivers, shapefiles, pickle | Public read |
 
@@ -104,6 +105,7 @@ mc alias set myminio http://localhost:9000 minioadmin minioadmin
 ### 2. Create buckets
 ```bash
 mc mb myminio/gps-data
+mc mb myminio/gps-analysis-data
 mc mb myminio/images
 mc mb myminio/gis-data
 ```
@@ -111,6 +113,7 @@ mc mb myminio/gis-data
 ### 3. Set access policies
 ```bash
 mc anonymous set download myminio/gps-data
+mc anonymous set download myminio/gps-analysis-data
 mc anonymous set download myminio/images
 mc anonymous set download myminio/gis-data
 ```
@@ -519,4 +522,3 @@ For issues or questions:
 ---
 
 **Note:** The old Docker build method is no longer needed. The setup script works with the official MinIO Docker image from docker-compose.yml.
-

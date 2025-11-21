@@ -78,6 +78,12 @@ class FileUploadService:
                 created_at=datetime.now(timezone.utc),
                 uploader_id=uploader_id,
                 trip_id=trip_id,
+                has_gpx_analysis=result.has_gpx_analysis,
+                analysis_object_key=result.analysis_object_key,
+                analysis_bucket=result.analysis_bucket,
+                analysis_status=result.analysis_status,
+                analysis_error=result.analysis_error,
+                track_summary=result.track_summary,
                 status=result.status
             )
             
@@ -103,7 +109,13 @@ class FileUploadService:
                 "captured_source": result.captured_source,
                 "camera_make": result.camera_make,
                 "camera_model": result.camera_model,
-                "status": result.status
+                "status": result.status,
+                "has_gpx_analysis": result.has_gpx_analysis,
+                "analysis_status": result.analysis_status,
+                "analysis_bucket": result.analysis_bucket,
+                "analysis_object_key": result.analysis_object_key,
+                "analysis_error": result.analysis_error,
+                "track_summary": result.track_summary,
             }
         
         return {
