@@ -147,8 +147,8 @@ function PhotoTimelinePanel({
     <section className={`PhotoTimelinePanel mode-${mode} ${isOpen ? 'open' : 'closed'}`}>
       <header className="timeline-header">
         <div>
-          <p className="eyebrow">Trip Photo Timeline</p>
-          <h3>{orderedPhotos.length ? `${orderedPhotos.length} photos` : 'No photos yet'}</h3>
+          <p className="eyebrow">Trip Timeline</p>
+          <h3>{orderedPhotos.length ? `${orderedPhotos.length} items` : 'No items yet'}</h3>
           <p className="subtitle">Chronological • Date Taken (captured_at)</p>
         </div>
         {mode !== 'side' && (
@@ -162,8 +162,8 @@ function PhotoTimelinePanel({
         {loading && <div className="timeline-empty">Loading photos…</div>}
         {!loading && orderedPhotos.length === 0 && (
           <div className="timeline-empty">
-            <p>No trip photos available yet.</p>
-            <p className="muted">Uploads will appear here ordered by their Date Taken.</p>
+            <p>No trip photos or waypoints available yet.</p>
+            <p className="muted">Uploads and GPX tracks will appear here ordered by their timestamp.</p>
           </div>
         )}
 
@@ -173,72 +173,98 @@ function PhotoTimelinePanel({
               <span className="day-label">{group.label}</span>
               <span className="day-date">{group.dateLabel}</span>
             </div>
-            {group.photos.map((photo) => {
-              const isSelected = selectedPhotoId === photo.id;
-              const isEditing = editingId === photo.id;
-              const isExpanded = expandedId === photo.id;
-              const title = deriveTitle(photo);
-              const snippet = deriveSnippet(photo, isExpanded);
-              const hasLocation = photo.lat !== null && photo.lon !== null;
+            {group.photos.map((item) => {
+              const isPhoto = item.type === 'photo';
+              const isWaypoint = item.type === 'waypoint';
+              const isSelected = selectedPhotoId === item.id;
+              const isEditing = editingId === item.id;
+              const isExpanded = expandedId === item.id;
+              const title = deriveTitle(item);
+              const snippet = deriveSnippet(item, isExpanded);
+              const hasLocation = item.lat !== null && item.lon !== null;
 
               return (
                 <article
-                  key={photo.id}
+                  key={item.id}
                   ref={(el) => {
                     if (el) {
-                      rowRefs.current[photo.id] = el;
+                      rowRefs.current[item.id] = el;
                     } else {
-                      delete rowRefs.current[photo.id];
+                      delete rowRefs.current[item.id];
                     }
                   }}
-                  className={`timeline-row ${isSelected ? 'selected' : ''} ${isExpanded ? 'expanded' : ''}`}
+                  className={`timeline-row ${isSelected ? 'selected' : ''} ${isExpanded ? 'expanded' : ''} ${isWaypoint ? 'timeline-row--waypoint' : ''}`}
                   role="button"
                   tabIndex={0}
-                  onClick={(e) => handlePhotoClick(photo, e)}
+                  onClick={(e) => handlePhotoClick(item, e)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      onSelectPhoto && onSelectPhoto(photo);
+                      onSelectPhoto && onSelectPhoto(item);
                     }
                   }}
                 >
                   {isSelected && <span className="accent-bar" aria-hidden="true" />}
                   
                   <div className="timeline-item-header">
-                    <div className="time-cell">{formatTime(photo.capturedDate)}</div>
-                    {photo.capturedSource === 'fallback' && (
+                    <div className="time-cell">{formatTime(item.capturedDate)}</div>
+                    {isPhoto && item.capturedSource === 'fallback' && (
                       <div className="meta-pill" title="Date Taken missing; using upload time">
                         Fallback time
+                      </div>
+                    )}
+                    {isWaypoint && (
+                      <div className="meta-pill waypoint-badge" title="GPS Waypoint">
+                        📍 Waypoint
                       </div>
                     )}
                   </div>
 
                   <div className="timeline-content-wrapper">
-                    <div 
-                      className="thumb-cell"
-                      onClick={(e) => toggleExpand(photo.id, e)}
-                      title={isExpanded ? 'Click to view smaller' : 'Click to view larger'}
-                      role="button"
-                      aria-label={isExpanded ? 'Collapse image' : 'Expand image to full size'}
-                    >
-                      <img 
-                        src={isExpanded ? photo.imageUrl : (photo.thumbnailUrl || photo.imageUrl)} 
-                        alt={title || photo.fileName}
-                        loading="lazy"
-                      />
-                    </div>
+                    {isPhoto && (
+                      <div 
+                        className="thumb-cell"
+                        onClick={(e) => toggleExpand(item.id, e)}
+                        title={isExpanded ? 'Click to view smaller' : 'Click to view larger'}
+                        role="button"
+                        aria-label={isExpanded ? 'Collapse image' : 'Expand image to full size'}
+                      >
+                        <img 
+                          src={isExpanded ? item.imageUrl : (item.thumbnailUrl || item.imageUrl)} 
+                          alt={title || item.fileName}
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+                    
+                    {isWaypoint && (
+                      <div className="waypoint-icon-cell">
+                        <div className="waypoint-icon" role="img" aria-label="Waypoint marker">
+                          📍
+                        </div>
+                        {item.elev !== null && (
+                          <div className="waypoint-elev">{Math.round(item.elev)}m</div>
+                        )}
+                      </div>
+                    )}
                     
                     <div className="text-cell">
-                      {/* Only show title heading if there's no note, or if there's an explicit noteTitle different from the note */}
-                      {(!snippet || (photo.noteTitle && photo.noteTitle !== snippet)) && (
-                        <h4 className="primary">{title || photo.fileName}</h4>
+                      {isWaypoint && (
+                        <h4 className="primary">
+                          {item.elev !== null 
+                            ? `Waypoint at ${Math.round(item.elev)}m elevation`
+                            : 'Waypoint'}
+                        </h4>
+                      )}
+                      {isPhoto && (!snippet || (item.noteTitle && item.noteTitle !== snippet)) && (
+                        <h4 className="primary">{title || item.fileName}</h4>
                       )}
                       {!isEditing && snippet && (
                         <div className="secondary">
                           {snippet}
                         </div>
                       )}
-                      {!isEditing && !snippet && (
+                      {!isEditing && !snippet && isPhoto && (
                         <div className="secondary">
                           <span className="muted">Add a note about this moment…</span>
                         </div>
@@ -248,10 +274,10 @@ function PhotoTimelinePanel({
                           className="view-on-map-link"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onSelectPhoto && onSelectPhoto(photo);
+                            onSelectPhoto && onSelectPhoto(item);
                           }}
-                          title="Center map on this photo location"
-                          aria-label={`View ${title || photo.fileName} on map`}
+                          title={`Center map on this ${isWaypoint ? 'waypoint' : 'photo'} location`}
+                          aria-label={`View ${title || item.fileName} on map`}
                         >
                           📍 View on map
                         </button>
@@ -259,7 +285,7 @@ function PhotoTimelinePanel({
                     </div>
                   </div>
 
-                  {isEditing && (
+                  {isEditing && isPhoto && (
                     <div className="note-editor" onClick={(e) => e.stopPropagation()}>
                       <textarea
                         value={draftNote}
@@ -268,7 +294,7 @@ function PhotoTimelinePanel({
                         autoFocus
                       />
                       <div className="note-actions">
-                        <button type="button" onClick={(e) => saveEdit(photo, e)}>
+                        <button type="button" onClick={(e) => saveEdit(item, e)}>
                           Save Note
                         </button>
                         <button type="button" className="ghost" onClick={cancelEdit}>
@@ -280,22 +306,22 @@ function PhotoTimelinePanel({
 
                   <div className="timeline-item-footer">
                     <div className="actions-cell">
-                      {!isEditing && (
+                      {!isEditing && isPhoto && (
                         <button 
                           type="button" 
                           className="ghost small" 
-                          onClick={(e) => startEdit(photo, e)}
-                          aria-label={`Edit note for ${title || photo.fileName}`}
+                          onClick={(e) => startEdit(item, e)}
+                          aria-label={`Edit note for ${title || item.fileName}`}
                         >
                           ✏️ Edit note
                         </button>
                       )}
                       {/* Only show Read more for very long notes (>500 chars) */}
-                      {(photo.note && photo.note.length > 500) && !isExpanded && (
+                      {(item.note && item.note.length > 500) && !isExpanded && (
                         <button
                           type="button"
                           className="expand-toggle"
-                          onClick={(e) => toggleExpand(photo.id, e)}
+                          onClick={(e) => toggleExpand(item.id, e)}
                           aria-label="Read full note"
                         >
                           Read more →
@@ -305,7 +331,7 @@ function PhotoTimelinePanel({
                         <button
                           type="button"
                           className="expand-toggle"
-                          onClick={(e) => toggleExpand(photo.id, e)}
+                          onClick={(e) => toggleExpand(item.id, e)}
                           aria-label="Show less"
                         >
                           ← Show less

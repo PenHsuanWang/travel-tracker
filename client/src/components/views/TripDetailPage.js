@@ -4,7 +4,7 @@ import LeafletMapView from './LeafletMapView';
 import TripSidebar from '../layout/TripSidebar';
 import PhotoTimelinePanel from '../panels/PhotoTimelinePanel';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
-import { getTrip, getTrips, deleteTrip, listGpxFiles, listImageFiles, getImageUrl, updatePhotoNote } from '../../services/api';
+import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
 
@@ -46,6 +46,7 @@ const normalizePhoto = (item) => {
     const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
 
     return {
+        type: 'photo',
         id: item.object_key,
         objectKey: item.object_key,
         fileName: metadata.original_filename || item.object_key,
@@ -61,6 +62,31 @@ const normalizePhoto = (item) => {
         note,
         noteTitle,
         orderIndex: metadata.order_index ?? null,
+    };
+};
+
+const normalizeWaypoint = (waypoint, gpxFileName, index) => {
+    if (!waypoint) return null;
+    const capturedDate = parseDateSafe(waypoint.time);
+    const lat = Number(waypoint.lat);
+    const lon = Number(waypoint.lon);
+    const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+
+    if (!hasCoords) return null;
+
+    return {
+        type: 'waypoint',
+        id: `waypoint-${gpxFileName}-${index}`,
+        gpxSource: gpxFileName,
+        fileName: `Waypoint ${index + 1}`,
+        capturedAt: capturedDate ? capturedDate.toISOString() : null,
+        capturedDate,
+        capturedSource: 'gpx',
+        lat,
+        lon,
+        elev: waypoint.elev !== null && waypoint.elev !== undefined ? Number(waypoint.elev) : null,
+        note: waypoint.note || null,
+        noteTitle: null,
     };
 };
 
@@ -106,6 +132,7 @@ const TripDetailPage = () => {
     const [tripStats, setTripStats] = useState({ photos: 0, tracks: 0 });
     const [tripNotice, setTripNotice] = useState('');
     const [photos, setPhotos] = useState([]);
+    const [waypoints, setWaypoints] = useState([]);
     const [photosLoading, setPhotosLoading] = useState(false);
     const [selectedPhotoId, setSelectedPhotoId] = useState(null);
     const [isViewerOpen, setIsViewerOpen] = useState(false);
@@ -192,10 +219,41 @@ const TripDetailPage = () => {
         }
     }, [tripId]);
 
+    const loadTripWaypoints = useCallback(async () => {
+        if (!tripId) return;
+        try {
+            const gpxFiles = await listGpxFilesWithMeta(tripId);
+            const allWaypoints = [];
+            
+            for (const gpxFile of gpxFiles) {
+                try {
+                    const analysisData = await fetchGpxAnalysis(gpxFile.object_key, tripId);
+                    const waypointsFromFile = (analysisData.waypoints || [])
+                        .map((wp, idx) => normalizeWaypoint(wp, gpxFile.object_key, idx))
+                        .filter(Boolean);
+                    allWaypoints.push(...waypointsFromFile);
+                } catch (error) {
+                    console.error(`Failed to load waypoints from ${gpxFile.object_key}:`, error);
+                }
+            }
+            
+            setWaypoints(allWaypoints);
+        } catch (error) {
+            console.error('Failed to load trip waypoints:', error);
+            setWaypoints([]);
+        }
+    }, [tripId]);
+
+    // Merge photos and waypoints into unified timeline
+    const timelineItems = useMemo(() => {
+        return [...photos, ...waypoints].sort(sortPhotosChronologically);
+    }, [photos, waypoints]);
+
     useEffect(() => {
         refreshTripStats();
         loadTripPhotos();
-    }, [refreshTripStats, loadTripPhotos]);
+        loadTripWaypoints();
+    }, [refreshTripStats, loadTripPhotos, loadTripWaypoints]);
 
     useEffect(() => {
         // Keep layout responsive: side rail on wide screens, overlay on medium, bottom sheet on tablet/mobile.
@@ -552,7 +610,7 @@ const TripDetailPage = () => {
                                 aria-label="Resize timeline"
                             />
                             <PhotoTimelinePanel
-                                photos={orderedPhotos}
+                                photos={timelineItems}
                                 selectedPhotoId={selectedPhotoId}
                                 onSelectPhoto={(photo) => handleSelectPhoto(photo, { openViewer: true, centerMap: true })}
                                 isOpen
@@ -564,7 +622,7 @@ const TripDetailPage = () => {
                     )}
                     {timelineMode !== 'side' && (
                         <PhotoTimelinePanel
-                            photos={orderedPhotos}
+                            photos={timelineItems}
                             selectedPhotoId={selectedPhotoId}
                             onSelectPhoto={(photo) => handleSelectPhoto(photo, { openViewer: true, centerMap: true })}
                             isOpen={timelineOpen}

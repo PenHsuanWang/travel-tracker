@@ -234,6 +234,68 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
+/* Waypoint-specific styling */
+.timeline-row--waypoint {
+  border-left: 4px solid rgba(59, 130, 246, 0.6);
+}
+
+.timeline-row--waypoint:hover {
+  background: rgba(59, 130, 246, 0.08);
+  border-left-color: rgba(59, 130, 246, 0.8);
+}
+
+.timeline-row--waypoint.selected {
+  border-left-color: rgba(59, 130, 246, 1);
+}
+
+.waypoint-icon-cell {
+  width: 120px;
+  height: 120px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.08));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease-in-out;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.timeline-row:hover .waypoint-icon-cell {
+  transform: scale(1.02);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(37, 99, 235, 0.15));
+}
+
+.waypoint-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.waypoint-elev {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #93c5fd;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.waypoint-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
 .timeline-item-header {
   display: flex;
   align-items: center;
@@ -522,4 +584,23 @@
 .note-editor .note-actions button.ghost:hover {
   background: rgba(148, 163, 184, 0.28);
   transform: translateY(-1px);
+}
+
+/* Responsive adjustments for waypoint cards */
+@media (max-width: 600px) {
+  .waypoint-icon-cell {
+    width: 100%;
+    height: 80px;
+    flex-direction: row;
+    justify-content: center;
+    padding: 0 16px;
+  }
+
+  .waypoint-icon {
+    font-size: 2rem;
+  }
+
+  .waypoint-elev {
+    font-size: 0.7rem;
+  }
 }
