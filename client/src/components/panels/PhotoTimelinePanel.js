@@ -83,19 +83,21 @@ function PhotoTimelinePanel({
   }, [selectedPhotoId, isOpen]);
 
   const deriveTitle = (photo) => {
+    // Only use explicit noteTitle, not the first line of note
     if (photo?.noteTitle) return photo.noteTitle;
-    if (photo?.note) {
-      const firstLine = String(photo.note).split('\n')[0].trim();
-      if (firstLine) return firstLine;
-    }
+    // Fallback to filename if no explicit title
     return photo?.fileName || '';
   };
 
   const deriveSnippet = (photo, isExpanded) => {
     if (!photo?.note) return '';
-    if (isExpanded) return photo.note;
-    const snippet = photo.note.slice(0, 120);
-    return photo.note.length > 120 ? `${snippet}…` : snippet;
+    // PM requirement: show full text by default, only truncate very long notes
+    if (isExpanded || photo.note.length <= 500) {
+      return photo.note;
+    }
+    // Only truncate extremely long notes (>500 chars)
+    const snippet = photo.note.slice(0, 500);
+    return `${snippet}…`;
   };
 
   const toggleExpand = (photoId, event) => {
@@ -215,7 +217,9 @@ function PhotoTimelinePanel({
                     <div 
                       className="thumb-cell"
                       onClick={(e) => toggleExpand(photo.id, e)}
-                      title={isExpanded ? 'Click to collapse' : 'Click to expand'}
+                      title={isExpanded ? 'Click to view smaller' : 'Click to view larger'}
+                      role="button"
+                      aria-label={isExpanded ? 'Collapse image' : 'Expand image to full size'}
                     >
                       <img 
                         src={isExpanded ? photo.imageUrl : (photo.thumbnailUrl || photo.imageUrl)} 
@@ -225,20 +229,29 @@ function PhotoTimelinePanel({
                     </div>
                     
                     <div className="text-cell">
-                      <div className="primary">{title || photo.fileName}</div>
-                      {!isEditing && (
+                      {/* Only show title heading if there's no note, or if there's an explicit noteTitle different from the note */}
+                      {(!snippet || (photo.noteTitle && photo.noteTitle !== snippet)) && (
+                        <h4 className="primary">{title || photo.fileName}</h4>
+                      )}
+                      {!isEditing && snippet && (
                         <div className="secondary">
-                          {snippet || <span className="muted">Add a note about this moment…</span>}
+                          {snippet}
                         </div>
                       )}
-                      {hasLocation && !isExpanded && (
+                      {!isEditing && !snippet && (
+                        <div className="secondary">
+                          <span className="muted">Add a note about this moment…</span>
+                        </div>
+                      )}
+                      {hasLocation && (
                         <button 
                           className="view-on-map-link"
                           onClick={(e) => {
                             e.stopPropagation();
                             onSelectPhoto && onSelectPhoto(photo);
                           }}
-                          title="Center map on this photo"
+                          title="Center map on this photo location"
+                          aria-label={`View ${title || photo.fileName} on map`}
                         >
                           📍 View on map
                         </button>
@@ -272,15 +285,18 @@ function PhotoTimelinePanel({
                           type="button" 
                           className="ghost small" 
                           onClick={(e) => startEdit(photo, e)}
+                          aria-label={`Edit note for ${title || photo.fileName}`}
                         >
                           ✏️ Edit note
                         </button>
                       )}
-                      {(photo.note && photo.note.length > 120) && !isExpanded && (
+                      {/* Only show Read more for very long notes (>500 chars) */}
+                      {(photo.note && photo.note.length > 500) && !isExpanded && (
                         <button
                           type="button"
                           className="expand-toggle"
                           onClick={(e) => toggleExpand(photo.id, e)}
+                          aria-label="Read full note"
                         >
                           Read more →
                         </button>
@@ -290,6 +306,7 @@ function PhotoTimelinePanel({
                           type="button"
                           className="expand-toggle"
                           onClick={(e) => toggleExpand(photo.id, e)}
+                          aria-label="Show less"
                         >
                           ← Show less
                         </button>
