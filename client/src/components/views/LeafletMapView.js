@@ -54,7 +54,7 @@ function GPXCenterController({ gpxCenter }) {
   return null;
 }
 
-function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripId, onImageSelected }) {
+function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripId, onImageSelected, mapRef: externalMapRef }) {
   const [riverGeoJSON, setRiverGeoJSON] = useState({});
   const [loading, setLoading] = useState(true);
   const [gpxFiles, setGpxFiles] = useState([]); // detailed metadata entries
@@ -62,7 +62,8 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
   const [selectedGpxFiles, setSelectedGpxFiles] = useState([]);
   const [gpxTracks, setGpxTracks] = useState({});
   const [gpxCenter, setGpxCenter] = useState(null);
-  const mapRef = useRef(null);
+  const internalMapRef = useRef(null);
+  const mapRef = externalMapRef || internalMapRef;
 
   // Load river GeoJSON data once on mount
   useEffect(() => {
@@ -299,6 +300,9 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
         zoom={8}
         style={{ height: '100%', width: '100%' }}
         ref={mapRef}
+        whenCreated={(mapInstance) => {
+          mapRef.current = mapInstance;
+        }}
       >
         {/* Map layer controller */}
         <MapLayerController selectedLayer={selectedLayer} />

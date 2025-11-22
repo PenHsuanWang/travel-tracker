@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import LeafletMapView from './LeafletMapView';
 import TripSidebar from '../layout/TripSidebar';
@@ -79,6 +79,23 @@ const computeTimelineMode = (width) => {
     return 'side';
 };
 
+const MIN_TIMELINE_WIDTH = 280;
+const MAX_TIMELINE_WIDTH = 600;
+const DEFAULT_TIMELINE_WIDTH = 360;
+
+const clampTimelineWidth = (value) => Math.min(MAX_TIMELINE_WIDTH, Math.max(MIN_TIMELINE_WIDTH, value));
+
+const getStoredTimelineWidth = () => {
+    if (typeof window === 'undefined') {
+        return DEFAULT_TIMELINE_WIDTH;
+    }
+    const stored = Number(window.localStorage.getItem('tripTimelineWidth'));
+    if (Number.isFinite(stored)) {
+        return clampTimelineWidth(stored);
+    }
+    return DEFAULT_TIMELINE_WIDTH;
+};
+
 const TripDetailPage = () => {
     const { tripId } = useParams();
     const [trip, setTrip] = useState(null);
@@ -94,6 +111,8 @@ const TripDetailPage = () => {
     const [isViewerOpen, setIsViewerOpen] = useState(false);
     const [timelineMode, setTimelineMode] = useState('side');
     const [timelineOpen, setTimelineOpen] = useState(true);
+    const [timelineWidth, setTimelineWidth] = useState(() => getStoredTimelineWidth());
+    const mapRef = useRef(null);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -200,6 +219,24 @@ const TripDetailPage = () => {
     }, []);
 
     useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        try {
+            window.localStorage.setItem('tripTimelineWidth', String(timelineWidth));
+        } catch (error) {
+            // ignore storage errors (private mode, etc.)
+        }
+        return undefined;
+    }, [timelineWidth]);
+
+    useEffect(() => {
+        const mapInstance = mapRef.current;
+        if (!mapInstance || typeof mapInstance.invalidateSize !== 'function') {
+            return;
+        }
+        mapInstance.invalidateSize();
+    }, [timelineWidth, timelineMode]);
+
+    useEffect(() => {
         const handleImageUpload = () => {
             loadTripPhotos();
             refreshTripStats();
@@ -265,6 +302,46 @@ const TripDetailPage = () => {
             window.dispatchEvent(new CustomEvent('centerMapOnLocation', { detail }));
         }
     }, [orderedPhotos, timelineMode]);
+
+    const handleResizerMouseDown = useCallback((event) => {
+        if (timelineMode !== 'side') return;
+        event.preventDefault();
+        const startX = event.clientX;
+        const startWidth = timelineWidth;
+        let animationFrameId = null;
+
+        const handleMouseMove = (moveEvent) => {
+            const delta = startX - moveEvent.clientX;
+            const nextWidth = clampTimelineWidth(startWidth + delta);
+            
+            // Throttle updates using requestAnimationFrame for smooth resizing
+            if (animationFrameId === null) {
+                animationFrameId = requestAnimationFrame(() => {
+                    setTimelineWidth(nextWidth);
+                    // Immediately invalidate map size during drag
+                    if (mapRef.current && typeof mapRef.current.invalidateSize === 'function') {
+                        mapRef.current.invalidateSize({ pan: false });
+                    }
+                    animationFrameId = null;
+                });
+            }
+        };
+
+        const handleMouseUp = () => {
+            if (animationFrameId !== null) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+            // Final invalidation on mouse up
+            if (mapRef.current && typeof mapRef.current.invalidateSize === 'function') {
+                mapRef.current.invalidateSize();
+            }
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+    }, [timelineMode, timelineWidth]);
 
     const handleMapPhotoSelected = useCallback(
         (image) => {
@@ -445,6 +522,7 @@ const TripDetailPage = () => {
                 />
                 <div
                     className={`MapAndTimeline ${timelineMode !== 'side' ? 'timeline-floating' : ''} ${timelineMode === 'sheet' ? 'timeline-sheet' : ''}`}
+                    style={{ '--timeline-width': `${timelineWidth}px` }}
                 >
                     <main className="MapArea">
                         {timelineMode !== 'side' && (
@@ -461,18 +539,28 @@ const TripDetailPage = () => {
                             selectedRivers={selectedRivers}
                             tripId={tripId}
                             onImageSelected={handleMapPhotoSelected}
+                            mapRef={mapRef}
                         />
                     </main>
                     {timelineMode === 'side' && (
-                        <PhotoTimelinePanel
-                            photos={orderedPhotos}
-                            selectedPhotoId={selectedPhotoId}
-                            onSelectPhoto={(photo) => handleSelectPhoto(photo, { openViewer: true, centerMap: true })}
-                            isOpen
-                            mode="side"
-                            loading={photosLoading}
-                            onEditNote={handleNoteSave}
-                        />
+                        <>
+                            <div
+                                className="Resizer"
+                                onMouseDown={handleResizerMouseDown}
+                                role="separator"
+                                aria-orientation="vertical"
+                                aria-label="Resize timeline"
+                            />
+                            <PhotoTimelinePanel
+                                photos={orderedPhotos}
+                                selectedPhotoId={selectedPhotoId}
+                                onSelectPhoto={(photo) => handleSelectPhoto(photo, { openViewer: true, centerMap: true })}
+                                isOpen
+                                mode="side"
+                                loading={photosLoading}
+                                onEditNote={handleNoteSave}
+                            />
+                        </>
                     )}
                     {timelineMode !== 'side' && (
                         <PhotoTimelinePanel
