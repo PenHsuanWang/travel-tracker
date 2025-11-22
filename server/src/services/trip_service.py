@@ -159,7 +159,7 @@ class TripService:
                         errors.append(f"Failed to delete {analysis_bucket}/{analysis_key}: {exc}")
 
         # Remove metadata documents for the trip
-        if metadata_collection:
+        if metadata_collection is not None:
             try:
                 metadata_collection.delete_many({"trip_id": trip_id})
             except Exception as exc:

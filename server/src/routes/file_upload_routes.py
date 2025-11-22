@@ -4,6 +4,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from src.controllers.file_upload_controller import FileUploadController
+from src.models.trip import Trip
 
 router = APIRouter()
 
@@ -27,6 +28,12 @@ class UploadResponse(BaseModel):
     analysis_object_key: Optional[str] = None
     analysis_error: Optional[str] = None
     track_summary: Optional[Dict[str, Any]] = None
+    trip: Optional[Trip] = None
+    gpx_metadata_extracted: Optional[bool] = None
+    gpx_start_datetime: Optional[str] = None
+    gpx_end_datetime: Optional[str] = None
+    trip_dates_auto_filled: Optional[bool] = None
+    auto_fill_reason: Optional[str] = None
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -74,6 +81,12 @@ async def upload_file(
             "analysis_object_key": result.get("analysis_object_key"),
             "analysis_error": result.get("analysis_error"),
             "track_summary": result.get("track_summary"),
+            "trip": result.get("trip"),
+            "gpx_metadata_extracted": result.get("gpx_metadata_extracted"),
+            "gpx_start_datetime": result.get("gpx_start_datetime"),
+            "gpx_end_datetime": result.get("gpx_end_datetime"),
+            "trip_dates_auto_filled": result.get("trip_dates_auto_filled"),
+            "auto_fill_reason": result.get("auto_fill_reason"),
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

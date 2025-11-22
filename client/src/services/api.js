@@ -15,6 +15,21 @@ export const createTrip = async (tripData) => {
   return response.data;
 };
 
+export const createTripWithGpx = async (tripData, gpxFile) => {
+  const formData = new FormData();
+  formData.append('name', tripData.name);
+  if (tripData.start_date) formData.append('start_date', tripData.start_date);
+  if (tripData.end_date) formData.append('end_date', tripData.end_date);
+  if (tripData.region) formData.append('region', tripData.region);
+  if (tripData.notes) formData.append('notes', tripData.notes);
+  if (gpxFile) formData.append('gpx_file', gpxFile);
+
+  const response = await apiClient.post('/trips/with-gpx', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
 export const getTrips = async () => {
   const response = await apiClient.get('/trips/');
   return response.data;
@@ -35,6 +50,21 @@ export const deleteTrip = async (tripId) => {
 };
 
 // --- File API ---
+
+export const updatePhotoNote = async (metadataId, { note, note_title }) => {
+  const response = await apiClient.patch(`/photos/${encodeURIComponent(metadataId)}/note`, {
+    note,
+    note_title,
+  });
+  return response.data;
+};
+
+export const updatePhotoOrder = async (metadataId, order_index) => {
+  const response = await apiClient.patch(`/photos/${encodeURIComponent(metadataId)}/order`, {
+    order_index,
+  });
+  return response.data;
+};
 
 export const deleteFile = async (filename, bucket = 'images') => {
   const response = await apiClient.delete(`/map/delete/${encodeURIComponent(filename)}`, {

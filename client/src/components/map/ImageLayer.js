@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { getGeotaggedImages } from '../../services/api';
+import { getGeotaggedImages, updatePhotoNote } from '../../services/api';
 import '../../styles/ImageLayer.css';
 
 export async function fetchGeotaggedImagesForTrip(fetcher = getGeotaggedImages, tripId = null) {
@@ -385,6 +385,99 @@ function createPopupContent(image, onMarkerSelected) {
   coordsText.textContent = `${detail.lat.toFixed(4)}°, ${detail.lon.toFixed(4)}°`;
   coordsEl.appendChild(coordsText);
   container.appendChild(coordsEl);
+
+  const noteContainer = document.createElement('div');
+  noteContainer.className = 'image-popup-note';
+
+  const noteLabel = document.createElement('div');
+  noteLabel.className = 'image-popup-note-label';
+  noteLabel.textContent = 'Note / Story';
+  noteContainer.appendChild(noteLabel);
+
+  const noteDisplay = document.createElement('div');
+  noteDisplay.className = 'image-popup-note-display';
+  const existingNote = image.note || '';
+  noteDisplay.textContent = existingNote || 'Add a note about this moment…';
+  if (!existingNote) {
+    noteDisplay.classList.add('muted');
+  }
+  noteContainer.appendChild(noteDisplay);
+
+  const noteEditor = document.createElement('textarea');
+  noteEditor.className = 'image-popup-note-editor';
+  noteEditor.value = existingNote;
+  noteEditor.style.display = 'none';
+  noteContainer.appendChild(noteEditor);
+
+  const noteActions = document.createElement('div');
+  noteActions.className = 'image-popup-note-actions';
+  noteActions.style.display = 'none';
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.textContent = 'Save';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'ghost';
+  cancelBtn.textContent = 'Cancel';
+  noteActions.appendChild(saveBtn);
+  noteActions.appendChild(cancelBtn);
+  noteContainer.appendChild(noteActions);
+
+  const toggleEditor = (show) => {
+    noteEditor.style.display = show ? 'block' : 'none';
+    noteActions.style.display = show ? 'flex' : 'none';
+    noteDisplay.style.display = show ? 'none' : 'block';
+    if (show) {
+      noteEditor.focus();
+      noteEditor.selectionStart = noteEditor.value.length;
+    }
+  };
+
+  noteDisplay.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleEditor(true);
+  });
+
+  cancelBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    noteEditor.value = existingNote;
+    toggleEditor(false);
+  });
+
+  saveBtn.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    const newNote = noteEditor.value;
+    try {
+      await updatePhotoNote(detail.metadata_id || detail.object_key, {
+        note: newNote,
+        note_title: newNote ? newNote.split('\n')[0] : null,
+      });
+      noteDisplay.textContent = newNote || 'Add a note about this moment…';
+      if (newNote) {
+        noteDisplay.classList.remove('muted');
+      } else {
+        noteDisplay.classList.add('muted');
+      }
+      toggleEditor(false);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('photoNoteUpdated', {
+            detail: {
+              object_key: detail.object_key,
+              metadata_id: detail.metadata_id || detail.object_key,
+              note: newNote,
+              note_title: newNote ? newNote.split('\n')[0] : null,
+            },
+          })
+        );
+      }
+    } catch (err) {
+      console.error('[ImageLayer] Failed to save note', err);
+      alert('Failed to save note. Please try again.');
+    }
+  });
+
+  container.appendChild(noteContainer);
 
   const buttonEl = document.createElement('button');
   buttonEl.className = 'image-popup-button';

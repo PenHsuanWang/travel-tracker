@@ -203,6 +203,9 @@ class FileRetrievalService:
                         'metadata_id': parsed.id,
                         'captured_at': parsed.captured_at.isoformat() if parsed.captured_at else None,
                         'captured_source': parsed.captured_source,
+                        'note': parsed.note,
+                        'note_title': parsed.note_title,
+                        'order_index': parsed.order_index,
                     })
                 except Exception as exc:
                     self.logger.warning(
