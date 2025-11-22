@@ -66,6 +66,7 @@ function PhotoTimelinePanel({
   const rowRefs = useRef({});
   const [editingId, setEditingId] = useState(null);
   const [draftNote, setDraftNote] = useState('');
+  const [expandedId, setExpandedId] = useState(null);
 
   const orderedPhotos = useMemo(() => {
     return [...photos].sort(sortChronologically);
@@ -90,10 +91,25 @@ function PhotoTimelinePanel({
     return photo?.fileName || '';
   };
 
-  const deriveSnippet = (photo) => {
+  const deriveSnippet = (photo, isExpanded) => {
     if (!photo?.note) return '';
-    const snippet = photo.note.slice(0, 160);
-    return photo.note.length > 160 ? `${snippet}…` : snippet;
+    if (isExpanded) return photo.note;
+    const snippet = photo.note.slice(0, 120);
+    return photo.note.length > 120 ? `${snippet}…` : snippet;
+  };
+
+  const toggleExpand = (photoId, event) => {
+    if (event) event.stopPropagation();
+    setExpandedId(expandedId === photoId ? null : photoId);
+  };
+
+  const handlePhotoClick = (photo, event) => {
+    // If clicking on the thumbnail, toggle expand
+    if (event.target.tagName === 'IMG' || event.target.closest('.thumb-cell')) {
+      toggleExpand(photo.id, event);
+    } else if (onSelectPhoto) {
+      onSelectPhoto(photo);
+    }
   };
 
   const startEdit = (photo, event) => {
@@ -158,11 +174,13 @@ function PhotoTimelinePanel({
             {group.photos.map((photo) => {
               const isSelected = selectedPhotoId === photo.id;
               const isEditing = editingId === photo.id;
+              const isExpanded = expandedId === photo.id;
               const title = deriveTitle(photo);
-              const snippet = deriveSnippet(photo);
+              const snippet = deriveSnippet(photo, isExpanded);
+              const hasLocation = photo.lat !== null && photo.lon !== null;
 
               return (
-                <div
+                <article
                   key={photo.id}
                   ref={(el) => {
                     if (el) {
@@ -171,57 +189,114 @@ function PhotoTimelinePanel({
                       delete rowRefs.current[photo.id];
                     }
                   }}
-                  className={`timeline-row ${isSelected ? 'selected' : ''}`}
+                  className={`timeline-row ${isSelected ? 'selected' : ''} ${isExpanded ? 'expanded' : ''}`}
                   role="button"
                   tabIndex={0}
-                  onClick={() => onSelectPhoto && onSelectPhoto(photo)}
+                  onClick={(e) => handlePhotoClick(photo, e)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
                       onSelectPhoto && onSelectPhoto(photo);
                     }
                   }}
                 >
-                  <div className="time-cell">{formatTime(photo.capturedDate)}</div>
-                  <div className="thumb-cell">
-                    <img src={photo.thumbnailUrl || photo.imageUrl} alt={photo.fileName} />
-                  </div>
-                  <div className="text-cell">
-                    <div className="primary">{title || photo.fileName}</div>
-                    {isEditing ? (
-                      <div className="note-editor" onClick={(e) => e.stopPropagation()}>
-                        <textarea
-                          value={draftNote}
-                          onChange={(e) => setDraftNote(e.target.value)}
-                          placeholder="Add a note about this moment…"
-                          rows={3}
-                        />
-                        <div className="note-actions">
-                          <button type="button" onClick={(e) => saveEdit(photo, e)}>
-                            Save
-                          </button>
-                          <button type="button" className="ghost" onClick={cancelEdit}>
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="secondary">
-                        {snippet || <span className="muted">Add a note</span>}
-                      </div>
-                    )}
+                  {isSelected && <span className="accent-bar" aria-hidden="true" />}
+                  
+                  <div className="timeline-item-header">
+                    <div className="time-cell">{formatTime(photo.capturedDate)}</div>
                     {photo.capturedSource === 'fallback' && (
                       <div className="meta-pill" title="Date Taken missing; using upload time">
                         Fallback time
                       </div>
                     )}
                   </div>
-                  <div className="actions-cell" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="ghost small" onClick={(e) => startEdit(photo, e)}>
-                      {isEditing ? 'Editing' : 'Edit note'}
-                    </button>
+
+                  <div className="timeline-content-wrapper">
+                    <div 
+                      className="thumb-cell"
+                      onClick={(e) => toggleExpand(photo.id, e)}
+                      title={isExpanded ? 'Click to collapse' : 'Click to expand'}
+                    >
+                      <img 
+                        src={isExpanded ? photo.imageUrl : (photo.thumbnailUrl || photo.imageUrl)} 
+                        alt={title || photo.fileName}
+                        loading="lazy"
+                      />
+                    </div>
+                    
+                    <div className="text-cell">
+                      <div className="primary">{title || photo.fileName}</div>
+                      {!isEditing && (
+                        <div className="secondary">
+                          {snippet || <span className="muted">Add a note about this moment…</span>}
+                        </div>
+                      )}
+                      {hasLocation && !isExpanded && (
+                        <button 
+                          className="view-on-map-link"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectPhoto && onSelectPhoto(photo);
+                          }}
+                          title="Center map on this photo"
+                        >
+                          📍 View on map
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {isSelected && <span className="accent-bar" aria-hidden="true" />}
-                </div>
+
+                  {isEditing && (
+                    <div className="note-editor" onClick={(e) => e.stopPropagation()}>
+                      <textarea
+                        value={draftNote}
+                        onChange={(e) => setDraftNote(e.target.value)}
+                        placeholder="Add a note about this moment… Share the story behind the photo."
+                        autoFocus
+                      />
+                      <div className="note-actions">
+                        <button type="button" onClick={(e) => saveEdit(photo, e)}>
+                          Save Note
+                        </button>
+                        <button type="button" className="ghost" onClick={cancelEdit}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="timeline-item-footer">
+                    <div className="actions-cell">
+                      {!isEditing && (
+                        <button 
+                          type="button" 
+                          className="ghost small" 
+                          onClick={(e) => startEdit(photo, e)}
+                        >
+                          ✏️ Edit note
+                        </button>
+                      )}
+                      {(photo.note && photo.note.length > 120) && !isExpanded && (
+                        <button
+                          type="button"
+                          className="expand-toggle"
+                          onClick={(e) => toggleExpand(photo.id, e)}
+                        >
+                          Read more →
+                        </button>
+                      )}
+                      {isExpanded && (
+                        <button
+                          type="button"
+                          className="expand-toggle"
+                          onClick={(e) => toggleExpand(photo.id, e)}
+                        >
+                          ← Show less
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </article>
               );
             })}
           </div>
