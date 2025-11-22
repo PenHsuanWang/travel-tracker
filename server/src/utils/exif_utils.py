@@ -1,4 +1,5 @@
 from typing import Any, Dict, Optional, Tuple, IO
+from datetime import datetime, timezone
 from PIL import Image, ExifTags
 
 
@@ -267,3 +268,38 @@ def extract_exif_from_stream(stream: IO) -> Dict[str, Any]:
         return exif
     except Exception:
         return {}
+
+
+def parse_exif_datetime(value: Any, assume_tz: timezone = timezone.utc) -> Optional[datetime]:
+    """Parse common EXIF datetime strings into an aware datetime.
+
+    Supports formats like 'YYYY:MM:DD HH:MM:SS' (typical EXIF) and ISO-8601.
+    Returns None when parsing fails.
+    """
+    if not value:
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    # Typical EXIF format: 2024:01:02 12:34:56
+    try:
+        if text.count(":") >= 2 and " " in text:
+            date_part, _, time_part = text.partition(" ")
+            normalized_date = date_part.replace(":", "-")
+            candidate = f"{normalized_date} {time_part}"
+            dt = datetime.strptime(candidate, "%Y-%m-%d %H:%M:%S")
+            return dt.replace(tzinfo=assume_tz)
+    except Exception:
+        pass
+
+    # Try ISO-8601 parsing as fallback
+    try:
+        parsed = datetime.fromisoformat(text)
+        # If naive, attach assumed timezone
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=assume_tz)
+        return parsed
+    except Exception:
+        return None

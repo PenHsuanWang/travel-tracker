@@ -1,9 +1,14 @@
 // client/src/components/map/ImageLayer.js
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { getGeotaggedImages } from '../../services/api';
+import { getGeotaggedImages, updatePhotoNote } from '../../services/api';
 import '../../styles/ImageLayer.css';
+
+export async function fetchGeotaggedImagesForTrip(fetcher = getGeotaggedImages, tripId = null) {
+  const images = await fetcher(undefined, undefined, undefined, undefined, 'images', tripId);
+  return Array.isArray(images) ? images : [];
+}
 
 /**
  * ImageLayer Component
@@ -11,11 +16,11 @@ import '../../styles/ImageLayer.css';
  * Renders markers for geotagged images on the map using react-leaflet.
  * This component works with the Leaflet map from react-leaflet's useMap hook.
  */
-function ImageLayer({ onImageSelected = null }) {
+function ImageLayer({ onImageSelected = null, tripId = null }) {
   const map = useMap();
   const [markers, setMarkers] = useState({});
   const markersRef = useRef({});
-  const [loading, setLoading] = useState(false);
+
 
   useEffect(() => {
     markersRef.current = markers;
@@ -68,21 +73,22 @@ function ImageLayer({ onImageSelected = null }) {
   /**
    * Load geotagged images and create markers
    */
-  const loadGeotaggedImages = async () => {
+  /**
+   * Load geotagged images and create markers
+   */
+  const loadGeotaggedImages = useCallback(async () => {
     if (!map) return;
 
-    setLoading(true);
-
     try {
-      console.log('[ImageLayer] Loading geotagged images...');
-      const images = await getGeotaggedImages();
-      console.log('[ImageLayer] Loaded', images.length, 'geotagged images');
-
+      const tripContextLog = tripId ? ` for trip ${tripId}` : '';
+      console.log(`[ImageLayer] Loading geotagged images${tripContextLog}...`);
       clearAllMarkers();
+      const images = await fetchGeotaggedImagesForTrip(getGeotaggedImages, tripId);
+      console.log('[ImageLayer] Loaded', images?.length || 0, 'geotagged images for trip context');
 
       const newMarkers = {};
 
-      images.forEach((image) => {
+      (images || []).forEach((image) => {
         try {
           // Validate GPS coordinates
           if (!Number.isFinite(Number(image.lat)) || !Number.isFinite(Number(image.lon))) {
@@ -124,10 +130,8 @@ function ImageLayer({ onImageSelected = null }) {
       markersRef.current = newMarkers;
     } catch (err) {
       console.error('[ImageLayer] Error loading geotagged images:', err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [map, tripId, clearAllMarkers, handleMarkerSelected, registerMarkerEvents]);
 
   /**
    * Initial load when map is ready
@@ -136,7 +140,7 @@ function ImageLayer({ onImageSelected = null }) {
     if (map) {
       loadGeotaggedImages();
     }
-  }, [map]);
+  }, [map, loadGeotaggedImages]);
 
   /**
    * Listen for image upload events with GPS data
@@ -194,7 +198,7 @@ function ImageLayer({ onImageSelected = null }) {
 
     window.addEventListener('imageUploadedWithGPS', handleImageUploadedWithGPS);
     return () => window.removeEventListener('imageUploadedWithGPS', handleImageUploadedWithGPS);
-  }, [map, onImageSelected, registerMarkerEvents]);
+  }, [map, onImageSelected, registerMarkerEvents, handleMarkerSelected]);
 
   /**
    * Listen for image delete events
@@ -275,19 +279,19 @@ function getDisplayName(filename) {
   if (uuidDashPattern && uuidDashPattern[1]) {
     return uuidDashPattern[1];
   }
-  
+
   // Pattern 2: 32-character UUID without dashes: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx_name
   const uuidNoDashPattern = filename.match(/^[a-f0-9]{32}_(.+)$/i);
   if (uuidNoDashPattern && uuidNoDashPattern[1]) {
     return uuidNoDashPattern[1];
   }
-  
+
   // Pattern 3: Shorter alphanumeric ID: xxxxxxxx_name (at least 8 chars, then underscore)
   const alphaPattern = filename.match(/^[a-z0-9]{8,}_(.+)$/i);
   if (alphaPattern && alphaPattern[1]) {
     return alphaPattern[1];
   }
-  
+
   // Pattern 4: No UUID/ID, return as-is
   return filename;
 }
@@ -381,6 +385,99 @@ function createPopupContent(image, onMarkerSelected) {
   coordsText.textContent = `${detail.lat.toFixed(4)}°, ${detail.lon.toFixed(4)}°`;
   coordsEl.appendChild(coordsText);
   container.appendChild(coordsEl);
+
+  const noteContainer = document.createElement('div');
+  noteContainer.className = 'image-popup-note';
+
+  const noteLabel = document.createElement('div');
+  noteLabel.className = 'image-popup-note-label';
+  noteLabel.textContent = 'Note / Story';
+  noteContainer.appendChild(noteLabel);
+
+  const noteDisplay = document.createElement('div');
+  noteDisplay.className = 'image-popup-note-display';
+  const existingNote = image.note || '';
+  noteDisplay.textContent = existingNote || 'Add a note about this moment…';
+  if (!existingNote) {
+    noteDisplay.classList.add('muted');
+  }
+  noteContainer.appendChild(noteDisplay);
+
+  const noteEditor = document.createElement('textarea');
+  noteEditor.className = 'image-popup-note-editor';
+  noteEditor.value = existingNote;
+  noteEditor.style.display = 'none';
+  noteContainer.appendChild(noteEditor);
+
+  const noteActions = document.createElement('div');
+  noteActions.className = 'image-popup-note-actions';
+  noteActions.style.display = 'none';
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.textContent = 'Save';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'ghost';
+  cancelBtn.textContent = 'Cancel';
+  noteActions.appendChild(saveBtn);
+  noteActions.appendChild(cancelBtn);
+  noteContainer.appendChild(noteActions);
+
+  const toggleEditor = (show) => {
+    noteEditor.style.display = show ? 'block' : 'none';
+    noteActions.style.display = show ? 'flex' : 'none';
+    noteDisplay.style.display = show ? 'none' : 'block';
+    if (show) {
+      noteEditor.focus();
+      noteEditor.selectionStart = noteEditor.value.length;
+    }
+  };
+
+  noteDisplay.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleEditor(true);
+  });
+
+  cancelBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    noteEditor.value = existingNote;
+    toggleEditor(false);
+  });
+
+  saveBtn.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    const newNote = noteEditor.value;
+    try {
+      await updatePhotoNote(detail.metadata_id || detail.object_key, {
+        note: newNote,
+        note_title: newNote ? newNote.split('\n')[0] : null,
+      });
+      noteDisplay.textContent = newNote || 'Add a note about this moment…';
+      if (newNote) {
+        noteDisplay.classList.remove('muted');
+      } else {
+        noteDisplay.classList.add('muted');
+      }
+      toggleEditor(false);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('photoNoteUpdated', {
+            detail: {
+              object_key: detail.object_key,
+              metadata_id: detail.metadata_id || detail.object_key,
+              note: newNote,
+              note_title: newNote ? newNote.split('\n')[0] : null,
+            },
+          })
+        );
+      }
+    } catch (err) {
+      console.error('[ImageLayer] Failed to save note', err);
+      alert('Failed to save note. Please try again.');
+    }
+  });
+
+  container.appendChild(noteContainer);
 
   const buttonEl = document.createElement('button');
   buttonEl.className = 'image-popup-button';

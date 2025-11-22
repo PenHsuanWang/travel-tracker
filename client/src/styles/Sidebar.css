@@ -1,10 +1,60 @@
 /* client/src/styles/Sidebar.css */
 .Sidebar {
-  width: 280px;
+  width: 270px;
+  min-width: 250px;
+  max-width: 280px;
   background-color: #1f2327; /* A dark background for your side nav */
   color: #fff;
   display: flex;
   flex-direction: column;
   padding: 20px;
   box-sizing: border-box;
+  gap: 20px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.TripSummaryCard {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.TripSummaryCard h2 {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+}
+
+.TripSummaryCard p {
+  margin: 2px 0;
+  color: #cbd5f5;
+  font-size: 0.9rem;
+}
+
+.TripSummaryStats {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.TripSummaryStat {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.TripNotice {
+  margin-top: -4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #dbeafe;
+  line-height: 1.4;
+  font-size: 0.9rem;
+  border: 1px solid rgba(59, 130, 246, 0.35);
 }

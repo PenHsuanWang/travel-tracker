@@ -10,15 +10,16 @@ class FileUploadController:
     Controller for file uploads.
     """
     @staticmethod
-    def upload_file(file: UploadFile, uploader_id: Optional[str] = None) -> Dict[str, Any]:
+    def upload_file(file: UploadFile, uploader_id: Optional[str] = None, trip_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Upload the file and return metadata.
 
         :param file: The uploaded file.
         :param uploader_id: Optional user ID.
+        :param trip_id: Optional trip ID.
         :return: Dictionary containing file info and metadata.
         """
-        return FileUploadService.save_file(file, uploader_id)
+        return FileUploadService.save_file(file, uploader_id, trip_id)
     
     @staticmethod
     def get_file_metadata(metadata_id: str) -> Optional[Dict[str, Any]]:

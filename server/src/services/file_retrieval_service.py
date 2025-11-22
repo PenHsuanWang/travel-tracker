@@ -37,26 +37,38 @@ class FileRetrievalService:
         except Exception as exc:  # pragma: no cover - defensive guard
             self.logger.warning("MongoDB adapter not initialized: %s", exc)
 
-    def list_files(self, bucket_name: str) -> List[str]:
+    def list_files(self, bucket_name: str, trip_id: Optional[str] = None) -> List[str]:
         """
         List object keys in the given bucket.
         """
         if 'minio' not in self.storage_manager.adapters:
             raise RuntimeError("MinIO adapter not configured")
-        return self.storage_manager.list_keys('minio', prefix="", bucket=bucket_name)
+        prefix = f"{trip_id}/" if trip_id else ""
+        return self.storage_manager.list_keys('minio', prefix=prefix, bucket=bucket_name)
 
-    def list_files_with_metadata(self, bucket_name: str) -> List[Dict[str, Any]]:
-        """List files and merge in metadata when available."""
+    def list_files_with_metadata(self, bucket_name: str, trip_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        List files and merge in metadata when available.
+
+        When trip_id is provided, only files explicitly associated with that
+        trip are returned. Objects from other trips (or orphan objects with no
+        metadata) are intentionally hidden to prevent cross-trip leakage.
+        """
         if 'minio' not in self.storage_manager.adapters:
             raise RuntimeError("MinIO adapter not configured")
-        object_keys = set(self.storage_manager.list_keys('minio', prefix="", bucket=bucket_name))
+
+        prefix = f"{trip_id}/" if trip_id else ""
+        object_keys = set(self.storage_manager.list_keys('minio', prefix=prefix, bucket=bucket_name))
         metadata_map: Dict[str, Dict[str, Any]] = {}
 
         mongodb_adapter = self.storage_manager.adapters.get('mongodb')
         if mongodb_adapter:
             try:
                 collection = mongodb_adapter.get_collection('file_metadata')
-                cursor = collection.find({"bucket": bucket_name})
+                query = {"bucket": bucket_name}
+                if trip_id:
+                    query["trip_id"] = trip_id
+                cursor = collection.find(query)
                 for document in cursor:
                     try:
                         parsed = FileMetadata(**document)
@@ -66,6 +78,8 @@ class FileRetrievalService:
 
                     metadata_payload = parsed.model_dump()
                     metadata_payload['created_at'] = parsed.created_at.isoformat()
+                    if parsed.captured_at:
+                        metadata_payload['captured_at'] = parsed.captured_at.isoformat()
                     metadata_map[parsed.id] = metadata_payload
             except Exception as exc:  # pragma: no cover - resilience guard
                 self.logger.warning("Failed to load metadata for bucket %s: %s", bucket_name, exc)
@@ -116,7 +130,8 @@ class FileRetrievalService:
     def list_geotagged_images(
         self,
         bucket_name: str = "images",
-        bbox: Optional[Dict[str, float]] = None
+        bbox: Optional[Dict[str, float]] = None,
+        trip_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         List images with GPS coordinates (geotagged images).
@@ -135,11 +150,14 @@ class FileRetrievalService:
             
             # Build query for images with GPS
             query: Dict[str, Any] = {
-                "bucket": bucket_name,
                 "gps": {"$exists": True, "$ne": None},
                 "gps.latitude": {"$exists": True, "$ne": None},
-                "gps.longitude": {"$exists": True, "$ne": None}
+                "gps.longitude": {"$exists": True, "$ne": None},
+                "bucket": bucket_name
             }
+            
+            if trip_id:
+                query["trip_id"] = trip_id
             
             # Apply bounding box filter if provided
             if bbox:
@@ -174,7 +192,7 @@ class FileRetrievalService:
                     
                     # Generate thumbnail URL (use object_key for now)
                     # In production, this could use a thumbnail service or presigned URL
-                    thumb_url = self._generate_thumbnail_url(parsed.object_key, bucket_name)
+                    thumb_url = self._generate_thumbnail_url(parsed.object_key, parsed.bucket or bucket_name)
                     
                     items.append({
                         'object_key': parsed.object_key,
@@ -182,7 +200,12 @@ class FileRetrievalService:
                         'lat': float(parsed.gps.latitude),
                         'lon': float(parsed.gps.longitude),
                         'thumb_url': thumb_url,
-                        'metadata_id': parsed.id
+                        'metadata_id': parsed.id,
+                        'captured_at': parsed.captured_at.isoformat() if parsed.captured_at else None,
+                        'captured_source': parsed.captured_source,
+                        'note': parsed.note,
+                        'note_title': parsed.note_title,
+                        'order_index': parsed.order_index,
                     })
                 except Exception as exc:
                     self.logger.warning(

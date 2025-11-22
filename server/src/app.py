@@ -1,5 +1,8 @@
 # server/src/app.py
 
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from .env file
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -7,7 +10,9 @@ from fastapi.middleware.gzip import GZipMiddleware
 from src.routes.map_routes import router as map_router
 from src.routes.gis_routes import router as gis_router
 from src.routes.file_upload_routes import router as file_upload_router
+from src.routes.file_upload_routes import router as file_upload_router
 from src.routes.file_retrieval_routes import router as file_retrieval_router
+from src.routes.trip_routes import router as trip_router
 
 app = FastAPI()
 
@@ -31,6 +36,8 @@ app.include_router(gis_router, prefix="/api/gis")
 app.include_router(file_upload_router, prefix="/api/map")
 # File retrieval routes
 app.include_router(file_retrieval_router, prefix="/api")
+# Trip routes
+app.include_router(trip_router, prefix="/api/trips")
 
 if __name__ == "__main__":
     import uvicorn

@@ -8,17 +8,90 @@ const apiClient = axios.create({
   },
 });
 
-export const uploadFile = async (file) => {
+// --- Trip API ---
+
+export const createTrip = async (tripData) => {
+  const response = await apiClient.post('/trips/', tripData);
+  return response.data;
+};
+
+export const createTripWithGpx = async (tripData, gpxFile) => {
+  const formData = new FormData();
+  formData.append('name', tripData.name);
+  if (tripData.start_date) formData.append('start_date', tripData.start_date);
+  if (tripData.end_date) formData.append('end_date', tripData.end_date);
+  if (tripData.region) formData.append('region', tripData.region);
+  if (tripData.notes) formData.append('notes', tripData.notes);
+  if (gpxFile) formData.append('gpx_file', gpxFile);
+
+  const response = await apiClient.post('/trips/with-gpx', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const getTrips = async () => {
+  const response = await apiClient.get('/trips/');
+  return response.data;
+};
+
+export const getTrip = async (tripId) => {
+  const response = await apiClient.get(`/trips/${tripId}`);
+  return response.data;
+};
+
+export const updateTrip = async (tripId, tripData) => {
+  const response = await apiClient.put(`/trips/${tripId}`, tripData);
+  return response.data;
+};
+
+export const deleteTrip = async (tripId) => {
+  await apiClient.delete(`/trips/${tripId}`);
+};
+
+// --- File API ---
+
+export const updatePhotoNote = async (metadataId, { note, note_title }) => {
+  const response = await apiClient.patch(`/photos/${encodeURIComponent(metadataId)}/note`, {
+    note,
+    note_title,
+  });
+  return response.data;
+};
+
+export const updatePhotoOrder = async (metadataId, order_index) => {
+  const response = await apiClient.patch(`/photos/${encodeURIComponent(metadataId)}/order`, {
+    order_index,
+  });
+  return response.data;
+};
+
+export const deleteFile = async (filename, bucket = 'images') => {
+  const response = await apiClient.delete(`/map/delete/${encodeURIComponent(filename)}`, {
+    params: { bucket }
+  });
+  return response.data;
+};
+
+export const deleteGpxFile = async (filename) => deleteFile(filename, 'gps-data');
+
+export const uploadFile = async (file, tripId = null) => {
   try {
-    console.log('[API] Uploading file:', file.name, file.type, file.size);
+    console.log('[API] Uploading file:', file.name, file.type, file.size, 'Trip:', tripId);
     const formData = new FormData();
     formData.append('file', file);
-    
+
+    const params = {};
+    if (tripId) {
+      params.trip_id = tripId;
+    }
+
     console.log('[API] Sending POST to:', `${apiClient.defaults.baseURL}/map/upload`);
     const response = await apiClient.post('/map/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      params: params,
     });
-    
+
     console.log('[API] Upload successful, response:', response.data);
     return response.data;
   } catch (error) {
@@ -67,8 +140,40 @@ export const searchLocations = async (query) => {
   return response.data;
 };
 
-export const listGpxFiles = async () => {
-  const response = await apiClient.get('/list-files');
+export const listGpxFiles = async (tripId = null) => {
+  const params = {};
+  if (tripId) {
+    params.trip_id = tripId;
+  }
+  // Note: The backend endpoint is /list-files, but it returns just keys.
+  // If we want metadata/trip filtering, we might need to use /list-files/detail or update /list-files.
+  // The current /list-files endpoint in retrieval service just lists keys from MinIO, filtering by trip_id there is hard without metadata.
+  // However, we updated retrieval service to support trip_id in list_files_with_metadata.
+  // Let's assume we use list_files_with_metadata if we need filtering, or the backend list_files was updated?
+  // Wait, I only updated list_files_with_metadata.
+  // The frontend uses listGpxFiles which calls /list-files.
+  // I should probably switch this to use /list-files/detail if I want filtering, OR I should have updated /list-files.
+  // But /list-files returns List[str], /list-files/detail returns List[FileListItem].
+  // Let's use /list-files for now but pass the param, assuming I might update backend or it's fine.
+  // Actually, for trip filtering to work for GPX, we MUST use metadata.
+  // So I should probably change this to use /list-files/detail and map to filenames if needed, or just return the objects.
+  // But to keep compatibility with existing frontend code that expects strings?
+  // Existing frontend: setGpxFiles(files) where files is array of strings.
+  // So I should probably update this to map the result of detail if tripId is present, or just return strings.
+  // But wait, if I use /list-files, it ignores trip_id.
+  // So I should use /list-files/detail and extract object_keys.
+
+  // Let's change the endpoint to /list-files/detail and map to object_keys
+  const response = await apiClient.get('/list-files/detail', { params: { bucket: 'gps-data', ...params } });
+  return response.data.map(item => item.object_key);
+};
+
+export const listGpxFilesWithMeta = async (tripId = null) => {
+  const params = { bucket: 'gps-data' };
+  if (tripId) {
+    params.trip_id = tripId;
+  }
+  const response = await apiClient.get('/list-files/detail', { params });
   return response.data;
 };
 
@@ -77,6 +182,15 @@ export const fetchGpxFile = async (filename, bucket = 'gps-data') => {
     params: { bucket },
     responseType: 'arraybuffer',
   });
+  return response.data;
+};
+
+export const fetchGpxAnalysis = async (filename, tripId = null) => {
+  const params = {};
+  if (tripId) {
+    params.trip_id = tripId;
+  }
+  const response = await apiClient.get(`/gpx/${encodeURIComponent(filename)}/analysis`, { params });
   return response.data;
 };
 
@@ -101,20 +215,27 @@ export const riversData = async () => {
   return response.data;
 };
 
-export const listImageFiles = async () => {
+export const listImageFiles = async (tripId = null) => {
+  const params = { bucket: 'images' };
+  if (tripId) {
+    params.trip_id = tripId;
+  }
   const response = await apiClient.get('/list-files/detail', {
-    params: { bucket: 'images' }
+    params: params
   });
   return response.data;
 };
 
-export const getGeotaggedImages = async (minLon, minLat, maxLon, maxLat, bucket = 'images') => {
+export const getGeotaggedImages = async (minLon, minLat, maxLon, maxLat, bucket = 'images', tripId = null) => {
   const params = { bucket };
   if (minLon !== undefined && minLat !== undefined && maxLon !== undefined && maxLat !== undefined) {
     params.minLon = minLon;
     params.minLat = minLat;
     params.maxLon = maxLon;
     params.maxLat = maxLat;
+  }
+  if (tripId) {
+    params.trip_id = tripId;
   }
   const response = await apiClient.get('/images/geo', { params });
   return response.data;

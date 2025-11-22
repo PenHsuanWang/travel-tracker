@@ -9,13 +9,14 @@
   font-size: 1.1rem;
 }
 
+
 .category-list {
   margin-top: 10px;
-  background-color: rgba(255, 255, 255, 0.05);
-  padding: 10px;
-  border-radius: 4px;
-  /* Optional subtle border: */
-  /* border: 1px solid rgba(255,255,255,0.2); */
+  background-color: rgba(15, 23, 42, 0.65);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.2);
 }
 
 .CategoriesPanel button {
@@ -28,4 +29,53 @@
 }
 .CategoriesPanel button:hover {
   background-color: #4f6375;
+}
+
+.CategoriesPanel-search {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background-color: rgba(15, 23, 42, 0.4);
+  color: #e2e8f0;
+  margin-bottom: 10px;
+}
+
+.CategoriesPanel-search::placeholder {
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.river-list {
+  max-height: 180px;
+  overflow-y: auto;
+  background: rgba(15, 18, 30, 0.65);
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.river-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #f8fafc;
+  cursor: pointer;
+}
+
+.river-option:hover {
+  background-color: rgba(59, 130, 246, 0.15);
+}
+
+.river-option input[type="checkbox"] {
+  margin: 0;
+  accent-color: #38bdf8;
+}
+
+.river-option span {
+  flex: 1;
+  text-align: left;
+  line-height: 1.3;
 }

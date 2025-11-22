@@ -1,29 +1,22 @@
 // client/src/App.js
-import React, { useState } from 'react';
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/layout/Header';
-import Sidebar from './components/layout/Sidebar';
-import MainBlock from './components/layout/MainBlock';
 import Footer from './components/layout/Footer';
+import TripsPage from './components/views/TripsPage';
+import TripDetailPage from './components/views/TripDetailPage';
 import './styles/App.css';
 
 function App() {
-  // Shared state for the map
-  const [selectedLayer, setSelectedLayer] = useState('openstreetmap');
-  const [selectedRivers, setSelectedRivers] = useState([]);
-
   return (
     <div className="App">
       <Header />
       <div className="App-body">
-        <Sidebar
-          selectedRivers={selectedRivers}
-          setSelectedRivers={setSelectedRivers}
-        />
-        <MainBlock
-          selectedLayer={selectedLayer}
-          setSelectedLayer={setSelectedLayer}
-          selectedRivers={selectedRivers}
-        />
+        <Routes>
+          <Route path="/" element={<Navigate to="/trips" replace />} />
+          <Route path="/trips" element={<TripsPage />} />
+          <Route path="/trips/:tripId" element={<TripDetailPage />} />
+        </Routes>
       </div>
       <Footer />
     </div>
