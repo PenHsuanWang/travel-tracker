@@ -131,6 +131,7 @@ def _parse_raw_gpx_bytes(gpx_bytes: bytes) -> Tuple[List[List[float]], List[Dict
             continue
         elev = None
         name_text = None
+        time_text = None
         for child in wpt:
             if _tag_endswith(child, "ele") and child.text:
                 try:
@@ -139,7 +140,15 @@ def _parse_raw_gpx_bytes(gpx_bytes: bytes) -> Tuple[List[List[float]], List[Dict
                     pass
             if _tag_endswith(child, "name") and child.text:
                 name_text = child.text.strip()
-        waypoints.append({"lat": lat, "lon": lon, "elev": elev, "note": name_text})
+            if _tag_endswith(child, "time") and child.text:
+                time_text = child.text.strip()
+        waypoints.append({
+            "lat": lat, 
+            "lon": lon, 
+            "elev": elev, 
+            "note": name_text,
+            "time": time_text
+        })
 
     return coords, waypoints, track_name
 

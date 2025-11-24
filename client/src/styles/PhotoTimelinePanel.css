@@ -72,6 +72,15 @@
   .text-cell .secondary {
     font-size: 0.9rem;
   }
+  
+  .view-mode-toggle {
+    flex-wrap: wrap;
+  }
+  
+  .view-mode-toggle .toggle-btn {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+  }
 }
 
 @media (max-width: 360px) {
@@ -83,6 +92,12 @@
   .thumb-cell {
     max-height: 240px;
   }
+  
+  .timeline-period-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
 }
 
 .PhotoTimelinePanel.closed {
@@ -93,9 +108,51 @@
   padding: 16px 18px 10px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timeline-header > div:first-child {
+  flex: 1;
+}
+
+.timeline-controls {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
+  width: 100%;
+}
+
+.view-mode-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(148, 163, 184, 0.08);
+  border-radius: 8px;
+}
+
+.view-mode-toggle .toggle-btn {
+  padding: 6px 12px;
+  font-size: 0.875rem;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.view-mode-toggle .toggle-btn:hover {
+  background: rgba(148, 163, 184, 0.15);
+  color: #e2e8f0;
+}
+
+.view-mode-toggle .toggle-btn.active {
+  background: #3b82f6;
+  color: white;
+  font-weight: 500;
 }
 
 .timeline-header h3 {
@@ -195,6 +252,33 @@
   font-weight: 500;
 }
 
+/* Time period sections */
+.timeline-period {
+  margin: 12px 0;
+}
+
+.timeline-period-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin: 8px 0;
+  background: rgba(59, 130, 246, 0.08);
+  border-left: 3px solid #3b82f6;
+  border-radius: 4px;
+}
+
+.period-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #60a5fa;
+}
+
+.period-count {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
 .timeline-row {
   position: relative;
   display: flex;
@@ -223,6 +307,10 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+.timeline-row.hovered {
+  background: rgba(255, 255, 255, 0.07);
+}
+
 .timeline-row.selected {
   background: rgba(59, 130, 246, 0.18);
   border-color: rgba(59, 130, 246, 0.45);
@@ -230,8 +318,80 @@
   transform: translateY(0);
 }
 
+/* Enhanced styling for photo vs waypoint */
+.timeline-row--photo {
+  border-left: 3px solid #10b981;
+}
+
+.timeline-row--waypoint {
+  border-left: 3px solid #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(255, 255, 255, 0.03) 100%);
+}
+
 .timeline-row.expanded {
   background: rgba(255, 255, 255, 0.06);
+}
+
+/* Waypoint-specific styling */
+.timeline-row--waypoint {
+  border-left: 4px solid rgba(59, 130, 246, 0.6);
+}
+
+.timeline-row--waypoint:hover {
+  background: rgba(59, 130, 246, 0.08);
+  border-left-color: rgba(59, 130, 246, 0.8);
+}
+
+.timeline-row--waypoint.selected {
+  border-left-color: rgba(59, 130, 246, 1);
+}
+
+.waypoint-icon-cell {
+  width: 120px;
+  height: 120px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.08));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease-in-out;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.timeline-row:hover .waypoint-icon-cell {
+  transform: scale(1.02);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(37, 99, 235, 0.15));
+}
+
+.waypoint-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.waypoint-elev {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #93c5fd;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.waypoint-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .timeline-item-header {
@@ -254,15 +414,95 @@
 
 .timeline-content-wrapper {
   display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  align-items: stretch;
+}
+
+/* Card view mode - large full-width photos */
+.view-card .thumb-cell {
+  width: 100%;
+  height: auto;
+  max-height: 400px;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+}
+
+.view-card .thumb-cell:hover {
+  transform: scale(1.02);
+}
+
+.view-card .thumb-cell img {
+  width: 100%;
+  height: auto;
+  max-height: 400px;
+  object-fit: cover;
+  display: block;
+}
+
+/* Compact view mode - original small thumbnails */
+.view-compact .timeline-content-wrapper {
+  flex-direction: row;
   gap: 16px;
   padding: 18px;
   align-items: flex-start;
 }
 
-.thumb-cell {
+.view-compact .thumb-cell {
   width: 120px;
   height: 120px;
   border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.view-compact .thumb-cell:hover {
+  transform: scale(1.05);
+}
+
+.view-compact .thumb-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Story view mode - vertical immersive */
+.view-story .timeline-content-wrapper {
+  flex-direction: column;
+  gap: 0;
+}
+
+.view-story .thumb-cell {
+  width: 100%;
+  height: auto;
+  min-height: 300px;
+  max-height: 500px;
+  border-radius: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.view-story .thumb-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Default thumb-cell for backward compatibility */
+.thumb-cell {
+  width: 100%;
+  height: auto;
+  max-height: 400px;
+  border-radius: 12px 12px 0 0;
   overflow: hidden;
   background: radial-gradient(circle at 30% 20%, #1f2937, #0b1324);
   display: flex;
@@ -305,12 +545,40 @@
   object-fit: contain;
 }
 
+/* Photo hover overlay */
+.photo-hover-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.timeline-row:hover .photo-hover-overlay {
+  opacity: 1;
+}
+
+.zoom-hint {
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
 .text-cell {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 18px;
 }
 
 .text-cell .primary {
@@ -336,6 +604,43 @@
   word-break: break-word;
   overflow-wrap: break-word;
   /* PM requirement: show full text by default, no truncation */
+}
+
+/* Markdown rendering support */
+.text-cell .secondary p {
+  margin: 0 0 0.8em 0;
+}
+
+.text-cell .secondary p:last-child {
+  margin-bottom: 0;
+}
+
+.text-cell .secondary strong {
+  font-weight: 700;
+  color: #e5e7eb;
+}
+
+.text-cell .secondary em {
+  font-style: italic;
+  color: #d1d5db;
+}
+
+.text-cell .secondary ul,
+.text-cell .secondary ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.text-cell .secondary li {
+  margin: 0.3em 0;
+}
+
+.text-cell .secondary h1,
+.text-cell .secondary h2,
+.text-cell .secondary h3 {
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0.8em 0 0.4em 0;
 }
 
 .timeline-row.expanded .text-cell .secondary {
@@ -408,6 +713,20 @@
   background: rgba(0, 0, 0, 0.1);
   border-top: 1px solid rgba(148, 163, 184, 0.1);
   gap: 8px;
+}
+
+/* Card view - footer inside text cell */
+.view-card .timeline-item-footer {
+  background: transparent;
+  border-top: none;
+  padding: 0;
+  margin-top: 12px;
+}
+
+/* Story view - minimize footer */
+.view-story .timeline-item-footer {
+  padding: 8px 14px;
+  font-size: 0.85rem;
 }
 
 .actions-cell {
@@ -522,4 +841,23 @@
 .note-editor .note-actions button.ghost:hover {
   background: rgba(148, 163, 184, 0.28);
   transform: translateY(-1px);
+}
+
+/* Responsive adjustments for waypoint cards */
+@media (max-width: 600px) {
+  .waypoint-icon-cell {
+    width: 100%;
+    height: 80px;
+    flex-direction: row;
+    justify-content: center;
+    padding: 0 16px;
+  }
+
+  .waypoint-icon {
+    font-size: 2rem;
+  }
+
+  .waypoint-elev {
+    font-size: 0.7rem;
+  }
 }
