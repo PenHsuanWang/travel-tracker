@@ -1,5 +1,6 @@
 // client/src/components/panels/PhotoTimelinePanel.js
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import '../../styles/PhotoTimelinePanel.css';
 
 const sortChronologically = (a, b) => {
@@ -25,6 +26,28 @@ const formatTime = (date) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+// Helper: Get time of day period
+const getTimeOfDay = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return 'unknown';
+  }
+  const hour = date.getHours();
+  if (hour < 12) return 'morning';
+  if (hour < 18) return 'afternoon';
+  return 'evening';
+};
+
+const getTimeOfDayLabel = (period) => {
+  const labels = {
+    morning: '🌅 上午時段',
+    afternoon: '☀️ 下午時段',
+    evening: '🌆 傍晚時段',
+    unknown: '⏰ 未知時段',
+  };
+  return labels[period] || labels.unknown;
+};
+
+// Build groups by day and time period
 const buildGroups = (photos) => {
   const groups = [];
   let dayCounter = 0;
@@ -32,6 +55,8 @@ const buildGroups = (photos) => {
 
   photos.forEach((photo) => {
     const dayKey = photo.capturedDate ? photo.capturedDate.toISOString().slice(0, 10) : 'unknown';
+    const timeOfDay = getTimeOfDay(photo.capturedDate);
+    
     if (dayKey !== lastDayKey) {
       lastDayKey = dayKey;
       const isUnknown = dayKey === 'unknown';
@@ -42,14 +67,29 @@ const buildGroups = (photos) => {
         id: dayKey,
         label: isUnknown ? 'Unknown time' : `Day ${dayCounter}`,
         dateLabel: isUnknown ? 'Ungrouped captures' : formatDate(photo.capturedDate),
-        photos: [],
+        periods: {},
         isUnknown,
       });
     }
-    groups[groups.length - 1].photos.push(photo);
+    
+    const currentGroup = groups[groups.length - 1];
+    if (!currentGroup.periods[timeOfDay]) {
+      currentGroup.periods[timeOfDay] = [];
+    }
+    currentGroup.periods[timeOfDay].push(photo);
   });
 
   return groups;
+};
+
+// Smart crop detection
+const getSmartCropPosition = (photo) => {
+  // For portrait photos, center crop
+  if (photo.orientation === 'portrait') {
+    return 'center';
+  }
+  // For landscape, prefer bottom third (horizon line)
+  return '50% 70%';
 };
 
 function PhotoTimelinePanel({
@@ -67,6 +107,8 @@ function PhotoTimelinePanel({
   const [editingId, setEditingId] = useState(null);
   const [draftNote, setDraftNote] = useState('');
   const [expandedId, setExpandedId] = useState(null);
+  const [viewMode, setViewMode] = useState('card'); // card | compact | story
+  const [hoveredPhotoId, setHoveredPhotoId] = useState(null);
 
   const orderedPhotos = useMemo(() => {
     return [...photos].sort(sortChronologically);
@@ -98,6 +140,18 @@ function PhotoTimelinePanel({
     // Only truncate extremely long notes (>500 chars)
     const snippet = photo.note.slice(0, 500);
     return `${snippet}…`;
+  };
+  
+  const shouldShowMarkdown = (note) => {
+    // Detect Markdown syntax
+    return note && (note.includes('**') || note.includes('*') || note.includes('- ') || note.includes('# '));
+  };
+  
+  const handleDoubleClick = (photo, event) => {
+    // Double-click on text to start editing (inline edit)
+    if (event.target.closest('.text-cell') && !event.target.closest('.note-editor')) {
+      startEdit(photo, event);
+    }
   };
 
   const toggleExpand = (photoId, event) => {
@@ -144,18 +198,46 @@ function PhotoTimelinePanel({
   }
 
   return (
-    <section className={`PhotoTimelinePanel mode-${mode} ${isOpen ? 'open' : 'closed'}`}>
+    <section className={`PhotoTimelinePanel mode-${mode} view-${viewMode} ${isOpen ? 'open' : 'closed'}`}>
       <header className="timeline-header">
         <div>
           <p className="eyebrow">Trip Timeline</p>
           <h3>{orderedPhotos.length ? `${orderedPhotos.length} items` : 'No items yet'}</h3>
           <p className="subtitle">Chronological • Date Taken (captured_at)</p>
         </div>
-        {mode !== 'side' && (
-          <button className="timeline-close" type="button" onClick={onClose}>
-            Close
-          </button>
-        )}
+        <div className="timeline-controls">
+          <div className="view-mode-toggle" role="group" aria-label="View mode">
+            <button
+              type="button"
+              className={`toggle-btn ${viewMode === 'card' ? 'active' : ''}`}
+              onClick={() => setViewMode('card')}
+              title="Card layout - Large photos with full notes"
+            >
+              🗂 Card
+            </button>
+            <button
+              type="button"
+              className={`toggle-btn ${viewMode === 'compact' ? 'active' : ''}`}
+              onClick={() => setViewMode('compact')}
+              title="Compact layout - Smaller photos, side-by-side"
+            >
+              ☰ Compact
+            </button>
+            <button
+              type="button"
+              className={`toggle-btn ${viewMode === 'story' ? 'active' : ''}`}
+              onClick={() => setViewMode('story')}
+              title="Story layout - Vertical immersive experience"
+            >
+              📱 Story
+            </button>
+          </div>
+          {mode !== 'side' && (
+            <button className="timeline-close" type="button" onClick={onClose}>
+              Close
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="timeline-scroll" ref={listRef}>
@@ -173,15 +255,24 @@ function PhotoTimelinePanel({
               <span className="day-label">{group.label}</span>
               <span className="day-date">{group.dateLabel}</span>
             </div>
-            {group.photos.map((item) => {
+            {Object.entries(group.periods).map(([period, periodPhotos]) => (
+              <div key={`${group.id}-${period}`} className="timeline-period">
+                <div className="timeline-period-header">
+                  <span className="period-label">{getTimeOfDayLabel(period)}</span>
+                  <span className="period-count">{periodPhotos.length} items</span>
+                </div>
+                {periodPhotos.map((item) => {
               const isPhoto = item.type === 'photo';
               const isWaypoint = item.type === 'waypoint';
               const isSelected = selectedPhotoId === item.id;
               const isEditing = editingId === item.id;
               const isExpanded = expandedId === item.id;
+              const isHovered = hoveredPhotoId === item.id;
               const title = deriveTitle(item);
               const snippet = deriveSnippet(item, isExpanded);
               const hasLocation = item.lat !== null && item.lon !== null;
+              const useMarkdown = shouldShowMarkdown(snippet);
+              const cropPosition = getSmartCropPosition(item);
 
               return (
                 <article
@@ -193,10 +284,13 @@ function PhotoTimelinePanel({
                       delete rowRefs.current[item.id];
                     }
                   }}
-                  className={`timeline-row ${isSelected ? 'selected' : ''} ${isExpanded ? 'expanded' : ''} ${isWaypoint ? 'timeline-row--waypoint' : ''}`}
+                  className={`timeline-row ${isSelected ? 'selected' : ''} ${isExpanded ? 'expanded' : ''} ${isHovered ? 'hovered' : ''} ${isWaypoint ? 'timeline-row--waypoint' : 'timeline-row--photo'}`}
                   role="button"
                   tabIndex={0}
                   onClick={(e) => handlePhotoClick(item, e)}
+                  onDoubleClick={(e) => handleDoubleClick(item, e)}
+                  onMouseEnter={() => setHoveredPhotoId(item.id)}
+                  onMouseLeave={() => setHoveredPhotoId(null)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
@@ -223,17 +317,28 @@ function PhotoTimelinePanel({
                   <div className="timeline-content-wrapper">
                     {isPhoto && (
                       <div 
-                        className="thumb-cell"
+                        className={`thumb-cell ${viewMode}`}
                         onClick={(e) => toggleExpand(item.id, e)}
                         title={isExpanded ? 'Click to view smaller' : 'Click to view larger'}
                         role="button"
                         aria-label={isExpanded ? 'Collapse image' : 'Expand image to full size'}
+                        style={{
+                          '--crop-position': cropPosition
+                        }}
                       >
                         <img 
                           src={isExpanded ? item.imageUrl : (item.thumbnailUrl || item.imageUrl)} 
                           alt={title || item.fileName}
                           loading="lazy"
+                          style={{
+                            objectPosition: cropPosition
+                          }}
                         />
+                        {isHovered && !isExpanded && (
+                          <div className="photo-hover-overlay">
+                            <span className="zoom-hint">🔍 Click to expand</span>
+                          </div>
+                        )}
                       </div>
                     )}
                     
@@ -261,7 +366,11 @@ function PhotoTimelinePanel({
                       )}
                       {!isEditing && snippet && (
                         <div className="secondary">
-                          {snippet}
+                          {useMarkdown ? (
+                            <ReactMarkdown>{snippet}</ReactMarkdown>
+                          ) : (
+                            snippet
+                          )}
                         </div>
                       )}
                       {!isEditing && !snippet && isPhoto && (
@@ -342,6 +451,8 @@ function PhotoTimelinePanel({
                 </article>
               );
             })}
+              </div>
+            ))}
           </div>
         ))}
       </div>
