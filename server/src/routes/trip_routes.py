@@ -2,12 +2,15 @@ from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from src.models.trip import Trip
+from src.models.dashboard import TripDashboardResponse
 from src.services.trip_service import TripService
 from src.services.file_upload_service import FileUploadService
+from src.services.dashboard_service import DashboardService
 from datetime import datetime
 
 router = APIRouter()
 trip_service = TripService()
+dashboard_service = DashboardService()
 
 
 class TripCreateWithGpxResponse(BaseModel):
@@ -124,6 +127,19 @@ async def get_trip(trip_id: str):
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")
     return trip
+
+
+@router.get("/{trip_id}/dashboard", response_model=TripDashboardResponse)
+async def get_trip_dashboard(trip_id: str):
+    """Return aggregated analytics for a trip."""
+    try:
+        return dashboard_service.get_trip_dashboard(trip_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to compile dashboard")
 
 @router.put("/{trip_id}", response_model=Trip)
 async def update_trip(trip_id: str, update_data: Dict[str, Any]):

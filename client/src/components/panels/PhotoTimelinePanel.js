@@ -1,6 +1,7 @@
 // client/src/components/panels/PhotoTimelinePanel.js
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import QuickAnnotationBar from '../annotations/QuickAnnotationBar';
 import '../../styles/PhotoTimelinePanel.css';
 
 const sortChronologically = (a, b) => {
@@ -92,6 +93,47 @@ const getSmartCropPosition = (photo) => {
   return '50% 70%';
 };
 
+const INTERACTIVE_TAGS = new Set(['button', 'input', 'textarea', 'select', 'label', 'option']);
+const ACTIVATION_SKIP_SELECTOR = [
+  '.note-editor',
+  '.note-editor *',
+  '.note-actions',
+  '.note-actions *',
+  '.quick-annotation-bar',
+  '.quick-annotation-bar *',
+  '.selection-cell',
+  '.selection-cell *',
+  '.timeline-item-footer',
+  '.timeline-item-footer *',
+  '.view-on-map-link',
+  '.view-on-map-link *',
+].join(', ');
+
+const shouldSkipPhotoActivation = (event) => {
+  if (!event) return false;
+  if (event.defaultPrevented) return true;
+  const targetNode = event.target;
+  if (!targetNode) return false;
+
+  const element = typeof targetNode.closest === 'function' ? targetNode : targetNode.parentElement;
+  if (!element) return false;
+
+  const tagName = (element.tagName || '').toLowerCase();
+  if (INTERACTIVE_TAGS.has(tagName)) {
+    return true;
+  }
+
+  if (element.isContentEditable) {
+    return true;
+  }
+
+  if (typeof element.closest === 'function' && ACTIVATION_SKIP_SELECTOR && element.closest(ACTIVATION_SKIP_SELECTOR)) {
+    return true;
+  }
+
+  return false;
+};
+
 function PhotoTimelinePanel({
   photos = [],
   selectedPhotoId = null,
@@ -101,6 +143,14 @@ function PhotoTimelinePanel({
   mode = 'side', // side | overlay | sheet
   onClose,
   loading = false,
+  onOpenAnnotations,
+  onQuickAnnotate,
+  quickSavingMap = {},
+  selectionMode = false,
+  selectedForBulk = [],
+  onToggleSelect,
+  onSelectionModeChange,
+  onRequestBulkEdit,
 }) {
   const listRef = useRef(null);
   const rowRefs = useRef({});
@@ -160,8 +210,15 @@ function PhotoTimelinePanel({
   };
 
   const handlePhotoClick = (photo, event) => {
+    if (shouldSkipPhotoActivation(event)) {
+      return;
+    }
+
+    const targetNode = event.target;
+    const element = typeof targetNode?.closest === 'function' ? targetNode : targetNode?.parentElement;
+
     // If clicking on the thumbnail, toggle expand
-    if (event.target.tagName === 'IMG' || event.target.closest('.thumb-cell')) {
+    if (element && (element.tagName === 'IMG' || element.closest('.thumb-cell'))) {
       toggleExpand(photo.id, event);
     } else if (onSelectPhoto) {
       onSelectPhoto(photo);
@@ -237,6 +294,25 @@ function PhotoTimelinePanel({
               Close
             </button>
           )}
+          <div className="timeline-bulk-actions">
+            <button
+              type="button"
+              className={`ghost small ${selectionMode ? 'active' : ''}`}
+              onClick={() => onSelectionModeChange?.(!selectionMode)}
+            >
+              {selectionMode ? 'Done selecting' : 'Select photos'}
+            </button>
+            {selectionMode && (
+              <button
+                type="button"
+                className="primary small"
+                disabled={!selectedForBulk.length}
+                onClick={onRequestBulkEdit}
+              >
+                Bulk annotate ({selectedForBulk.length})
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -273,6 +349,7 @@ function PhotoTimelinePanel({
               const hasLocation = item.lat !== null && item.lon !== null;
               const useMarkdown = shouldShowMarkdown(snippet);
               const cropPosition = getSmartCropPosition(item);
+              const isBulkSelected = selectedForBulk.includes(item.id);
 
               return (
                 <article
@@ -292,6 +369,9 @@ function PhotoTimelinePanel({
                   onMouseEnter={() => setHoveredPhotoId(item.id)}
                   onMouseLeave={() => setHoveredPhotoId(null)}
                   onKeyDown={(e) => {
+                    if (shouldSkipPhotoActivation(e)) {
+                      return;
+                    }
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       onSelectPhoto && onSelectPhoto(item);
@@ -301,6 +381,16 @@ function PhotoTimelinePanel({
                   {isSelected && <span className="accent-bar" aria-hidden="true" />}
                   
                   <div className="timeline-item-header">
+                    {selectionMode && isPhoto && (
+                      <div className="selection-cell">
+                        <input
+                          type="checkbox"
+                          checked={isBulkSelected}
+                          onChange={(event) => onToggleSelect?.(item, event.target.checked)}
+                          aria-label="Select photo for bulk annotation"
+                        />
+                      </div>
+                    )}
                     <div className="time-cell">{formatTime(item.capturedDate)}</div>
                     {isPhoto && item.capturedSource === 'fallback' && (
                       <div className="meta-pill" title="Date Taken missing; using upload time">
@@ -395,7 +485,11 @@ function PhotoTimelinePanel({
                   </div>
 
                   {isEditing && isPhoto && (
-                    <div className="note-editor" onClick={(e) => e.stopPropagation()}>
+                    <div
+                      className="note-editor"
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
                       <textarea
                         value={draftNote}
                         onChange={(e) => setDraftNote(e.target.value)}
@@ -447,6 +541,14 @@ function PhotoTimelinePanel({
                         </button>
                       )}
                     </div>
+                    {isPhoto && (
+                      <QuickAnnotationBar
+                        photo={item}
+                        onQuickAnnotate={onQuickAnnotate}
+                        onOpenFullEditor={onOpenAnnotations}
+                        saving={Boolean(quickSavingMap[item.id])}
+                      />
+                    )}
                   </div>
                 </article>
               );

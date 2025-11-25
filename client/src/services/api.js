@@ -40,6 +40,11 @@ export const getTrip = async (tripId) => {
   return response.data;
 };
 
+export const getTripDashboard = async (tripId) => {
+  const response = await apiClient.get(`/trips/${tripId}/dashboard`);
+  return response.data;
+};
+
 export const updateTrip = async (tripId, tripData) => {
   const response = await apiClient.put(`/trips/${tripId}`, tripData);
   return response.data;
@@ -63,6 +68,37 @@ export const updatePhotoOrder = async (metadataId, order_index) => {
   const response = await apiClient.patch(`/photos/${encodeURIComponent(metadataId)}/order`, {
     order_index,
   });
+  return response.data;
+};
+
+export const updatePhotoAnnotations = async (metadataId, body) => {
+  const response = await apiClient.patch(`/photos/${encodeURIComponent(metadataId)}/annotations`, body);
+  return response.data;
+};
+
+export const bulkUpdatePhotoAnnotations = async ({
+  metadataIds,
+  annotations,
+  tagMode = 'append',
+  companionMode = 'append',
+  gearMode = 'append',
+  annotatedBy,
+  autoAnnotated,
+}) => {
+  const payload = {
+    metadata_ids: metadataIds,
+    annotations,
+    tag_mode: tagMode,
+    companion_mode: companionMode,
+    gear_mode: gearMode,
+  };
+  if (annotatedBy !== undefined) {
+    payload.annotated_by = annotatedBy;
+  }
+  if (autoAnnotated !== undefined) {
+    payload.auto_annotated = autoAnnotated;
+  }
+  const response = await apiClient.post('/photos/annotations/bulk', payload);
   return response.data;
 };
 

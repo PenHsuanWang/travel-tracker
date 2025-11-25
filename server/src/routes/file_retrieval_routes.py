@@ -7,16 +7,19 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, HTTPException, Response, Query  # type: ignore[import-not-found]
 from pydantic import BaseModel  # type: ignore[import-not-found]
 
+from src.models.annotations import AnnotationUpdatePayload, BulkAnnotationPayload
+from src.models.file_metadata import FileMetadata
 from src.services.file_retrieval_service import FileRetrievalService
 from src.services.gpx_analysis_retrieval_service import GpxAnalysisRetrievalService
+from src.services.photo_annotation_service import PhotoAnnotationService
 from src.services.photo_note_service import PhotoNoteService
-from src.models.file_metadata import FileMetadata
 
 router = APIRouter()
 
 retrieval_service = FileRetrievalService()
 analysis_retrieval_service = GpxAnalysisRetrievalService()
 photo_note_service = PhotoNoteService()
+annotation_service = PhotoAnnotationService()
 
 logger = logging.getLogger(__name__)
 
@@ -331,4 +334,50 @@ async def update_photo_order(metadata_id: str, payload: PhotoOrderPayload):
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/photos/{metadata_id:path}/annotations")
+async def get_photo_annotations(metadata_id: str):
+    """Return the structured annotations for a single photo."""
+    try:
+        return annotation_service.get_annotations(metadata_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.patch("/photos/{metadata_id:path}/annotations")
+async def update_photo_annotations(metadata_id: str, payload: AnnotationUpdatePayload):
+    """Upsert structured annotations for a single photo metadata document."""
+    try:
+        return annotation_service.update_annotations(
+            metadata_id,
+            patch=payload.annotations,
+            annotated_by=payload.annotated_by,
+            auto_annotated=payload.auto_annotated,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/photos/annotations/bulk")
+async def bulk_update_photo_annotations(payload: BulkAnnotationPayload):
+    """Apply structured annotation updates to multiple photos at once."""
+    try:
+        return annotation_service.bulk_update_annotations(
+            metadata_ids=payload.metadata_ids,
+            patch=payload.annotations,
+            tag_mode=payload.tag_mode,
+            companion_mode=payload.companion_mode,
+            gear_mode=payload.gear_mode,
+            annotated_by=payload.annotated_by,
+            auto_annotated=payload.auto_annotated,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc))

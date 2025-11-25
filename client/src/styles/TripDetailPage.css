@@ -33,6 +33,92 @@
   overflow: hidden;
 }
 
+.TripContent {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: #f8fafc;
+}
+
+.trip-detail-tabs {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.trip-detail-tab {
+  border: none;
+  background: transparent;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.trip-detail-tab:hover {
+  background: #f1f5f9;
+  color: #111827;
+}
+
+.trip-detail-tab.active {
+  background: #111827;
+  color: #f8fafc;
+}
+
+.TripMainContent {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.TripMainContent > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.TimelineStandalone {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+  background: #f8fafc;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.TimelineStandalone .PhotoTimelinePanel {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  min-height: calc(100vh - 205px);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.TimelineStandalone .PhotoTimelinePanel.mode-sheet {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  height: 100%;
+  max-height: none;
+  width: 100%;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.TimelineStandalone .PhotoTimelinePanel .timeline-scroll {
+  max-height: none;
+}
+
 .trip-detail-header__left {
   display: flex;
   gap: 1.25rem;

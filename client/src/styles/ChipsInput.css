@@ -1,0 +1,74 @@
+.chips-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.chips-input label {
+  font-size: 0.85rem;
+  color: #5a6775;
+}
+
+.chips-input__box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid #d6dbe1;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.chips-input__box input {
+  border: none;
+  outline: none;
+  min-width: 120px;
+  flex: 1;
+  font-size: 0.95rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #eef2ff;
+  color: #253858;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.85rem;
+}
+
+.chip button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.chips-input__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chips-input__suggestions .suggestion {
+  border: 1px dashed #b8c1d1;
+  border-radius: 999px;
+  padding: 0.15rem 0.65rem;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #4a5568;
+}
+
+.chips-input__suggestions .suggestion.selected {
+  background: #4c6ef5;
+  border-color: #4c6ef5;
+  color: #fff;
+}
+
+.chips-input.is-disabled {
+  opacity: 0.6;
+}

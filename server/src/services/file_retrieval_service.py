@@ -80,6 +80,10 @@ class FileRetrievalService:
                     metadata_payload['created_at'] = parsed.created_at.isoformat()
                     if parsed.captured_at:
                         metadata_payload['captured_at'] = parsed.captured_at.isoformat()
+                    if parsed.annotated_at:
+                        metadata_payload['annotated_at'] = parsed.annotated_at.isoformat()
+                    if parsed.last_edited_at:
+                        metadata_payload['last_edited_at'] = parsed.last_edited_at.isoformat()
                     metadata_map[parsed.id] = metadata_payload
             except Exception as exc:  # pragma: no cover - resilience guard
                 self.logger.warning("Failed to load metadata for bucket %s: %s", bucket_name, exc)

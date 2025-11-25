@@ -4,7 +4,10 @@ import LeafletMapView from './LeafletMapView';
 import TripSidebar from '../layout/TripSidebar';
 import PhotoTimelinePanel from '../panels/PhotoTimelinePanel';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
-import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis } from '../../services/api';
+import TripDashboard from './TripDashboard';
+import AnnotationEditorModal from '../annotations/AnnotationEditorModal';
+import BulkAnnotationModal from '../annotations/BulkAnnotationModal';
+import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis, getTripDashboard, updatePhotoAnnotations, bulkUpdatePhotoAnnotations } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
 
@@ -41,9 +44,13 @@ const normalizePhoto = (item) => {
     const note = metadata.note || metadata.caption || metadata.notes || null;
     const noteTitle = metadata.note_title || (note ? note.split('\n')[0] : null);
     const capturedDate = parseDateSafe(metadata.captured_at || metadata.date_taken || metadata.created_at);
+    const annotatedAt = parseDateSafe(metadata.annotated_at);
+    const lastEditedAt = parseDateSafe(metadata.last_edited_at);
     const lat = Number(metadata?.gps?.latitude ?? metadata?.gps?.lat ?? item.lat);
     const lon = Number(metadata?.gps?.longitude ?? metadata?.gps?.lon ?? item.lon);
     const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+    const annotations = metadata.annotations || null;
+    const metadataId = metadata.id || metadata._id || item.metadata_id || item.object_key;
 
     return {
         type: 'photo',
@@ -57,11 +64,16 @@ const normalizePhoto = (item) => {
         capturedSource: metadata.captured_source || (metadata.date_taken ? 'exif' : metadata.created_at ? 'fallback' : 'unknown'),
         lat: hasCoords ? lat : null,
         lon: hasCoords ? lon : null,
-        metadataId: item.metadata_id || null,
+        metadataId,
         caption: metadata.caption || metadata.notes || null,
         note,
         noteTitle,
         orderIndex: metadata.order_index ?? null,
+        annotations,
+        annotatedAt,
+        lastEditedAt,
+        annotatedBy: metadata.annotated_by || null,
+        autoAnnotated: metadata.auto_annotated ?? null,
     };
 };
 
@@ -109,6 +121,12 @@ const MIN_TIMELINE_WIDTH = 280;
 const MAX_TIMELINE_WIDTH = 600;
 const DEFAULT_TIMELINE_WIDTH = 360;
 
+const VIEW_TABS = [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'map', label: 'Map' },
+    { id: 'timeline', label: 'Timeline' },
+];
+
 const clampTimelineWidth = (value) => Math.min(MAX_TIMELINE_WIDTH, Math.max(MIN_TIMELINE_WIDTH, value));
 
 const getStoredTimelineWidth = () => {
@@ -139,6 +157,18 @@ const TripDetailPage = () => {
     const [timelineMode, setTimelineMode] = useState('side');
     const [timelineOpen, setTimelineOpen] = useState(true);
     const [timelineWidth, setTimelineWidth] = useState(() => getStoredTimelineWidth());
+    const [activeView, setActiveView] = useState('dashboard');
+    const [dashboardData, setDashboardData] = useState(null);
+    const [dashboardLoading, setDashboardLoading] = useState(true);
+    const [dashboardError, setDashboardError] = useState('');
+    const [annotationModalOpen, setAnnotationModalOpen] = useState(false);
+    const [annotationModalPhoto, setAnnotationModalPhoto] = useState(null);
+    const [annotationSaving, setAnnotationSaving] = useState(false);
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedForBulk, setSelectedForBulk] = useState([]);
+    const [bulkModalOpen, setBulkModalOpen] = useState(false);
+    const [bulkSaving, setBulkSaving] = useState(false);
+    const [quickSavingMap, setQuickSavingMap] = useState({});
     const mapRef = useRef(null);
     const navigate = useNavigate();
 
@@ -180,6 +210,10 @@ const TripDetailPage = () => {
     const selectedPhotoIndex = useMemo(
         () => orderedPhotos.findIndex((photo) => photo.id === selectedPhotoId),
         [orderedPhotos, selectedPhotoId]
+    );
+    const selectedPhotosForBulk = useMemo(
+        () => orderedPhotos.filter((photo) => selectedForBulk.includes(photo.id)),
+        [orderedPhotos, selectedForBulk]
     );
 
     const refreshTripStats = useCallback(async () => {
@@ -244,6 +278,27 @@ const TripDetailPage = () => {
         }
     }, [tripId]);
 
+    const loadDashboard = useCallback(async () => {
+        if (!tripId) {
+            setDashboardData(null);
+            setDashboardError('');
+            setDashboardLoading(false);
+            return;
+        }
+        setDashboardLoading(true);
+        setDashboardError('');
+        try {
+            const payload = await getTripDashboard(tripId);
+            setDashboardData(payload);
+        } catch (error) {
+            console.error('Failed to load trip dashboard:', error);
+            setDashboardError('Unable to load dashboard data right now.');
+            setDashboardData(null);
+        } finally {
+            setDashboardLoading(false);
+        }
+    }, [tripId]);
+
     // Merge photos and waypoints into unified timeline
     const timelineItems = useMemo(() => {
         return [...photos, ...waypoints].sort(sortPhotosChronologically);
@@ -254,6 +309,10 @@ const TripDetailPage = () => {
         loadTripPhotos();
         loadTripWaypoints();
     }, [refreshTripStats, loadTripPhotos, loadTripWaypoints]);
+
+    useEffect(() => {
+        loadDashboard();
+    }, [loadDashboard]);
 
     useEffect(() => {
         // Keep layout responsive: side rail on wide screens, overlay on medium, bottom sheet on tablet/mobile.
@@ -315,6 +374,10 @@ const TripDetailPage = () => {
     }, [tripId]);
 
     useEffect(() => {
+        setActiveView('dashboard');
+    }, [tripId]);
+
+    useEffect(() => {
         if (!tripNotice) {
             return undefined;
         }
@@ -345,10 +408,10 @@ const TripDetailPage = () => {
         if (openViewer) {
             setIsViewerOpen(true);
         }
-        if (ensureTimeline && timelineMode !== 'side') {
+        if (ensureTimeline && activeView === 'map' && timelineMode !== 'side') {
             setTimelineOpen(true);
         }
-        if (centerMap) {
+        if (centerMap && activeView === 'map') {
             const detail = {
                 object_key: photo.objectKey,
                 source: 'trip-photo-timeline',
@@ -359,7 +422,7 @@ const TripDetailPage = () => {
             }
             window.dispatchEvent(new CustomEvent('centerMapOnLocation', { detail }));
         }
-    }, [orderedPhotos, timelineMode]);
+    }, [orderedPhotos, timelineMode, activeView]);
 
     const handleResizerMouseDown = useCallback((event) => {
         if (timelineMode !== 'side') return;
@@ -434,7 +497,35 @@ const TripDetailPage = () => {
         }
         refreshTripStats();
         loadTripPhotos();
-    }, [refreshTripStats, loadTripPhotos]);
+        loadDashboard();
+    }, [refreshTripStats, loadTripPhotos, loadDashboard]);
+
+    const getMetadataId = useCallback((photo) => {
+        if (!photo) return null;
+        return photo.metadataId || photo.id || null;
+    }, []);
+
+    const applyAnnotationMetadata = useCallback((metadataDoc) => {
+        if (!metadataDoc) return;
+        const metadataId = metadataDoc.id || metadataDoc._id;
+        if (!metadataId) return;
+        const annotatedAtDate = parseDateSafe(metadataDoc.annotated_at);
+        const lastEditedAtDate = parseDateSafe(metadataDoc.last_edited_at);
+        setPhotos((prev) =>
+            prev.map((photo) =>
+                photo.metadataId === metadataId
+                    ? {
+                          ...photo,
+                          annotations: metadataDoc.annotations || null,
+                          annotatedAt: annotatedAtDate,
+                          lastEditedAt: lastEditedAtDate,
+                          annotatedBy: metadataDoc.annotated_by || null,
+                          autoAnnotated: metadataDoc.auto_annotated ?? photo.autoAnnotated ?? null,
+                      }
+                    : photo
+            )
+        );
+    }, []);
 
     const deriveNoteTitle = (noteTitleValue, noteValue) => {
         if (noteTitleValue) return noteTitleValue;
@@ -458,6 +549,53 @@ const TripDetailPage = () => {
             )
         );
     }, []);
+
+    const handleOpenAnnotationEditor = useCallback((photo) => {
+        setAnnotationModalPhoto(photo);
+        setAnnotationModalOpen(Boolean(photo));
+    }, []);
+
+    const handleCloseAnnotationEditor = useCallback(() => {
+        setAnnotationModalPhoto(null);
+        setAnnotationModalOpen(false);
+    }, []);
+
+    const handleAnnotationSave = useCallback(async (values) => {
+        if (!annotationModalPhoto) return;
+        const metadataId = getMetadataId(annotationModalPhoto);
+        if (!metadataId) return;
+        setAnnotationSaving(true);
+        try {
+            const response = await updatePhotoAnnotations(metadataId, { annotations: values });
+            applyAnnotationMetadata(response);
+            handleCloseAnnotationEditor();
+        } catch (error) {
+            console.error('Failed to save annotations', error);
+            alert('Failed to save annotations. Please try again.');
+        } finally {
+            setAnnotationSaving(false);
+        }
+    }, [annotationModalPhoto, applyAnnotationMetadata, handleCloseAnnotationEditor, getMetadataId]);
+
+    const handleQuickAnnotate = useCallback(async (photo, patch) => {
+        if (!photo) return;
+        const metadataId = getMetadataId(photo);
+        if (!metadataId) return;
+        setQuickSavingMap((prev) => ({ ...prev, [photo.id]: true }));
+        try {
+            const response = await updatePhotoAnnotations(metadataId, { annotations: patch });
+            applyAnnotationMetadata(response);
+        } catch (error) {
+            console.error('Failed to update quick annotations', error);
+            alert('Unable to update annotations right now.');
+        } finally {
+            setQuickSavingMap((prev) => {
+                const next = { ...prev };
+                delete next[photo.id];
+                return next;
+            });
+        }
+    }, [applyAnnotationMetadata, getMetadataId]);
 
     const handleNoteSave = useCallback(
         async ({ photoId, metadataId, note, noteTitle }) => {
@@ -495,6 +633,64 @@ const TripDetailPage = () => {
         [applyNoteToPhotoState, photos]
     );
 
+    const handleSelectionModeChange = useCallback((nextValue) => {
+        setSelectionMode(Boolean(nextValue));
+    }, []);
+
+    const handleToggleSelection = useCallback((photo, isSelected) => {
+        if (!photo) return;
+        const targetId = photo.id;
+        setSelectedForBulk((prev) => {
+            if (isSelected) {
+                if (prev.includes(targetId)) {
+                    return prev;
+                }
+                return [...prev, targetId];
+            }
+            return prev.filter((id) => id !== targetId);
+        });
+    }, []);
+
+    const handleRequestBulkEdit = useCallback(() => {
+        if (!selectedPhotosForBulk.length) return;
+        setBulkModalOpen(true);
+    }, [selectedPhotosForBulk]);
+
+    const handleBulkApply = useCallback(
+        async ({ annotations, tagMode, companionMode, gearMode }) => {
+            const metadataIds = selectedPhotosForBulk
+                .map((photo) => getMetadataId(photo))
+                .filter(Boolean);
+            if (!metadataIds.length) {
+                alert('Unable to apply annotations. Please refresh and try again.');
+                return;
+            }
+            setBulkSaving(true);
+            try {
+                await bulkUpdatePhotoAnnotations({
+                    metadataIds,
+                    annotations,
+                    tagMode,
+                    companionMode,
+                    gearMode,
+                });
+                await loadTripPhotos();
+                setBulkModalOpen(false);
+                setSelectedForBulk([]);
+            } catch (error) {
+                console.error('Failed to apply bulk annotations', error);
+                alert('Bulk annotation failed. Please try again.');
+            } finally {
+                setBulkSaving(false);
+            }
+        },
+        [selectedPhotosForBulk, getMetadataId, loadTripPhotos]
+    );
+
+    const handleCloseBulkModal = useCallback(() => {
+        setBulkModalOpen(false);
+    }, []);
+
     useEffect(() => {
         const handleExternalNoteUpdate = (event) => {
             const detail = event.detail || {};
@@ -507,6 +703,18 @@ const TripDetailPage = () => {
         window.addEventListener('photoNoteUpdated', handleExternalNoteUpdate);
         return () => window.removeEventListener('photoNoteUpdated', handleExternalNoteUpdate);
     }, [applyNoteToPhotoState]);
+
+    useEffect(() => {
+        if (!selectionMode && selectedForBulk.length) {
+            setSelectedForBulk([]);
+        }
+    }, [selectionMode, selectedForBulk]);
+
+    useEffect(() => {
+        setSelectionMode(false);
+        setSelectedForBulk([]);
+        setBulkModalOpen(false);
+    }, [tripId]);
 
     const handleTripChange = (event) => {
         const newTripId = event.target.value;
@@ -578,60 +786,129 @@ const TripDetailPage = () => {
                     onTripDataChange={handleTripDataChange}
                     notice={tripNotice}
                 />
-                <div
-                    className={`MapAndTimeline ${timelineMode !== 'side' ? 'timeline-floating' : ''} ${timelineMode === 'sheet' ? 'timeline-sheet' : ''}`}
-                    style={{ '--timeline-width': `${timelineWidth}px` }}
-                >
-                    <main className="MapArea">
-                        {timelineMode !== 'side' && (
+                <div className="TripContent">
+                    <div className="trip-detail-tabs" role="tablist">
+                        {VIEW_TABS.map((tab) => (
                             <button
-                                className="timeline-toggle-btn"
-                                onClick={() => setTimelineOpen((value) => !value)}
+                                key={tab.id}
+                                type="button"
+                                role="tab"
+                                aria-selected={activeView === tab.id}
+                                className={`trip-detail-tab ${activeView === tab.id ? 'active' : ''}`}
+                                onClick={() => setActiveView(tab.id)}
                             >
-                                {timelineOpen ? 'Hide photo timeline' : 'Show photo timeline'}
+                                {tab.label}
                             </button>
+                        ))}
+                    </div>
+                    <div className="TripMainContent">
+                        {activeView === 'dashboard' && (
+                            <TripDashboard
+                                data={dashboardData}
+                                loading={dashboardLoading}
+                                error={dashboardError}
+                                onRetry={loadDashboard}
+                                trip={trip}
+                            />
                         )}
-                        <LeafletMapView
-                            selectedLayer={selectedLayer}
-                            setSelectedLayer={setSelectedLayer}
-                            selectedRivers={selectedRivers}
-                            tripId={tripId}
-                            onImageSelected={handleMapPhotoSelected}
-                            mapRef={mapRef}
-                        />
-                    </main>
-                    {timelineMode === 'side' && (
-                        <>
+                        {activeView === 'map' && (
                             <div
-                                className="Resizer"
-                                onMouseDown={handleResizerMouseDown}
-                                role="separator"
-                                aria-orientation="vertical"
-                                aria-label="Resize timeline"
-                            />
-                            <PhotoTimelinePanel
-                                photos={timelineItems}
-                                selectedPhotoId={selectedPhotoId}
-                                onSelectPhoto={(photo) => handleSelectPhoto(photo, { openViewer: true, centerMap: true })}
-                                isOpen
-                                mode="side"
-                                loading={photosLoading}
-                                onEditNote={handleNoteSave}
-                            />
-                        </>
-                    )}
-                    {timelineMode !== 'side' && (
-                        <PhotoTimelinePanel
-                            photos={timelineItems}
-                            selectedPhotoId={selectedPhotoId}
-                            onSelectPhoto={(photo) => handleSelectPhoto(photo, { openViewer: true, centerMap: true })}
-                            isOpen={timelineOpen}
-                            mode={timelineMode === 'sheet' ? 'sheet' : 'overlay'}
-                            onClose={() => setTimelineOpen(false)}
-                            loading={photosLoading}
-                            onEditNote={handleNoteSave}
-                        />
-                    )}
+                                className={`MapAndTimeline ${timelineMode !== 'side' ? 'timeline-floating' : ''} ${timelineMode === 'sheet' ? 'timeline-sheet' : ''}`}
+                                style={{ '--timeline-width': `${timelineWidth}px` }}
+                            >
+                                <main className="MapArea">
+                                    {timelineMode !== 'side' && (
+                                        <button
+                                            className="timeline-toggle-btn"
+                                            onClick={() => setTimelineOpen((value) => !value)}
+                                        >
+                                            {timelineOpen ? 'Hide photo timeline' : 'Show photo timeline'}
+                                        </button>
+                                    )}
+                                    <LeafletMapView
+                                        selectedLayer={selectedLayer}
+                                        setSelectedLayer={setSelectedLayer}
+                                        selectedRivers={selectedRivers}
+                                        tripId={tripId}
+                                        onImageSelected={handleMapPhotoSelected}
+                                        mapRef={mapRef}
+                                    />
+                                </main>
+                                {timelineMode === 'side' && (
+                                    <>
+                                        <div
+                                            className="Resizer"
+                                            onMouseDown={handleResizerMouseDown}
+                                            role="separator"
+                                            aria-orientation="vertical"
+                                            aria-label="Resize timeline"
+                                        />
+                                        <PhotoTimelinePanel
+                                            photos={timelineItems}
+                                            selectedPhotoId={selectedPhotoId}
+                                            onSelectPhoto={(photo) => handleSelectPhoto(photo, { openViewer: true, centerMap: true })}
+                                            isOpen
+                                            mode="side"
+                                            loading={photosLoading}
+                                            onEditNote={handleNoteSave}
+                                            onOpenAnnotations={handleOpenAnnotationEditor}
+                                            onQuickAnnotate={handleQuickAnnotate}
+                                            quickSavingMap={quickSavingMap}
+                                            selectionMode={selectionMode}
+                                            selectedForBulk={selectedForBulk}
+                                            onToggleSelect={handleToggleSelection}
+                                            onSelectionModeChange={handleSelectionModeChange}
+                                            onRequestBulkEdit={handleRequestBulkEdit}
+                                        />
+                                    </>
+                                )}
+                                {timelineMode !== 'side' && (
+                                    <PhotoTimelinePanel
+                                        photos={timelineItems}
+                                        selectedPhotoId={selectedPhotoId}
+                                        onSelectPhoto={(photo) => handleSelectPhoto(photo, { openViewer: true, centerMap: true })}
+                                        isOpen={timelineOpen}
+                                        mode={timelineMode === 'sheet' ? 'sheet' : 'overlay'}
+                                        onClose={() => setTimelineOpen(false)}
+                                        loading={photosLoading}
+                                        onEditNote={handleNoteSave}
+                                        onOpenAnnotations={handleOpenAnnotationEditor}
+                                        onQuickAnnotate={handleQuickAnnotate}
+                                        quickSavingMap={quickSavingMap}
+                                        selectionMode={selectionMode}
+                                        selectedForBulk={selectedForBulk}
+                                        onToggleSelect={handleToggleSelection}
+                                        onSelectionModeChange={handleSelectionModeChange}
+                                        onRequestBulkEdit={handleRequestBulkEdit}
+                                    />
+                                )}
+                            </div>
+                        )}
+                        {activeView === 'timeline' && (
+                            <div className="TimelineStandalone">
+                                <PhotoTimelinePanel
+                                    photos={timelineItems}
+                                    selectedPhotoId={selectedPhotoId}
+                                    onSelectPhoto={(photo) =>
+                                        handleSelectPhoto(photo, { openViewer: true, centerMap: false, ensureTimeline: false })
+                                    }
+                                    isOpen
+                                    mode="sheet"
+                                    loading={photosLoading}
+                                    onEditNote={handleNoteSave}
+                                    onClose={() => setActiveView('map')}
+                                    onOpenAnnotations={handleOpenAnnotationEditor}
+                                    onQuickAnnotate={handleQuickAnnotate}
+                                    quickSavingMap={quickSavingMap}
+                                    selectionMode={selectionMode}
+                                    selectedForBulk={selectedForBulk}
+                                    onToggleSelect={handleToggleSelection}
+                                    onSelectionModeChange={handleSelectionModeChange}
+                                    onRequestBulkEdit={handleRequestBulkEdit}
+                                />
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
             <PhotoViewerOverlay
@@ -642,6 +919,20 @@ const TripDetailPage = () => {
                 onClose={() => setIsViewerOpen(false)}
                 onPrev={goToPrevious}
                 onNext={goToNext}
+            />
+            <AnnotationEditorModal
+                isOpen={annotationModalOpen}
+                photo={annotationModalPhoto}
+                onClose={handleCloseAnnotationEditor}
+                onSave={handleAnnotationSave}
+                saving={annotationSaving}
+            />
+            <BulkAnnotationModal
+                isOpen={bulkModalOpen}
+                selectedPhotos={selectedPhotosForBulk}
+                onClose={handleCloseBulkModal}
+                onApply={handleBulkApply}
+                saving={bulkSaving}
             />
         </div>
     );

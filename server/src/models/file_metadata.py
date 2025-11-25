@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 
+from src.models.annotations import PhotoAnnotations
+
 
 class GPSData(BaseModel):
     """GPS coordinates and metadata"""
@@ -44,6 +46,11 @@ class FileMetadata(BaseModel):
     note: Optional[str] = None
     note_title: Optional[str] = None
     order_index: Optional[int] = None
+    annotations: Optional[PhotoAnnotations] = None
+    annotated_at: Optional[datetime] = None
+    annotated_by: Optional[str] = None
+    last_edited_at: Optional[datetime] = None
+    auto_annotated: Optional[bool] = None
     
     class Config:
         populate_by_name = True

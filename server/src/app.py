@@ -13,6 +13,7 @@ from src.routes.file_upload_routes import router as file_upload_router
 from src.routes.file_upload_routes import router as file_upload_router
 from src.routes.file_retrieval_routes import router as file_retrieval_router
 from src.routes.trip_routes import router as trip_router
+from src.routes.search_routes import router as search_router
 
 app = FastAPI()
 
@@ -38,6 +39,8 @@ app.include_router(file_upload_router, prefix="/api/map")
 app.include_router(file_retrieval_router, prefix="/api")
 # Trip routes
 app.include_router(trip_router, prefix="/api/trips")
+# Search routes
+app.include_router(search_router, prefix="/api/search")
 
 if __name__ == "__main__":
     import uvicorn
