@@ -5,6 +5,8 @@ import L from 'leaflet';
 import { getGeotaggedImages, updatePhotoNote } from '../../services/api';
 import '../../styles/ImageLayer.css';
 
+const FALLBACK_THUMBNAIL = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="160" height="160"%3E%3Crect fill="%23f1f5f9" width="160" height="160" rx="12"/%3E%3Cpath fill="%23cbd5f5" d="M30 110l26-32 26 20 30-38 28 50z"/%3E%3Ccircle cx="52" cy="54" r="14" fill="%23dbeafe"/%3E%3C/svg%3E';
+
 export async function fetchGeotaggedImagesForTrip(fetcher = getGeotaggedImages, tripId = null) {
   const images = await fetcher(undefined, undefined, undefined, undefined, 'images', tripId);
   return Array.isArray(images) ? images : [];
@@ -103,6 +105,16 @@ function ImageLayer({ onImageSelected = null, tripId = null }) {
           const displayName = getDisplayName(image.original_filename);
           const marker = L.marker([lat, lon], {
             title: displayName,
+            icon: createPhotoMarkerIcon(image),
+            riseOnHover: true,
+            zIndexOffset: 150,
+          });
+
+          marker.bindTooltip(displayName, {
+            direction: 'top',
+            offset: [0, -38],
+            opacity: 0.95,
+            className: 'photo-tooltip',
           });
 
           // Create popup content with thumbnail
@@ -165,6 +177,16 @@ function ImageLayer({ onImageSelected = null, tripId = null }) {
         const displayName = getDisplayName(original_filename);
         const marker = L.marker([lat, lon], {
           title: displayName,
+          icon: createPhotoMarkerIcon(image),
+          riseOnHover: true,
+          zIndexOffset: 150,
+        });
+
+        marker.bindTooltip(displayName, {
+          direction: 'top',
+          offset: [0, -38],
+          opacity: 0.95,
+          className: 'photo-tooltip',
         });
 
         const image = {
@@ -304,34 +326,6 @@ function createPopupContent(image, onMarkerSelected) {
   const truncatedName = displayName.length > 30
     ? `${displayName.substring(0, 27)}...`
     : displayName;
-
-  const placeholderImage = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-size="16"%3ENo Image%3C/text%3E%3C/svg%3E';
-
-  const resolveThumbUrl = (url) => {
-    if (!url || typeof url !== 'string') {
-      return null;
-    }
-
-    if (/^https?:\/\//i.test(url)) {
-      return url;
-    }
-
-    const baseCandidate =
-      process.env.REACT_APP_API_BASE_URL ||
-      (typeof window !== 'undefined' ? window.location.origin : '');
-
-    if (!baseCandidate) {
-      return url;
-    }
-
-    try {
-      return new URL(url, baseCandidate).toString();
-    } catch (err) {
-      console.warn('[ImageLayer] Failed to resolve thumbnail URL', err);
-      return url;
-    }
-  };
-
   const resolvedThumbUrl = resolveThumbUrl(image.thumb_url);
 
   if (typeof document === 'undefined') {
@@ -359,14 +353,14 @@ function createPopupContent(image, onMarkerSelected) {
 
   const imageEl = document.createElement('img');
   imageEl.alt = displayName;
-  imageEl.src = resolvedThumbUrl || placeholderImage;
+  imageEl.src = resolvedThumbUrl || FALLBACK_THUMBNAIL;
   imageEl.style.display = 'none';
   imageEl.onload = () => {
     imageEl.style.display = 'block';
   };
   imageEl.onerror = () => {
-    if (imageEl.src !== placeholderImage) {
-      imageEl.src = placeholderImage;
+    if (imageEl.src !== FALLBACK_THUMBNAIL) {
+      imageEl.src = FALLBACK_THUMBNAIL;
     }
     imageEl.style.display = 'block';
   };
@@ -511,3 +505,49 @@ function createPopupContent(image, onMarkerSelected) {
 }
 
 export default ImageLayer;
+
+function resolveThumbUrl(url) {
+  if (!url || typeof url !== 'string') {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+
+  const baseCandidate =
+    process.env.REACT_APP_API_BASE_URL ||
+    (typeof window !== 'undefined' ? window.location.origin : '');
+
+  if (!baseCandidate) {
+    return url;
+  }
+
+  try {
+    return new URL(url, baseCandidate).toString();
+  } catch (err) {
+    console.warn('[ImageLayer] Failed to resolve thumbnail URL', err);
+    return url;
+  }
+}
+
+function createPhotoMarkerIcon(image) {
+  const resolvedThumbUrl = resolveThumbUrl(image.thumb_url) || FALLBACK_THUMBNAIL;
+  const safeUrl = encodeURI(resolvedThumbUrl);
+
+  return L.divIcon({
+    className: 'photo-marker',
+    html: `
+      <div class="photo-pin">
+        <div class="photo-pin__thumb" style="background-image:url('${safeUrl}')"></div>
+        <div class="photo-pin__status">
+          <span class="photo-pin__status-dot"></span>
+        </div>
+      </div>
+    `,
+    iconSize: [44, 52],
+    iconAnchor: [22, 46],
+    popupAnchor: [0, -44],
+    tooltipAnchor: [0, -42],
+  });
+}
