@@ -4,7 +4,7 @@ import LeafletMapView from './LeafletMapView';
 import TripSidebar from '../layout/TripSidebar';
 import TimelinePanel from '../panels/TimelinePanel';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
-import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage } from '../../services/api';
+import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
 
@@ -152,6 +152,13 @@ const TripDetailPage = () => {
     const [timelineMode, setTimelineMode] = useState('side');
     const [timelineOpen, setTimelineOpen] = useState(true);
     const [timelineWidth, setTimelineWidth] = useState(() => getStoredTimelineWidth());
+
+    // Lifted GPX State
+    const [gpxFiles, setGpxFiles] = useState([]);
+    const [selectedGpxFiles, setSelectedGpxFiles] = useState([]);
+    const [gpxTracks, setGpxTracks] = useState({});
+    const [highlightedItemId, setHighlightedItemId] = useState(null);
+
     const mapRef = useRef(null);
     const navigate = useNavigate();
 
@@ -232,41 +239,116 @@ const TripDetailPage = () => {
         }
     }, [tripId]);
 
-    const loadTripWaypoints = useCallback(async () => {
-        if (!tripId) return;
-        try {
-            const gpxFiles = await listGpxFilesWithMeta(tripId);
-            const allWaypoints = [];
 
-            for (const gpxFile of gpxFiles) {
-                try {
-                    const analysisData = await fetchGpxAnalysis(gpxFile.object_key, tripId);
-                    const waypointsFromFile = (analysisData.waypoints || [])
-                        .map((wp, idx) => normalizeWaypoint(wp, gpxFile.object_key, idx))
-                        .filter(Boolean);
-                    allWaypoints.push(...waypointsFromFile);
-                } catch (error) {
-                    console.error(`Failed to load waypoints from ${gpxFile.object_key}:`, error);
-                }
+
+    // Load GPX files list
+    useEffect(() => {
+        const loadGpxList = async () => {
+            if (!tripId) return;
+            try {
+                const files = await listGpxFilesWithMeta(tripId);
+                setGpxFiles(files);
+            } catch (err) {
+                console.error('Error listing GPX files:', err);
             }
-
-            setWaypoints(allWaypoints);
-        } catch (error) {
-            console.error('Failed to load trip waypoints:', error);
-            setWaypoints([]);
-        }
+        };
+        loadGpxList();
     }, [tripId]);
 
+    // Handle GPX Selection
+    const handleGpxSelect = useCallback(async (objectKey) => {
+        const isSelected = selectedGpxFiles.includes(objectKey);
+
+        if (isSelected) {
+            const newSelection = selectedGpxFiles.filter((f) => f !== objectKey);
+            const newTracks = { ...gpxTracks };
+            delete newTracks[objectKey];
+            setSelectedGpxFiles(newSelection);
+            setGpxTracks(newTracks);
+            return;
+        }
+
+        setSelectedGpxFiles((prev) => [...prev, objectKey]);
+
+        try {
+            const trackData = await fetchGpxAnalysis(objectKey, tripId);
+            if (trackData.coordinates && trackData.coordinates.length > 0) {
+                setGpxTracks((prev) => ({
+                    ...prev,
+                    [objectKey]: {
+                        coordinates: trackData.coordinates,
+                        summary: trackData.track_summary,
+                        source: trackData.source,
+                        displayName: trackData.display_name || objectKey,
+                        waypoints: trackData.waypoints || [],
+                        rest_points: trackData.rest_points || []
+                    }
+                }));
+                console.log(`GPX track loaded: ${objectKey}`);
+            }
+        } catch (err) {
+            console.error('Error fetching analyzed GPX data:', err);
+        }
+    }, [tripId, selectedGpxFiles, gpxTracks]);
+
+    // Handle GPX Deletion
+    const handleGpxDelete = useCallback(async (fileItem) => {
+        const objectKey = typeof fileItem === 'string' ? fileItem : fileItem.object_key;
+        const analysisKey = fileItem?.metadata?.analysis_object_key;
+        const analysisBucket = fileItem?.metadata?.analysis_bucket || 'gps-analysis-data';
+
+        const confirmed = window.confirm(`Delete GPX file "${objectKey}"? This will remove the original file, metadata, and analyzed object.`);
+        if (!confirmed) return;
+
+        try {
+            await deleteFile(objectKey, 'gps-data');
+            if (analysisKey) {
+                try {
+                    await deleteFile(analysisKey, analysisBucket);
+                } catch (innerErr) {
+                    console.warn(`Failed to delete analysis object ${analysisKey}:`, innerErr);
+                }
+            }
+            setGpxFiles((prev) => prev.filter((item) => {
+                const key = typeof item === 'string' ? item : item.object_key;
+                return key !== objectKey;
+            }));
+            setSelectedGpxFiles((prev) => prev.filter((key) => key !== objectKey));
+            setGpxTracks((prev) => {
+                const next = { ...prev };
+                delete next[objectKey];
+                return next;
+            });
+            await refreshTripStats();
+        } catch (err) {
+            console.error('Failed to delete GPX file:', err);
+            alert('Failed to delete GPX file. Please try again.');
+        }
+    }, [refreshTripStats]);
+
+    // Compute waypoints from loaded tracks
+    const trackWaypoints = useMemo(() => {
+        const allWaypoints = [];
+        Object.entries(gpxTracks).forEach(([filename, trackData]) => {
+            const waypointsFromFile = (trackData.waypoints || [])
+                .map((wp, idx) => normalizeWaypoint(wp, filename, idx))
+                .filter(Boolean);
+            allWaypoints.push(...waypointsFromFile);
+        });
+        return allWaypoints;
+    }, [gpxTracks]);
+
     // Merge photos and waypoints into unified timeline
+    // Note: We use trackWaypoints instead of the separate 'waypoints' state now
     const timelineItems = useMemo(() => {
-        return [...photos, ...waypoints].sort(sortPhotosChronologically);
-    }, [photos, waypoints]);
+        return [...photos, ...trackWaypoints].sort(sortPhotosChronologically);
+    }, [photos, trackWaypoints]);
 
     useEffect(() => {
         refreshTripStats();
         loadTripPhotos();
-        loadTripWaypoints();
-    }, [refreshTripStats, loadTripPhotos, loadTripWaypoints]);
+        // loadTripWaypoints(); // Removed, now handled by gpxTracks
+    }, [refreshTripStats, loadTripPhotos]);
 
     useEffect(() => {
         // Keep layout responsive: side rail on wide screens, overlay on medium, bottom sheet on tablet/mobile.
@@ -324,6 +406,9 @@ const TripDetailPage = () => {
         setSelectedPhotoId(null);
         setIsViewerOpen(false);
         setPhotos([]);
+        setGpxFiles([]);
+        setSelectedGpxFiles([]);
+        setGpxTracks({});
         setTripStats({ photos: 0, tracks: 0 });
     }, [tripId]);
 
@@ -463,24 +548,44 @@ const TripDetailPage = () => {
         );
     }, []);
 
-    const applyNoteToWaypointState = useCallback((waypointId, { note, noteTitle }) => {
-        setWaypoints((prev) =>
-            prev.map((wp) =>
-                wp.id === waypointId
-                    ? {
-                        ...wp,
-                        note,
-                        noteTitle: deriveNoteTitleValue(noteTitle, note),
+    const applyNoteToWaypointState = useCallback((waypointId, { note, noteTitle, timestamp }) => {
+        // We need to update gpxTracks state because that's the source of truth for waypoints now
+        setGpxTracks((prevTracks) => {
+            const newTracks = { ...prevTracks };
+            let found = false;
+
+            for (const [filename, trackData] of Object.entries(newTracks)) {
+                const updatedWaypoints = trackData.waypoints.map((wp, idx) => {
+                    const id = `waypoint-${filename}-${idx}`;
+                    if (id === waypointId) {
+                        found = true;
+                        return {
+                            ...wp,
+                            note: note !== undefined ? note : wp.note,
+                            title: noteTitle !== undefined ? noteTitle : (wp.title || wp.name),
+                            time: timestamp ? new Date(timestamp).toISOString() : wp.time
+                        };
                     }
-                    : wp
-            )
-        );
+                    return wp;
+                });
+
+                if (found) {
+                    newTracks[filename] = {
+                        ...trackData,
+                        waypoints: updatedWaypoints
+                    };
+                    break;
+                }
+            }
+            return newTracks;
+        });
     }, []);
 
     const handleNoteSave = useCallback(
-        async ({ itemType = 'photo', photoId, waypointId, metadataId, note, noteTitle }) => {
+        async ({ itemType = 'photo', photoId, waypointId, metadataId, note, noteTitle, timestamp }) => {
             if (itemType === 'waypoint' && waypointId) {
-                applyNoteToWaypointState(waypointId, { note, noteTitle });
+                applyNoteToWaypointState(waypointId, { note, noteTitle, timestamp });
+                // TODO: Persist waypoint changes to backend (not yet implemented in API)
                 return;
             }
 
@@ -670,6 +775,13 @@ const TripDetailPage = () => {
                             tripId={tripId}
                             onImageSelected={handleMapPhotoSelected}
                             mapRef={mapRef}
+                            // GPX Props
+                            gpxFiles={gpxFiles}
+                            selectedGpxFiles={selectedGpxFiles}
+                            gpxTracks={gpxTracks}
+                            onGpxSelect={handleGpxSelect}
+                            onGpxDelete={handleGpxDelete}
+                            highlightedItemId={highlightedItemId}
                         />
                     </main>
                     {timelineMode === 'side' && (
@@ -689,6 +801,7 @@ const TripDetailPage = () => {
                                     onUpdateItem={handleNoteSave}
                                     onDeleteItem={handleDeletePhoto}
                                     onItemClick={(item) => handleSelectPhoto(item, { openViewer: true, centerMap: true })}
+                                    onItemHover={(id, isHovering) => setHighlightedItemId(isHovering ? id : null)}
                                 />
                             </div>
                         </>
@@ -710,6 +823,7 @@ const TripDetailPage = () => {
                                 onUpdateItem={handleNoteSave}
                                 onDeleteItem={handleDeletePhoto}
                                 onItemClick={(item) => handleSelectPhoto(item, { openViewer: true, centerMap: true })}
+                                onItemHover={(id, isHovering) => setHighlightedItemId(isHovering ? id : null)}
                             />
                         </div>
                     )}

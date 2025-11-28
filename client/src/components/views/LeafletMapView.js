@@ -54,14 +54,24 @@ function GPXCenterController({ gpxCenter }) {
   return null;
 }
 
-function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripId, onImageSelected, mapRef: externalMapRef }) {
+function LeafletMapView({
+  selectedLayer,
+  setSelectedLayer,
+  selectedRivers,
+  tripId,
+  onImageSelected,
+  mapRef: externalMapRef,
+  // New props for lifted state
+  gpxFiles = [],
+  selectedGpxFiles = [],
+  gpxTracks = {},
+  onGpxSelect,
+  onGpxDelete,
+  highlightedItemId
+}) {
   const [riverGeoJSON, setRiverGeoJSON] = useState({});
   const [loading, setLoading] = useState(true);
-  const [gpxFiles, setGpxFiles] = useState([]); // detailed metadata entries
   const [showGpx, setShowGpx] = useState(false);
-  const [selectedGpxFiles, setSelectedGpxFiles] = useState([]);
-  const [gpxTracks, setGpxTracks] = useState({});
-  const [gpxCenter, setGpxCenter] = useState(null);
   const internalMapRef = useRef(null);
   const mapRef = externalMapRef || internalMapRef;
 
@@ -82,88 +92,8 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
     loadRiverData();
   }, []);
 
-  const toggleGpxDropdown = async () => {
-    if (!showGpx) {
-      try {
-        const files = await listGpxFilesWithMeta(tripId);
-        setGpxFiles(files);
-      } catch (err) {
-        console.error('Error listing GPX files:', err);
-      }
-    }
+  const toggleGpxDropdown = () => {
     setShowGpx(!showGpx);
-  };
-
-  const handleGpxClick = async (objectKey) => {
-    const isSelected = selectedGpxFiles.includes(objectKey);
-
-    if (isSelected) {
-      const newSelection = selectedGpxFiles.filter((f) => f !== objectKey);
-      const newTracks = { ...gpxTracks };
-      delete newTracks[objectKey];
-      setSelectedGpxFiles(newSelection);
-      setGpxTracks(newTracks);
-      return;
-    }
-
-    setSelectedGpxFiles((prev) => [...prev, objectKey]);
-
-    try {
-      const trackData = await fetchGpxAnalysis(objectKey, tripId);
-      if (trackData.coordinates && trackData.coordinates.length > 0) {
-        setGpxTracks((prev) => ({
-          ...prev,
-          [objectKey]: {
-            coordinates: trackData.coordinates,
-            summary: trackData.track_summary,
-            source: trackData.source,
-            displayName: trackData.display_name || objectKey,
-            waypoints: trackData.waypoints || [],
-            rest_points: trackData.rest_points || []
-          }
-        }));
-
-        setGpxCenter(trackData.coordinates[0]);
-        console.log(`GPX track loaded: ${objectKey}, ${trackData.coordinates.length} points via ${trackData.source}`);
-      } else {
-        console.warn('No valid track points found in GPX file:', objectKey);
-      }
-    } catch (err) {
-      console.error('Error fetching analyzed GPX data:', err);
-    }
-  };
-
-  const handleDeleteGpx = async (fileItem) => {
-    const objectKey = typeof fileItem === 'string' ? fileItem : fileItem.object_key;
-    const analysisKey = fileItem?.metadata?.analysis_object_key;
-    const analysisBucket = fileItem?.metadata?.analysis_bucket || 'gps-analysis-data';
-
-    const confirmed = window.confirm(`Delete GPX file "${objectKey}"? This will remove the original file, metadata, and analyzed object.`);
-    if (!confirmed) return;
-
-    try {
-      await deleteFile(objectKey, 'gps-data');
-      if (analysisKey) {
-        try {
-          await deleteFile(analysisKey, analysisBucket);
-        } catch (innerErr) {
-          console.warn(`Failed to delete analysis object ${analysisKey}:`, innerErr);
-        }
-      }
-      setGpxFiles((prev) => prev.filter((item) => {
-        const key = typeof item === 'string' ? item : item.object_key;
-        return key !== objectKey;
-      }));
-      setSelectedGpxFiles((prev) => prev.filter((key) => key !== objectKey));
-      setGpxTracks((prev) => {
-        const next = { ...prev };
-        delete next[objectKey];
-        return next;
-      });
-    } catch (err) {
-      console.error('Failed to delete GPX file:', err);
-      alert('Failed to delete GPX file. Please try again.');
-    }
   };
 
   const getGpxTrackColor = (objectKey) => {
@@ -231,6 +161,16 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
     tooltipAnchor: [0, -40]
   }), []);
 
+  // Highlight icon for hovered items
+  const highlightIcon = useMemo(() => L.divIcon({
+    className: 'waypoint-pin waypoint-pin--highlight',
+    html: buildPinMarkup('#ef4444', '#7f1d1d'), // Red highlight
+    iconSize: [42, 56], // Slightly larger
+    iconAnchor: [21, 54],
+    popupAnchor: [0, -48],
+    tooltipAnchor: [0, -48]
+  }), []);
+
   return (
     <div className="leaflet-map-view">
       {/* Layer selector in top-left */}
@@ -271,44 +211,44 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
                 const sourceLabel = file.metadata?.analysis_status === 'success' ? 'Analyzed' : 'Raw';
 
                 return (
-                <li
-                  key={objectKey}
-                  onClick={() => handleGpxClick(objectKey)}
-                  className={selectedGpxFiles.includes(objectKey) ? 'selected' : ''}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedGpxFiles.includes(objectKey)}
-                    onChange={() => handleGpxClick(objectKey)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <div className="gpx-info">
-                    <div
-                      className="gpx-title"
-                      style={{
-                        color: selectedGpxFiles.includes(objectKey) ? getGpxTrackColor(objectKey) : 'inherit',
-                      }}
-                    >
-                      {label}
-                    </div>
-                    <div className="gpx-meta-row">
-                      {distanceLabel && <span className="gpx-chip">{distanceLabel}</span>}
-                      {typeof restCount === 'number' && <span className="gpx-chip">{restCount} rests</span>}
-                      {sourceLabel && <span className="gpx-chip muted">{sourceLabel}</span>}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="gpx-delete-button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteGpx(file);
-                    }}
-                    title="Delete GPX"
+                  <li
+                    key={objectKey}
+                    onClick={() => onGpxSelect && onGpxSelect(objectKey)}
+                    className={selectedGpxFiles.includes(objectKey) ? 'selected' : ''}
                   >
-                    x
-                  </button>
-                </li>
+                    <input
+                      type="checkbox"
+                      checked={selectedGpxFiles.includes(objectKey)}
+                      onChange={() => onGpxSelect && onGpxSelect(objectKey)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <div className="gpx-info">
+                      <div
+                        className="gpx-title"
+                        style={{
+                          color: selectedGpxFiles.includes(objectKey) ? getGpxTrackColor(objectKey) : 'inherit',
+                        }}
+                      >
+                        {label}
+                      </div>
+                      <div className="gpx-meta-row">
+                        {distanceLabel && <span className="gpx-chip">{distanceLabel}</span>}
+                        {typeof restCount === 'number' && <span className="gpx-chip">{restCount} rests</span>}
+                        {sourceLabel && <span className="gpx-chip muted">{sourceLabel}</span>}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="gpx-delete-button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onGpxDelete && onGpxDelete(file);
+                      }}
+                      title="Delete GPX"
+                    >
+                      x
+                    </button>
+                  </li>
                 );
               })
             )}
@@ -336,8 +276,7 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
         {/* Map layer controller */}
         <MapLayerController selectedLayer={selectedLayer} />
 
-        {/* GPX center controller */}
-        <GPXCenterController gpxCenter={gpxCenter} />
+        {/* GPX center controller removed - handled by parent or manual view control */}
 
         {/* Default tile layer (will be replaced by MapLayerController) */}
         <TileLayer
@@ -395,8 +334,9 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
                 <Marker
                   key={`${filename}-wp-${idx}`}
                   position={[wp.lat, wp.lon]}
-                  icon={waypointIcon}
+                  icon={highlightedItemId === `waypoint-${filename}-${idx}` ? highlightIcon : waypointIcon}
                   riseOnHover
+                  zIndexOffset={highlightedItemId === `waypoint-${filename}-${idx}` ? 1000 : 0}
                 >
                   <Tooltip direction="top" offset={[0, -34]} opacity={1} className="map-tooltip" sticky>
                     <div className="map-tooltip__title">{waypointTitle}</div>

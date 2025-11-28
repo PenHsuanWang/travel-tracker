@@ -1,30 +1,31 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { Camera, MapPin, PenLine, Link as LinkIcon } from 'lucide-react';
+import { Camera, MapPin, Link as LinkIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 // --- TimelineItem Sub-component ---
 
-const TimelineItem = ({ item, index, onUpdate, onDelete, onClick }) => {
-    const [isEditing, setIsEditing] = useState(false);
+const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, isEditing, onEditToggle }) => {
     const [editForm, setEditForm] = useState({
         title: item.title || '',
         timestamp: new Date(item.timestamp || Date.now()).toISOString().slice(0, 16), // Format for datetime-local
         note: item.note || '',
     });
+    const titleInputRef = useRef(null);
 
-    const handleEditToggle = (e) => {
-        e.stopPropagation();
-        setIsEditing(!isEditing);
+    // Auto-focus title input when entering edit mode
+    useEffect(() => {
+        if (isEditing && titleInputRef.current) {
+            titleInputRef.current.focus();
+        }
+    }, [isEditing]);
+
+    const handleCardClick = () => {
         if (!isEditing) {
-            // Reset form when entering edit mode
-            setEditForm({
-                title: item.title || '',
-                timestamp: new Date(item.timestamp).toISOString().slice(0, 16),
-                note: item.note || '',
-            });
+            onEditToggle(item.id);
         }
     };
+
 
     const handleSave = (e) => {
         e.stopPropagation();
@@ -33,12 +34,12 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick }) => {
             ...editForm,
             timestamp: updatedTimestamp,
         });
-        setIsEditing(false);
+        onEditToggle(null); // Close edit mode
     };
 
     const handleCancel = (e) => {
         e.stopPropagation();
-        setIsEditing(false);
+        onEditToggle(null); // Close edit mode
     };
 
     const handleDelete = (e) => {
@@ -53,9 +54,17 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick }) => {
         setEditForm(prev => ({ ...prev, [name]: value }));
     };
 
-    // Helper to format time
-    const formatTime = (timestamp) => {
-        return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // Helper to format date+time for view mode timestamp
+    const formatFullDateTime = (timestamp) => {
+        const date = new Date(timestamp);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = date.getHours();
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours % 12 || 12;
+        return `${year}/${month}/${day} ${ampm} ${displayHours}:${minutes}`;
     };
 
     // Helper to format date for photo subtitle
@@ -84,6 +93,8 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick }) => {
         <div
             className="relative pl-8 animate-fade-in-up"
             style={{ animationDelay: `${index * 30}ms` }}
+            onMouseEnter={() => onHover && onHover(item.id, true)}
+            onMouseLeave={() => onHover && onHover(item.id, false)}
         >
             {/* Row 1: Header Row */}
             <div className="flex items-center mb-2">
@@ -94,17 +105,8 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick }) => {
 
                 {/* Time Label */}
                 <span className="text-sm font-medium text-slate-500 mr-auto">
-                    {formatTime(item.timestamp)}
+                    {formatFullDateTime(item.timestamp)}
                 </span>
-
-                {/* Edit Button */}
-                <button
-                    onClick={handleEditToggle}
-                    className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
-                    aria-label="Edit item"
-                >
-                    <PenLine size={14} />
-                </button>
             </div>
 
             {/* Row 2: Content Card */}
@@ -113,6 +115,7 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick }) => {
                     ? 'ring-2 ring-indigo-200 border-indigo-300 shadow-md'
                     : 'border-slate-200 hover:border-slate-300 shadow-sm'
                     }`}
+                onClick={isEditing ? undefined : handleCardClick}
             >
                 {isEditing ? (
                     // Edit Mode
@@ -120,6 +123,7 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick }) => {
                         <div>
                             <label className="block text-xs font-semibold text-slate-500 mb-1">Title</label>
                             <input
+                                ref={titleInputRef}
                                 type="text"
                                 name="title"
                                 value={editForm.title}
@@ -130,13 +134,9 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick }) => {
                         </div>
                         <div>
                             <label className="block text-xs font-semibold text-slate-500 mb-1">Time</label>
-                            <input
-                                type="datetime-local"
-                                name="timestamp"
-                                value={editForm.timestamp}
-                                onChange={handleChange}
-                                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
+                            <div className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-700">
+                                {formatFullDateTime(item.timestamp)}
+                            </div>
                         </div>
                         <div>
                             <label className="block text-xs font-semibold text-slate-500 mb-1">Note</label>
@@ -166,7 +166,7 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick }) => {
                             </button>
                             <button
                                 onClick={handleSave}
-                                className="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors"
+                                className="px-3 py-1.5 text-xs font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-md transition-colors"
                             >
                                 Save
                             </button>
@@ -174,7 +174,7 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick }) => {
                     </div>
                 ) : (
                     // View Mode
-                    <div className="p-4 cursor-pointer" onClick={() => onClick(item)}>
+                    <div className="p-4 cursor-pointer" onClick={handleCardClick}>
                         {/* Title */}
                         <h3 className="font-semibold text-slate-800 mb-1">
                             {getDefaultTitle()}
@@ -200,9 +200,11 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick }) => {
                         )}
 
                         {/* Note Body */}
-                        <div className="text-sm text-slate-600 mt-2 prose prose-sm max-w-none">
+                        <div className="text-sm mt-2">
                             {item.note ? (
-                                <ReactMarkdown>{item.note}</ReactMarkdown>
+                                <div className="text-green-600 font-medium">
+                                    <ReactMarkdown>{item.note}</ReactMarkdown>
+                                </div>
                             ) : (
                                 <span className="italic text-slate-400 text-xs">No notes added...</span>
                             )}
@@ -229,6 +231,9 @@ TimelineItem.propTypes = {
     onUpdate: PropTypes.func.isRequired,
     onDelete: PropTypes.func,
     onClick: PropTypes.func.isRequired,
+    onHover: PropTypes.func,
+    isEditing: PropTypes.bool.isRequired,
+    onEditToggle: PropTypes.func.isRequired,
 };
 
 // --- Main Component: TimelinePanel ---
@@ -239,9 +244,11 @@ const TimelinePanel = ({
     onAddUrl,
     onUpdateItem,
     onDeleteItem,
-    onItemClick
+    onItemClick,
+    onItemHover
 }) => {
     const fileInputRef = useRef(null);
+    const [activeEditItemId, setActiveEditItemId] = useState(null);
 
     const handleFileSelect = (e) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -313,6 +320,9 @@ const TimelinePanel = ({
                                     onUpdate={onUpdateItem}
                                     onDelete={onDeleteItem}
                                     onClick={onItemClick}
+                                    onHover={onItemHover}
+                                    isEditing={activeEditItemId === item.id}
+                                    onEditToggle={setActiveEditItemId}
                                 />
                             ))
                         ) : (
@@ -343,6 +353,7 @@ TimelinePanel.propTypes = {
     onUpdateItem: PropTypes.func,
     onDeleteItem: PropTypes.func,
     onItemClick: PropTypes.func,
+    onItemHover: PropTypes.func,
 };
 
 export default TimelinePanel;
