@@ -1,5 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* src/styles/index.css */
-body, html, #root {
+body,
+html,
+#root {
   height: 100%;
   margin: 0;
   font-family: Arial, Helvetica, sans-serif;

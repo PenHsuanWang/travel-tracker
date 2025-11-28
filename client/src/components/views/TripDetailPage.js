@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import LeafletMapView from './LeafletMapView';
 import TripSidebar from '../layout/TripSidebar';
-import PhotoTimelinePanel from '../panels/PhotoTimelinePanel';
+import TimelinePanel from '../panels/TimelinePanel';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
-import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis } from '../../services/api';
+import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
 
@@ -35,11 +35,20 @@ const parseDateSafe = (value) => {
     return null;
 };
 
+const deriveNoteTitleValue = (providedTitle, noteValue) => {
+    if (providedTitle) return providedTitle;
+    if (noteValue) {
+        const firstLine = String(noteValue).split('\n')[0].trim();
+        return firstLine || null;
+    }
+    return null;
+};
+
 const normalizePhoto = (item) => {
     if (!item) return null;
     const metadata = item.metadata || {};
     const note = metadata.note || metadata.caption || metadata.notes || null;
-    const noteTitle = metadata.note_title || (note ? note.split('\n')[0] : null);
+    const noteTitle = deriveNoteTitleValue(metadata.note_title, note);
     const capturedDate = parseDateSafe(metadata.captured_at || metadata.date_taken || metadata.created_at);
     const lat = Number(metadata?.gps?.latitude ?? metadata?.gps?.lat ?? item.lat);
     const lon = Number(metadata?.gps?.longitude ?? metadata?.gps?.lon ?? item.lon);
@@ -54,6 +63,7 @@ const normalizePhoto = (item) => {
         imageUrl: getImageUrl(item.object_key),
         capturedAt: capturedDate ? capturedDate.toISOString() : null,
         capturedDate,
+        timestamp: capturedDate ? capturedDate.getTime() : 0,
         capturedSource: metadata.captured_source || (metadata.date_taken ? 'exif' : metadata.created_at ? 'fallback' : 'unknown'),
         lat: hasCoords ? lat : null,
         lon: hasCoords ? lon : null,
@@ -71,6 +81,8 @@ const normalizeWaypoint = (waypoint, gpxFileName, index) => {
     const lat = Number(waypoint.lat);
     const lon = Number(waypoint.lon);
     const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+    const rawNote = waypoint.note || waypoint.desc || waypoint.name || null;
+    const waypointTitle = deriveNoteTitleValue(waypoint.title || waypoint.name || null, rawNote);
 
     if (!hasCoords) return null;
 
@@ -81,12 +93,13 @@ const normalizeWaypoint = (waypoint, gpxFileName, index) => {
         fileName: `Waypoint ${index + 1}`,
         capturedAt: capturedDate ? capturedDate.toISOString() : null,
         capturedDate,
+        timestamp: capturedDate ? capturedDate.getTime() : 0,
         capturedSource: 'gpx',
         lat,
         lon,
         elev: waypoint.elev !== null && waypoint.elev !== undefined ? Number(waypoint.elev) : null,
-        note: waypoint.note || null,
-        noteTitle: null,
+        note: rawNote,
+        noteTitle: waypointTitle,
     };
 };
 
@@ -224,7 +237,7 @@ const TripDetailPage = () => {
         try {
             const gpxFiles = await listGpxFilesWithMeta(tripId);
             const allWaypoints = [];
-            
+
             for (const gpxFile of gpxFiles) {
                 try {
                     const analysisData = await fetchGpxAnalysis(gpxFile.object_key, tripId);
@@ -236,7 +249,7 @@ const TripDetailPage = () => {
                     console.error(`Failed to load waypoints from ${gpxFile.object_key}:`, error);
                 }
             }
-            
+
             setWaypoints(allWaypoints);
         } catch (error) {
             console.error('Failed to load trip waypoints:', error);
@@ -371,7 +384,7 @@ const TripDetailPage = () => {
         const handleMouseMove = (moveEvent) => {
             const delta = startX - moveEvent.clientX;
             const nextWidth = clampTimelineWidth(startWidth + delta);
-            
+
             // Throttle updates using requestAnimationFrame for smooth resizing
             if (animationFrameId === null) {
                 animationFrameId = requestAnimationFrame(() => {
@@ -436,31 +449,41 @@ const TripDetailPage = () => {
         loadTripPhotos();
     }, [refreshTripStats, loadTripPhotos]);
 
-    const deriveNoteTitle = (noteTitleValue, noteValue) => {
-        if (noteTitleValue) return noteTitleValue;
-        if (noteValue) {
-            const firstLine = String(noteValue).split('\n')[0].trim();
-            return firstLine || null;
-        }
-        return null;
-    };
-
     const applyNoteToPhotoState = useCallback((photoId, { note, noteTitle }) => {
         setPhotos((prev) =>
             prev.map((p) =>
                 p.id === photoId
                     ? {
-                          ...p,
-                          note,
-                          noteTitle: deriveNoteTitle(noteTitle, note),
-                      }
+                        ...p,
+                        note,
+                        noteTitle: deriveNoteTitleValue(noteTitle, note),
+                    }
                     : p
             )
         );
     }, []);
 
+    const applyNoteToWaypointState = useCallback((waypointId, { note, noteTitle }) => {
+        setWaypoints((prev) =>
+            prev.map((wp) =>
+                wp.id === waypointId
+                    ? {
+                        ...wp,
+                        note,
+                        noteTitle: deriveNoteTitleValue(noteTitle, note),
+                    }
+                    : wp
+            )
+        );
+    }, []);
+
     const handleNoteSave = useCallback(
-        async ({ photoId, metadataId, note, noteTitle }) => {
+        async ({ itemType = 'photo', photoId, waypointId, metadataId, note, noteTitle }) => {
+            if (itemType === 'waypoint' && waypointId) {
+                applyNoteToWaypointState(waypointId, { note, noteTitle });
+                return;
+            }
+
             if (!photoId && !metadataId) return;
             const targetId = metadataId || photoId;
             const previous = photos.find((p) => p.id === photoId);
@@ -492,7 +515,7 @@ const TripDetailPage = () => {
                 alert('Failed to save note. Please try again.');
             }
         },
-        [applyNoteToPhotoState, photos]
+        [applyNoteToPhotoState, applyNoteToWaypointState, photos]
     );
 
     useEffect(() => {
@@ -507,6 +530,55 @@ const TripDetailPage = () => {
         window.addEventListener('photoNoteUpdated', handleExternalNoteUpdate);
         return () => window.removeEventListener('photoNoteUpdated', handleExternalNoteUpdate);
     }, [applyNoteToPhotoState]);
+
+    const handleAddPhoto = useCallback(async (fileList) => {
+        if (!tripId) return;
+        setPhotosLoading(true);
+        try {
+            const uploads = Array.from(fileList).map(file => uploadFile(file, tripId));
+            await Promise.all(uploads);
+            // Refresh list after upload
+            await loadTripPhotos();
+            await refreshTripStats();
+        } catch (error) {
+            console.error('Failed to upload photos:', error);
+            alert('Failed to upload some photos. Please try again.');
+        } finally {
+            setPhotosLoading(false);
+        }
+    }, [tripId, loadTripPhotos, refreshTripStats]);
+
+    const handleAddUrl = useCallback(() => {
+        // Placeholder for future implementation
+        const url = prompt("Enter photo URL (not yet fully implemented):");
+        if (url) {
+            console.log("Adding URL:", url);
+            alert("URL adding is not yet supported by the backend.");
+        }
+    }, []);
+
+    const handleDeletePhoto = useCallback(async (itemId) => {
+        if (!itemId) return;
+
+        // Check if it's a photo (not a waypoint)
+        const photo = photos.find(p => p.id === itemId);
+        if (!photo) {
+            console.warn("Item to delete not found or is not a photo:", itemId);
+            return;
+        }
+
+        try {
+            // Assuming itemId is the object_key or filename
+            await deleteImage(photo.fileName || photo.objectKey);
+
+            // Optimistic update or refresh
+            setPhotos(prev => prev.filter(p => p.id !== itemId));
+            await refreshTripStats();
+        } catch (error) {
+            console.error('Failed to delete photo:', error);
+            alert('Failed to delete photo. Please try again.');
+        }
+    }, [photos, refreshTripStats]);
 
     const handleTripChange = (event) => {
         const newTripId = event.target.value;
@@ -609,28 +681,37 @@ const TripDetailPage = () => {
                                 aria-orientation="vertical"
                                 aria-label="Resize timeline"
                             />
-                            <PhotoTimelinePanel
-                                photos={timelineItems}
-                                selectedPhotoId={selectedPhotoId}
-                                onSelectPhoto={(photo) => handleSelectPhoto(photo, { openViewer: true, centerMap: true })}
-                                isOpen
-                                mode="side"
-                                loading={photosLoading}
-                                onEditNote={handleNoteSave}
-                            />
+                            <div style={{ width: 'var(--timeline-width)', flex: '0 0 var(--timeline-width)', height: '100%', borderLeft: '1px solid #e2e8f0' }}>
+                                <TimelinePanel
+                                    items={timelineItems}
+                                    onAddPhoto={handleAddPhoto}
+                                    onAddUrl={handleAddUrl}
+                                    onUpdateItem={handleNoteSave}
+                                    onDeleteItem={handleDeletePhoto}
+                                    onItemClick={(item) => handleSelectPhoto(item, { openViewer: true, centerMap: true })}
+                                />
+                            </div>
                         </>
                     )}
                     {timelineMode !== 'side' && (
-                        <PhotoTimelinePanel
-                            photos={timelineItems}
-                            selectedPhotoId={selectedPhotoId}
-                            onSelectPhoto={(photo) => handleSelectPhoto(photo, { openViewer: true, centerMap: true })}
-                            isOpen={timelineOpen}
-                            mode={timelineMode === 'sheet' ? 'sheet' : 'overlay'}
-                            onClose={() => setTimelineOpen(false)}
-                            loading={photosLoading}
-                            onEditNote={handleNoteSave}
-                        />
+                        <div
+                            className={`absolute z-[1200] bg-white shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ${timelineMode === 'sheet'
+                                ? 'left-0 right-0 bottom-0 h-[70vh] rounded-t-2xl border-t border-slate-200'
+                                : 'right-4 top-4 bottom-4 w-[400px] max-w-[calc(100vw-32px)] rounded-2xl border border-slate-200'
+                                }`}
+                        >
+                            <div className="flex justify-end p-2 border-b border-slate-100 bg-slate-50">
+                                <button onClick={() => setTimelineOpen(false)} className="text-slate-500 hover:text-slate-700 text-sm font-medium px-2 py-1">Close</button>
+                            </div>
+                            <TimelinePanel
+                                items={timelineItems}
+                                onAddPhoto={handleAddPhoto}
+                                onAddUrl={handleAddUrl}
+                                onUpdateItem={handleNoteSave}
+                                onDeleteItem={handleDeletePhoto}
+                                onItemClick={(item) => handleSelectPhoto(item, { openViewer: true, centerMap: true })}
+                            />
+                        </div>
                     )}
                 </div>
             </div>

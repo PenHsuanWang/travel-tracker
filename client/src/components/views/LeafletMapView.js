@@ -1,6 +1,6 @@
 // client/src/components/views/LeafletMapView.js
-import React, { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, GeoJSON, Polyline, CircleMarker, Popup, useMap } from 'react-leaflet';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { MapContainer, TileLayer, GeoJSON, Polyline, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { riversData, listGpxFilesWithMeta, fetchGpxAnalysis, deleteFile } from '../../services/api';
 import ImageLayer from '../map/ImageLayer';
@@ -202,6 +202,35 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
     };
   };
 
+  const buildPinMarkup = (fillColor, strokeColor) => (
+    `
+      <div class="waypoint-pin-wrapper">
+        <svg class="waypoint-pin-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1.5">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+          <circle cx="12" cy="9" r="3" fill="#fff" stroke="none" />
+        </svg>
+      </div>
+    `
+  );
+
+  const waypointIcon = useMemo(() => L.divIcon({
+    className: 'waypoint-pin',
+    html: buildPinMarkup('#f59e0b', '#78350f'),
+    iconSize: [36, 48],
+    iconAnchor: [18, 46],
+    popupAnchor: [0, -40],
+    tooltipAnchor: [0, -40]
+  }), []);
+
+  const restPointIcon = useMemo(() => L.divIcon({
+    className: 'waypoint-pin waypoint-pin--rest',
+    html: buildPinMarkup('#38bdf8', '#0c4a6e'),
+    iconSize: [36, 48],
+    iconAnchor: [18, 46],
+    popupAnchor: [0, -40],
+    tooltipAnchor: [0, -40]
+  }), []);
+
   return (
     <div className="leaflet-map-view">
       {/* Layer selector in top-left */}
@@ -356,44 +385,76 @@ function LeafletMapView({ selectedLayer, setSelectedLayer, selectedRivers, tripI
         {/* Render analyzed waypoints and rest points */}
         {Object.entries(gpxTracks).map(([filename, trackData]) => (
           <React.Fragment key={`${filename}-markers`}>
-            {(trackData.waypoints || []).map((wp, idx) => (
-              <CircleMarker
-                key={`${filename}-wp-${idx}`}
-                center={[wp.lat, wp.lon]}
-                radius={6}
-                pathOptions={{ color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.9 }}
-              >
-                <Popup>
-                  <div>
-                    <strong>Waypoint</strong>
-                    <div>{trackData.displayName || filename}</div>
-                    {wp.note && <div>Note: {wp.note}</div>}
-                    {wp.time && <div>Time: {wp.time}</div>}
-                    {wp.elev !== undefined && wp.elev !== null && <div>Elev: {wp.elev} m</div>}
-                  </div>
-                </Popup>
-              </CircleMarker>
-            ))}
-            {(trackData.rest_points || []).map((rp, idx) => (
-              <CircleMarker
-                key={`${filename}-rest-${idx}`}
-                center={[rp.lat, rp.lon]}
-                radius={7}
-                pathOptions={{ color: '#d97706', fillColor: '#f59e0b', fillOpacity: 0.95 }}
-              >
-                <Popup>
-                  <div>
-                    <strong>Rest point</strong>
-                    <div>{trackData.displayName || filename}</div>
-                    {rp.start_time && <div>Start: {rp.start_time}</div>}
-                    {rp.end_time && <div>End: {rp.end_time}</div>}
-                    {rp.rest_minutes !== undefined && rp.rest_minutes !== null && (
-                      <div>Rest: {rp.rest_minutes} min</div>
+            {(trackData.waypoints || []).map((wp, idx) => {
+              const waypointTitle = wp.name || wp.title || 'Waypoint';
+              const noteRaw = wp.note ?? wp.user_note;
+              const noteText = typeof noteRaw === 'string' ? noteRaw.trim() : '';
+              const descRaw = wp.desc ?? wp.description;
+              const descText = typeof descRaw === 'string' ? descRaw.trim() : '';
+              return (
+                <Marker
+                  key={`${filename}-wp-${idx}`}
+                  position={[wp.lat, wp.lon]}
+                  icon={waypointIcon}
+                  riseOnHover
+                >
+                  <Tooltip direction="top" offset={[0, -34]} opacity={1} className="map-tooltip" sticky>
+                    <div className="map-tooltip__title">{waypointTitle}</div>
+                    {!!noteText && (
+                      <div className="map-tooltip__note map-tooltip__note--highlight">{noteText}</div>
                     )}
-                    {rp.elev !== undefined && rp.elev !== null && <div>Elev: {rp.elev} m</div>}
+                    {!noteText && !!descText && (
+                      <div className="map-tooltip__note">{descText}</div>
+                    )}
+                    {wp.elev !== undefined && wp.elev !== null && (
+                      <div className="map-tooltip__meta">Elev: {wp.elev} m</div>
+                    )}
+                  </Tooltip>
+                  <Popup>
+                    <div className="map-popup">
+                      <div className="map-popup__title">{waypointTitle}</div>
+                      <div className="map-popup__row">{trackData.displayName || filename}</div>
+                      {noteText && <div className="map-popup__row">Note: {noteText}</div>}
+                      {wp.time && <div className="map-popup__row">Time: {wp.time}</div>}
+                      {wp.elev !== undefined && wp.elev !== null && (
+                        <div className="map-popup__row">Elev: {wp.elev} m</div>
+                      )}
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
+            {(trackData.rest_points || []).map((rp, idx) => (
+              <Marker
+                key={`${filename}-rest-${idx}`}
+                position={[rp.lat, rp.lon]}
+                icon={restPointIcon}
+                riseOnHover
+              >
+                <Tooltip direction="top" offset={[0, -34]} opacity={1} className="map-tooltip">
+                  <div className="map-tooltip__title">Rest point</div>
+                  <div className="map-tooltip__note">
+                    {rp.rest_minutes ? `${rp.rest_minutes} min break` : 'Rest stop'}
+                  </div>
+                  {rp.elev !== undefined && rp.elev !== null && (
+                    <div className="map-tooltip__meta">Elev: {rp.elev} m</div>
+                  )}
+                </Tooltip>
+                <Popup>
+                  <div className="map-popup">
+                    <div className="map-popup__title">Rest point</div>
+                    <div className="map-popup__row">{trackData.displayName || filename}</div>
+                    {rp.start_time && <div className="map-popup__row">Start: {rp.start_time}</div>}
+                    {rp.end_time && <div className="map-popup__row">End: {rp.end_time}</div>}
+                    {rp.rest_minutes !== undefined && rp.rest_minutes !== null && (
+                      <div className="map-popup__row">Rest: {rp.rest_minutes} min</div>
+                    )}
+                    {rp.elev !== undefined && rp.elev !== null && (
+                      <div className="map-popup__row">Elev: {rp.elev} m</div>
+                    )}
                   </div>
                 </Popup>
-              </CircleMarker>
+              </Marker>
             ))}
           </React.Fragment>
         ))}
