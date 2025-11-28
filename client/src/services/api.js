@@ -52,7 +52,7 @@ export const deleteTrip = async (tripId) => {
 // --- File API ---
 
 export const updatePhotoNote = async (metadataId, { note, note_title }) => {
-  const response = await apiClient.patch(`/photos/${encodeURIComponent(metadataId)}/note`, {
+  const response = await apiClient.patch(`/photos/${encodeURIComponent(metadataId).replace(/%2F/g, '/')}/note`, {
     note,
     note_title,
   });
@@ -60,14 +60,14 @@ export const updatePhotoNote = async (metadataId, { note, note_title }) => {
 };
 
 export const updatePhotoOrder = async (metadataId, order_index) => {
-  const response = await apiClient.patch(`/photos/${encodeURIComponent(metadataId)}/order`, {
+  const response = await apiClient.patch(`/photos/${encodeURIComponent(metadataId).replace(/%2F/g, '/')}/order`, {
     order_index,
   });
   return response.data;
 };
 
 export const deleteFile = async (filename, bucket = 'images') => {
-  const response = await apiClient.delete(`/map/delete/${encodeURIComponent(filename)}`, {
+  const response = await apiClient.delete(`/map/delete/${encodeURIComponent(filename).replace(/%2F/g, '/')}`, {
     params: { bucket }
   });
   return response.data;
@@ -113,7 +113,7 @@ export const getFileMetadata = async (metadataId) => {
 };
 
 export const deleteImage = async (filename, bucket = 'images') => {
-  const response = await apiClient.delete(`/map/delete/${encodeURIComponent(filename)}`, {
+  const response = await apiClient.delete(`/map/delete/${encodeURIComponent(filename).replace(/%2F/g, '/')}`, {
     params: { bucket }
   });
   return response.data;
@@ -178,7 +178,7 @@ export const listGpxFilesWithMeta = async (tripId = null) => {
 };
 
 export const fetchGpxFile = async (filename, bucket = 'gps-data') => {
-  const response = await apiClient.get(`/files/${encodeURIComponent(filename)}`, {
+  const response = await apiClient.get(`/files/${encodeURIComponent(filename).replace(/%2F/g, '/')}`, {
     params: { bucket },
     responseType: 'arraybuffer',
   });
@@ -190,7 +190,7 @@ export const fetchGpxAnalysis = async (filename, tripId = null) => {
   if (tripId) {
     params.trip_id = tripId;
   }
-  const response = await apiClient.get(`/gpx/${encodeURIComponent(filename)}/analysis`, { params });
+  const response = await apiClient.get(`/gpx/${encodeURIComponent(filename).replace(/%2F/g, '/')}/analysis`, { params });
   return response.data;
 };
 
@@ -242,7 +242,7 @@ export const getGeotaggedImages = async (minLon, minLat, maxLon, maxLat, bucket 
 };
 
 export const getImageUrl = (filename) => {
-  return `${apiClient.defaults.baseURL}/files/${encodeURIComponent(filename)}?bucket=images`;
+  return `${apiClient.defaults.baseURL}/files/${encodeURIComponent(filename).replace(/%2F/g, '/')}?bucket=images`;
 };
 
 export default apiClient;
