@@ -6,10 +6,9 @@ A web-based application for visualizing GPS tracking data and geographic informa
 
 ### 📍 GPX Track Visualization
 - **Upload GPX files** containing GPS tracking data
-- **Display multiple tracks simultaneously** with distinct color coding
-- **Interactive track management** with instant toggle on/off
-- **10-color palette** for easy track differentiation
-- **Smooth rendering** with no map redraw when toggling tracks
+- **Interactive track rendering** on the map
+- **Trip Statistics**: View distance, duration, elevation gain, and max elevation
+- **Elevation Profile**: Interactive graph showing elevation changes over distance
 - **Auto-centering** to track locations
 
 ### 🌊 River Network Display
@@ -30,11 +29,12 @@ A web-based application for visualizing GPS tracking data and geographic informa
 - **Combined layers** - display GPX tracks and rivers simultaneously
 - **Responsive design** for various screen sizes
 
-### 📸 Photo Management (Planned)
-- Upload and geotag photos
-- Display photos on map at capture locations
-- Link photos to GPX tracks
-- Photo gallery and timeline views
+### 📸 Photo Management
+- **Upload and geotag photos**
+- **Display photos on map** at capture locations
+- **Photo Timeline**: Chronological view of trip photos
+- **Photo Viewer**: Full-screen gallery with navigation
+- **Notes**: Add and edit notes for each photo
 
 ## 🚀 Quick Start
 

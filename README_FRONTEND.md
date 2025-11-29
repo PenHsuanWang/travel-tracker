@@ -51,13 +51,24 @@ The consistent structure of the application is maintained by these components fo
 -   **`TripSidebar.js`**: The left-hand collapsible panel on the `TripDetailPage`. Contains:
     -   `TripSummaryCard`: Displays trip overview, name, region, dates, notes, and statistics (photo/track counts)
     -   `ImageGalleryPanel`: Photo browsing interface
--   **`Footer.js`**: Application footer with copyright information or links.
+    -   `TripStatsHUD`: A floating panel at the bottom of the map displaying trip statistics (distance, duration, elevation gain, max elevation) and an interactive elevation profile graph.
+    -   `Footer.js`: Application footer with copyright information or links.
 
 **Note:** The original documentation mentioned `Sidebar.js` and `MainArea.js`, but the actual implementation uses `TripSidebar.js` for the trip detail page sidebar, and the map view is handled by `LeafletMapView.js` rather than a generic `MainArea.js` component.
 
 ## 4. Panels and Core Components
 
 These components provide the primary features of the application, mostly within the `TripDetailPage`.
+
+### Trip Stats & Visualization
+
+-   **`TripStatsHUD.js`**:
+    -   **Purpose:** Displays a summary of the trip's statistics and elevation profile overlaying the map.
+    -   **Functionality:**
+        -   **Stats Cards:** Shows total distance, duration, elevation gain, and maximum elevation.
+        -   **Elevation Profile:** Renders an interactive area chart of the trip's elevation profile.
+        -   **Interactivity:** Hovering over the chart displays a tooltip with precise distance and elevation at that point, along with a corresponding indicator on the graph.
+        -   **Collapsible:** Can be collapsed to save screen space.
 
 ### Map Components (`client/src/components/map/`)
 
