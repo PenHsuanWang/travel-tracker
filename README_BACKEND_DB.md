@@ -174,8 +174,9 @@ This section details which services interact with the storage layer and for what
 -   **Purpose:** Handles the entire file upload process, including processing, metadata extraction, and storage.
 -   **Functions & Storage Interaction:**
     -   `save_file()`:
-    -   **MinIO:** The appropriate `data_io_handler` (e.g., `ImageHandler`) saves the file content to a MinIO bucket (the repo uses `images` for photos and `gps-data` for raw GPX). For GPX files, it also saves a serialized analysis object to the `gps-analysis-data` bucket.
+        -   **MinIO:** The appropriate `data_io_handler` (e.g., `ImageHandler`) saves the file content to a MinIO bucket (the repo uses `images` for photos and `gps-data` for raw GPX). For GPX files, it also saves a serialized analysis object to the `gps-analysis-data` bucket.
         -   **MongoDB:** Saves a comprehensive `FileMetadata` document to the `file_metadata` collection, containing details about the file, EXIF data, GPS coordinates, and analysis summaries.
+        -   **GPX Handling:** Manages the 1:1 relationship between a trip and a GPX file. When a new GPX file is uploaded for a trip, it replaces any existing GPX file and its associated metadata.
     -   `get_file_metadata()`:
         -   **MongoDB:** Loads a specific `FileMetadata` document from the `file_metadata` collection.
     -   `delete_file()`:

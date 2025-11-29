@@ -50,9 +50,7 @@ The consistent structure of the application is maintained by these components fo
 -   **`Header.js`**: The top navigation bar displaying the application title/logo. Simple and clean design without cluttered navigation elements.
 -   **`TripSidebar.js`**: The left-hand collapsible panel on the `TripDetailPage`. Contains:
     -   `TripSummaryCard`: Displays trip overview, name, region, dates, notes, and statistics (photo/track counts)
-    -   `UploadPanel`: File upload interface
     -   `ImageGalleryPanel`: Photo browsing interface
-    -   `CategoriesPanel`: GIS layer toggle controls (rivers)
 -   **`Footer.js`**: Application footer with copyright information or links.
 
 **Note:** The original documentation mentioned `Sidebar.js` and `MainArea.js`, but the actual implementation uses `TripSidebar.js` for the trip detail page sidebar, and the map view is handled by `LeafletMapView.js` rather than a generic `MainArea.js` component.
@@ -67,11 +65,10 @@ These components provide the primary features of the application, mostly within 
     -   **Purpose:** The main interactive map component using React-Leaflet library for real-time map rendering
     -   **Functionality & User Experience:**
         -   Renders an interactive Leaflet map with pan, zoom, and layer controls
-        -   **Base Layer Switching:** Supports multiple tile layers (OpenStreetMap, Rudy Map, Mapbox) via `MapLayerController` sub-component
-        -   **GPX Track Display:** Renders selected GPX tracks as polylines with different colors for each track
-        -   **GPX Management Panel:** Integrated GPX file list with checkboxes for selection, file metadata, and delete buttons
+        -   **Base Layer Switching:** Supports multiple tile layers (Rudy Map [Default], Happyman, OpenStreetMap) via `MapLayerController` sub-component
+        -   **GPX Track Display:** Renders the single active GPX track as a polyline
         -   **Waypoint Markers:** Displays waypoints from GPX files as markers with popups
-        -   **River Overlays:** Renders GeoJSON river data when selected from the Categories panel
+        -   **River Overlays:** Renders GeoJSON river data when selected (currently hidden)
         -   **Image Markers:** Integrates `ImageLayer` component to display geotagged photos
         -   **Auto-centering:** Centers map on GPX tracks when selected
         -   **Highlight Sync:** Highlights markers when items are hovered in the timeline panel
@@ -109,18 +106,6 @@ These components provide the primary features of the application, mostly within 
     -   Kept for backward compatibility or alternative rendering approach
 
 ### Sidebar Panels (`client/src/components/panels/`)
-
--   **`UploadPanel.js`**:
-    -   **Purpose:** Provides a UI for uploading GPS tracks and images for the current trip
-    -   **Information & User Steps:**
-        1.  Presents two upload options: "Upload GPS Track" and "Upload Photo"
-        2.  Clicking either button opens a native file selection dialog
-        3.  Users can select GPX files or image files (JPG, PNG, etc.)
-        4.  Files are uploaded via the `uploadFile` API service
-        5.  For **GPX files**: Shows feedback if trip dates were auto-filled from track metadata
-        6.  For **images**: Displays success message with filename and extracted GPS/timestamp information
-        7.  After successful upload, dispatches global events (`imageUploaded`, `imageUploadedWithGPS`) to refresh other components
-    -   **Expected Experience:** Straightforward drag-and-drop or click-to-upload interface with immediate feedback and automatic system updates
 
 -   **`ImageGalleryPanel.js`**:
     -   **Purpose:** Displays a comprehensive, interactive gallery of all images for the current trip
@@ -162,21 +147,6 @@ These components provide the primary features of the application, mostly within 
         5.  **Chronological Sorting:** Items automatically sorted by capture/waypoint timestamp
         6.  **Markdown Support:** Notes can include formatting like **bold**, *italic*, `code`, links, etc.
     -   **Expected Experience:** Story-like journey view that weaves together photos and location waypoints, allowing users to document their trip as a narrative timeline
-
--   **`CategoriesPanel.js`**:
-    -   **Purpose:** Toggles visibility of GIS data layers on the map (currently focused on river overlays)
-    -   **Information & User Steps:**
-        1.  Collapsible panel labeled "Categories" or "Map Layers"
-        2.  Fetches available river names from backend using `listRivers` API
-        3.  Displays rivers as a searchable checkbox list
-        4.  **Search Bar:** Filter river names by typing
-        5.  **Checkbox Interaction:** 
-            -   Check boxes to show rivers on map
-            -   Uncheck to hide rivers
-            -   Multiple rivers can be selected simultaneously
-        6.  Selected rivers state is passed to map component, which renders corresponding GeoJSON polylines
-        7.  Changes take effect immediately without page reload
-    -   **Expected Experience:** Simple layer control for managing data density on the map, similar to Google Earth's layers panel
 
 ### Common Components (`client/src/components/common/`)
 

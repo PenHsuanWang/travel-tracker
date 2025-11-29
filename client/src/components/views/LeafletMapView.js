@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { MapContainer, TileLayer, GeoJSON, Polyline, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { riversData, listGpxFilesWithMeta, fetchGpxAnalysis, deleteFile } from '../../services/api';
+import { riversData } from '../../services/api';
 import ImageLayer from '../map/ImageLayer';
 import 'leaflet/dist/leaflet.css';
 import '../../styles/LeafletMapView.css';
@@ -21,19 +21,19 @@ function MapLayerController({ selectedLayer }) {
 
     // Add new tile layer based on selection
     const tileUrls = {
-      'openstreetmap': 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       'rudy map': 'https://tile.happyman.idv.tw/map/rudy/{z}/{x}/{y}.png',
-      'mapbox': 'https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}'
+      'happyman': 'https://tile.happyman.idv.tw/map/moi_osm/{z}/{x}/{y}.png',
+      'openstreetmap': 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
     };
 
     const attributions = {
-      'openstreetmap': '© OpenStreetMap contributors',
       'rudy map': 'Map data © Rudy contributors',
-      'mapbox': '© Mapbox contributors'
+      'happyman': 'Map data © Happyman contributors',
+      'openstreetmap': '© OpenStreetMap contributors'
     };
 
-    L.tileLayer(tileUrls[selectedLayer] || tileUrls['openstreetmap'], {
-      attribution: attributions[selectedLayer] || attributions['openstreetmap'],
+    L.tileLayer(tileUrls[selectedLayer] || tileUrls['rudy map'], {
+      attribution: attributions[selectedLayer] || attributions['rudy map'],
       maxZoom: 19
     }).addTo(map);
   }, [selectedLayer, map]);
@@ -42,14 +42,21 @@ function MapLayerController({ selectedLayer }) {
 }
 
 // Component to handle GPX file centering
-function GPXCenterController({ gpxCenter }) {
+function GPXCenterController({ gpxTrack }) {
   const map = useMap();
 
   useEffect(() => {
-    if (gpxCenter) {
-      map.setView(gpxCenter, 15);
+    if (gpxTrack && gpxTrack.coordinates && gpxTrack.coordinates.length > 0) {
+      try {
+        const bounds = L.latLngBounds(gpxTrack.coordinates);
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [50, 50] });
+        }
+      } catch (e) {
+        console.error("Error fitting bounds:", e);
+      }
     }
-  }, [gpxCenter, map]);
+  }, [gpxTrack, map]);
 
   return null;
 }
@@ -61,61 +68,35 @@ function LeafletMapView({
   tripId,
   onImageSelected,
   mapRef: externalMapRef,
-  // New props for lifted state
-  gpxFiles = [],
-  selectedGpxFiles = [],
-  gpxTracks = {},
-  onGpxSelect,
-  onGpxDelete,
+  // Refactored props
+  gpxTrack,
   highlightedItemId
 }) {
   const [riverGeoJSON, setRiverGeoJSON] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [showGpx, setShowGpx] = useState(false);
+  const [loading, setLoading] = useState(false);
   const internalMapRef = useRef(null);
   const mapRef = externalMapRef || internalMapRef;
 
-  // Load river GeoJSON data once on mount
+  // Load river GeoJSON data lazily when a river is selected
   useEffect(() => {
     const loadRiverData = async () => {
-      try {
-        console.log('Loading river GeoJSON data...');
-        const data = await riversData();
-        console.log('River data loaded:', Object.keys(data).length, 'rivers');
-        setRiverGeoJSON(data);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error loading river data:', error);
-        setLoading(false);
+      // Only fetch if user selected a river AND we haven't loaded data yet
+      if (selectedRivers.length > 0 && Object.keys(riverGeoJSON).length === 0) {
+        try {
+          setLoading(true);
+          console.log('Loading river GeoJSON data...');
+          const data = await riversData();
+          console.log('River data loaded:', Object.keys(data).length, 'rivers');
+          setRiverGeoJSON(data);
+        } catch (error) {
+          console.error('Error loading river data:', error);
+        } finally {
+          setLoading(false);
+        }
       }
     };
     loadRiverData();
-  }, []);
-
-  const toggleGpxDropdown = () => {
-    setShowGpx(!showGpx);
-  };
-
-  const getGpxTrackColor = (objectKey) => {
-    // Different colors for different GPX tracks
-    const colors = [
-      '#ff0000', // red
-      '#00ff00', // green
-      '#0000ff', // blue
-      '#ff00ff', // magenta
-      '#00ffff', // cyan
-      '#ff8800', // orange
-      '#8800ff', // purple
-      '#ffff00', // yellow
-      '#ff0088', // pink
-      '#00ff88'  // mint
-    ];
-    const index = gpxFiles.findIndex((item) => {
-      const key = typeof item === 'string' ? item : item.object_key;
-      return key === objectKey;
-    });
-    return colors[index % colors.length];
-  };
+  }, [selectedRivers, riverGeoJSON]);
 
   const getGeoJSONStyle = (riverName) => {
     // Different colors for different rivers
@@ -173,88 +154,16 @@ function LeafletMapView({
 
   return (
     <div className="leaflet-map-view">
-      {/* Layer selector in top-left */}
+      {/* Layer selector in top-right */}
       <select
         className="layer-selector"
         value={selectedLayer}
         onChange={(e) => setSelectedLayer(e.target.value)}
       >
-        <option value="openstreetmap">openstreetmap</option>
         <option value="rudy map">rudy map</option>
-        <option value="mapbox">mapbox</option>
+        <option value="happyman">happyman</option>
+        <option value="openstreetmap">openstreetmap</option>
       </select>
-
-      {/* GPX toggle in top-right */}
-      <button className="gpx-toggle" onClick={toggleGpxDropdown}>
-        {showGpx ? 'Hide GPX Files' : 'Show GPX Files'}
-      </button>
-
-      {/* GPX file list (if shown) */}
-      {showGpx && (
-        <div className="gpx-dropdown">
-          <ul>
-            {gpxFiles.length === 0 ? (
-              <li>No GPX files found.</li>
-            ) : (
-              gpxFiles.map((file) => {
-                const objectKey = typeof file === 'string' ? file : file.object_key;
-                const label = typeof file === 'string'
-                  ? file
-                  : (file.metadata?.original_filename || file.metadata?.filename || file.object_key);
-                const summary = file.metadata?.track_summary;
-                const distanceLabel = summary?.total_distance_km
-                  ? `${Number(summary.total_distance_km).toFixed(1)} km`
-                  : summary?.total_distance_m
-                    ? `${(Number(summary.total_distance_m) / 1000).toFixed(1)} km`
-                    : null;
-                const restCount = summary?.rest_points_count;
-                const sourceLabel = file.metadata?.analysis_status === 'success' ? 'Analyzed' : 'Raw';
-
-                return (
-                  <li
-                    key={objectKey}
-                    onClick={() => onGpxSelect && onGpxSelect(objectKey)}
-                    className={selectedGpxFiles.includes(objectKey) ? 'selected' : ''}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedGpxFiles.includes(objectKey)}
-                      onChange={() => onGpxSelect && onGpxSelect(objectKey)}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <div className="gpx-info">
-                      <div
-                        className="gpx-title"
-                        style={{
-                          color: selectedGpxFiles.includes(objectKey) ? getGpxTrackColor(objectKey) : 'inherit',
-                        }}
-                      >
-                        {label}
-                      </div>
-                      <div className="gpx-meta-row">
-                        {distanceLabel && <span className="gpx-chip">{distanceLabel}</span>}
-                        {typeof restCount === 'number' && <span className="gpx-chip">{restCount} rests</span>}
-                        {sourceLabel && <span className="gpx-chip muted">{sourceLabel}</span>}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="gpx-delete-button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onGpxDelete && onGpxDelete(file);
-                      }}
-                      title="Delete GPX"
-                    >
-                      x
-                    </button>
-                  </li>
-                );
-              })
-            )}
-          </ul>
-        </div>
-      )}
 
       {/* Loading indicator */}
       {loading && (
@@ -276,13 +185,8 @@ function LeafletMapView({
         {/* Map layer controller */}
         <MapLayerController selectedLayer={selectedLayer} />
 
-        {/* GPX center controller removed - handled by parent or manual view control */}
-
-        {/* Default tile layer (will be replaced by MapLayerController) */}
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='© OpenStreetMap contributors'
-        />
+        {/* GPX center controller */}
+        <GPXCenterController gpxTrack={gpxTrack} />
 
         {/* Render selected river GeoJSON layers */}
         {!loading && selectedRivers.map((riverName) => {
@@ -301,42 +205,36 @@ function LeafletMapView({
           );
         })}
 
-        {/* Render GPX track polylines */}
-        {Object.entries(gpxTracks).map(([filename, trackData]) => (
+        {/* Render GPX track polyline */}
+        {gpxTrack && gpxTrack.coordinates && (
           <Polyline
-            key={filename}
-            positions={trackData.coordinates}
+            positions={gpxTrack.coordinates}
             pathOptions={{
-              color: getGpxTrackColor(filename),
+              color: '#ff0000', // Default red for the single track
               weight: 3,
               opacity: 0.8
             }}
-            eventHandlers={{
-              click: () => {
-                console.log(`Clicked on track: ${filename}`);
-              }
-            }}
-          >
-            {/* Popup for track info */}
-          </Polyline>
-        ))}
+          />
+        )}
 
         {/* Render analyzed waypoints and rest points */}
-        {Object.entries(gpxTracks).map(([filename, trackData]) => (
-          <React.Fragment key={`${filename}-markers`}>
-            {(trackData.waypoints || []).map((wp, idx) => {
+        {gpxTrack && (
+          <React.Fragment>
+            {(gpxTrack.waypoints || []).map((wp, idx) => {
               const waypointTitle = wp.name || wp.title || 'Waypoint';
               const noteRaw = wp.note ?? wp.user_note;
               const noteText = typeof noteRaw === 'string' ? noteRaw.trim() : '';
               const descRaw = wp.desc ?? wp.description;
               const descText = typeof descRaw === 'string' ? descRaw.trim() : '';
+              const id = `waypoint-${gpxTrack.source || 'track'}-${idx}`;
+              
               return (
                 <Marker
-                  key={`${filename}-wp-${idx}`}
+                  key={`wp-${idx}`}
                   position={[wp.lat, wp.lon]}
-                  icon={highlightedItemId === `waypoint-${filename}-${idx}` ? highlightIcon : waypointIcon}
+                  icon={highlightedItemId === id ? highlightIcon : waypointIcon}
                   riseOnHover
-                  zIndexOffset={highlightedItemId === `waypoint-${filename}-${idx}` ? 1000 : 0}
+                  zIndexOffset={highlightedItemId === id ? 1000 : 0}
                 >
                   <Tooltip direction="top" offset={[0, -34]} opacity={1} className="map-tooltip" sticky>
                     <div className="map-tooltip__title">{waypointTitle}</div>
@@ -353,7 +251,7 @@ function LeafletMapView({
                   <Popup>
                     <div className="map-popup">
                       <div className="map-popup__title">{waypointTitle}</div>
-                      <div className="map-popup__row">{trackData.displayName || filename}</div>
+                      <div className="map-popup__row">{gpxTrack.displayName}</div>
                       {noteText && <div className="map-popup__row">Note: {noteText}</div>}
                       {wp.time && <div className="map-popup__row">Time: {wp.time}</div>}
                       {wp.elev !== undefined && wp.elev !== null && (
@@ -364,9 +262,9 @@ function LeafletMapView({
                 </Marker>
               );
             })}
-            {(trackData.rest_points || []).map((rp, idx) => (
+            {(gpxTrack.rest_points || []).map((rp, idx) => (
               <Marker
-                key={`${filename}-rest-${idx}`}
+                key={`rest-${idx}`}
                 position={[rp.lat, rp.lon]}
                 icon={restPointIcon}
                 riseOnHover
@@ -383,7 +281,7 @@ function LeafletMapView({
                 <Popup>
                   <div className="map-popup">
                     <div className="map-popup__title">Rest point</div>
-                    <div className="map-popup__row">{trackData.displayName || filename}</div>
+                    <div className="map-popup__row">{gpxTrack.displayName}</div>
                     {rp.start_time && <div className="map-popup__row">Start: {rp.start_time}</div>}
                     {rp.end_time && <div className="map-popup__row">End: {rp.end_time}</div>}
                     {rp.rest_minutes !== undefined && rp.rest_minutes !== null && (
@@ -397,7 +295,7 @@ function LeafletMapView({
               </Marker>
             ))}
           </React.Fragment>
-        ))}
+        )}
 
         {/* Image Layer - displays markers for geotagged images */}
         <ImageLayer tripId={tripId} onImageSelected={onImageSelected} />
