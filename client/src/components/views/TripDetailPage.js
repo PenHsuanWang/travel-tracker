@@ -154,9 +154,9 @@ const TripDetailPage = () => {
     const [timelineWidth, setTimelineWidth] = useState(() => getStoredTimelineWidth());
 
     // Lifted GPX State
-    const [gpxFiles, setGpxFiles] = useState([]);
-    const [selectedGpxFiles, setSelectedGpxFiles] = useState([]);
-    const [gpxTracks, setGpxTracks] = useState({});
+    // Refactored: Single GPX file per trip
+    const [gpxFile, setGpxFile] = useState(null);
+    const [gpxTrack, setGpxTrack] = useState(null); // The analyzed track data
     const [highlightedItemId, setHighlightedItemId] = useState(null);
 
     const mapRef = useRef(null);
@@ -239,104 +239,54 @@ const TripDetailPage = () => {
         }
     }, [tripId]);
 
-
-
-    // Load GPX files list
-    useEffect(() => {
-        const loadGpxList = async () => {
-            if (!tripId) return;
-            try {
-                const files = await listGpxFilesWithMeta(tripId);
-                setGpxFiles(files);
-            } catch (err) {
-                console.error('Error listing GPX files:', err);
+    // Load GPX file (Single)
+    const refreshGpxTrack = useCallback(async () => {
+        if (!tripId) return;
+        try {
+            const files = await listGpxFilesWithMeta(tripId);
+            if (files && files.length > 0) {
+                // Take the first one (backend enforces single, but frontend should be robust)
+                const file = files[0];
+                setGpxFile(file);
+                
+                // Auto-load analysis
+                const objectKey = file.object_key;
+                try {
+                    const trackData = await fetchGpxAnalysis(objectKey, tripId);
+                    if (trackData.coordinates && trackData.coordinates.length > 0) {
+                        setGpxTrack({
+                            coordinates: trackData.coordinates,
+                            summary: trackData.track_summary,
+                            source: trackData.source,
+                            displayName: trackData.display_name || objectKey,
+                            waypoints: trackData.waypoints || [],
+                            rest_points: trackData.rest_points || []
+                        });
+                        console.log(`GPX track loaded: ${objectKey}`);
+                    }
+                } catch (err) {
+                    console.error('Error fetching analyzed GPX data:', err);
+                }
+            } else {
+                setGpxFile(null);
+                setGpxTrack(null);
             }
-        };
-        loadGpxList();
+        } catch (err) {
+            console.error('Error listing GPX files:', err);
+        }
     }, [tripId]);
 
-    // Handle GPX Selection
-    const handleGpxSelect = useCallback(async (objectKey) => {
-        const isSelected = selectedGpxFiles.includes(objectKey);
+    useEffect(() => {
+        refreshGpxTrack();
+    }, [refreshGpxTrack]);
 
-        if (isSelected) {
-            const newSelection = selectedGpxFiles.filter((f) => f !== objectKey);
-            const newTracks = { ...gpxTracks };
-            delete newTracks[objectKey];
-            setSelectedGpxFiles(newSelection);
-            setGpxTracks(newTracks);
-            return;
-        }
-
-        setSelectedGpxFiles((prev) => [...prev, objectKey]);
-
-        try {
-            const trackData = await fetchGpxAnalysis(objectKey, tripId);
-            if (trackData.coordinates && trackData.coordinates.length > 0) {
-                setGpxTracks((prev) => ({
-                    ...prev,
-                    [objectKey]: {
-                        coordinates: trackData.coordinates,
-                        summary: trackData.track_summary,
-                        source: trackData.source,
-                        displayName: trackData.display_name || objectKey,
-                        waypoints: trackData.waypoints || [],
-                        rest_points: trackData.rest_points || []
-                    }
-                }));
-                console.log(`GPX track loaded: ${objectKey}`);
-            }
-        } catch (err) {
-            console.error('Error fetching analyzed GPX data:', err);
-        }
-    }, [tripId, selectedGpxFiles, gpxTracks]);
-
-    // Handle GPX Deletion
-    const handleGpxDelete = useCallback(async (fileItem) => {
-        const objectKey = typeof fileItem === 'string' ? fileItem : fileItem.object_key;
-        const analysisKey = fileItem?.metadata?.analysis_object_key;
-        const analysisBucket = fileItem?.metadata?.analysis_bucket || 'gps-analysis-data';
-
-        const confirmed = window.confirm(`Delete GPX file "${objectKey}"? This will remove the original file, metadata, and analyzed object.`);
-        if (!confirmed) return;
-
-        try {
-            await deleteFile(objectKey, 'gps-data');
-            if (analysisKey) {
-                try {
-                    await deleteFile(analysisKey, analysisBucket);
-                } catch (innerErr) {
-                    console.warn(`Failed to delete analysis object ${analysisKey}:`, innerErr);
-                }
-            }
-            setGpxFiles((prev) => prev.filter((item) => {
-                const key = typeof item === 'string' ? item : item.object_key;
-                return key !== objectKey;
-            }));
-            setSelectedGpxFiles((prev) => prev.filter((key) => key !== objectKey));
-            setGpxTracks((prev) => {
-                const next = { ...prev };
-                delete next[objectKey];
-                return next;
-            });
-            await refreshTripStats();
-        } catch (err) {
-            console.error('Failed to delete GPX file:', err);
-            alert('Failed to delete GPX file. Please try again.');
-        }
-    }, [refreshTripStats]);
-
-    // Compute waypoints from loaded tracks
+    // Compute waypoints from loaded track
     const trackWaypoints = useMemo(() => {
-        const allWaypoints = [];
-        Object.entries(gpxTracks).forEach(([filename, trackData]) => {
-            const waypointsFromFile = (trackData.waypoints || [])
-                .map((wp, idx) => normalizeWaypoint(wp, filename, idx))
-                .filter(Boolean);
-            allWaypoints.push(...waypointsFromFile);
-        });
-        return allWaypoints;
-    }, [gpxTracks]);
+        if (!gpxTrack) return [];
+        return (gpxTrack.waypoints || [])
+            .map((wp, idx) => normalizeWaypoint(wp, gpxFile?.object_key || 'track', idx))
+            .filter(Boolean);
+    }, [gpxTrack, gpxFile]);
 
     // Merge photos and waypoints into unified timeline
     // Note: We use trackWaypoints instead of the separate 'waypoints' state now
@@ -406,9 +356,8 @@ const TripDetailPage = () => {
         setSelectedPhotoId(null);
         setIsViewerOpen(false);
         setPhotos([]);
-        setGpxFiles([]);
-        setSelectedGpxFiles([]);
-        setGpxTracks({});
+        setGpxFile(null);
+        setGpxTrack(null);
         setTripStats({ photos: 0, tracks: 0 });
     }, [tripId]);
 
@@ -532,7 +481,8 @@ const TripDetailPage = () => {
         }
         refreshTripStats();
         loadTripPhotos();
-    }, [refreshTripStats, loadTripPhotos]);
+        refreshGpxTrack();
+    }, [refreshTripStats, loadTripPhotos, refreshGpxTrack]);
 
     const applyNoteToPhotoState = useCallback((photoId, { note, noteTitle }) => {
         setPhotos((prev) =>
@@ -549,37 +499,33 @@ const TripDetailPage = () => {
     }, []);
 
     const applyNoteToWaypointState = useCallback((waypointId, { note, noteTitle, timestamp }) => {
-        // We need to update gpxTracks state because that's the source of truth for waypoints now
-        setGpxTracks((prevTracks) => {
-            const newTracks = { ...prevTracks };
-            let found = false;
-
-            for (const [filename, trackData] of Object.entries(newTracks)) {
-                const updatedWaypoints = trackData.waypoints.map((wp, idx) => {
-                    const id = `waypoint-${filename}-${idx}`;
-                    if (id === waypointId) {
-                        found = true;
-                        return {
-                            ...wp,
-                            note: note !== undefined ? note : wp.note,
-                            title: noteTitle !== undefined ? noteTitle : (wp.title || wp.name),
-                            time: timestamp ? new Date(timestamp).toISOString() : wp.time
-                        };
-                    }
-                    return wp;
-                });
-
-                if (found) {
-                    newTracks[filename] = {
-                        ...trackData,
-                        waypoints: updatedWaypoints
+        // We need to update gpxTrack state because that's the source of truth for waypoints now
+        setGpxTrack((prevTrack) => {
+            if (!prevTrack) return prevTrack;
+            
+            const updatedWaypoints = (prevTrack.waypoints || []).map((wp, idx) => {
+                // Construct ID to match normalizeWaypoint logic: `waypoint-${gpxFileName}-${index}`
+                // Since we have single track, we use the source or 'track' as filename part
+                const filename = prevTrack.source || gpxFile?.object_key || 'track';
+                const id = `waypoint-${filename}-${idx}`;
+                
+                if (id === waypointId) {
+                    return {
+                        ...wp,
+                        note: note !== undefined ? note : wp.note,
+                        title: noteTitle !== undefined ? noteTitle : (wp.title || wp.name),
+                        time: timestamp ? new Date(timestamp).toISOString() : wp.time
                     };
-                    break;
                 }
-            }
-            return newTracks;
+                return wp;
+            });
+
+            return {
+                ...prevTrack,
+                waypoints: updatedWaypoints
+            };
         });
-    }, []);
+    }, [gpxFile]);
 
     const handleNoteSave = useCallback(
         async ({ itemType = 'photo', photoId, waypointId, metadataId, note, noteTitle, timestamp }) => {
@@ -775,12 +721,8 @@ const TripDetailPage = () => {
                             tripId={tripId}
                             onImageSelected={handleMapPhotoSelected}
                             mapRef={mapRef}
-                            // GPX Props
-                            gpxFiles={gpxFiles}
-                            selectedGpxFiles={selectedGpxFiles}
-                            gpxTracks={gpxTracks}
-                            onGpxSelect={handleGpxSelect}
-                            onGpxDelete={handleGpxDelete}
+                            // GPX Props (Refactored)
+                            gpxTrack={gpxTrack}
                             highlightedItemId={highlightedItemId}
                         />
                     </main>

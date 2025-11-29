@@ -155,6 +155,24 @@ class FileUploadService:
         if file_extension in {"gpx", "jpg", "jpeg", "png", "gif"} and not trip_id:
             raise ValueError("trip_id is required when uploading GPX tracks or photos")
         
+        # Enforce single GPX file per trip: delete existing GPX files before uploading new one
+        if file_extension == "gpx" and trip_id:
+            try:
+                mongodb_adapter = service.storage_manager.adapters.get('mongodb')
+                if mongodb_adapter:
+                    collection = mongodb_adapter.get_collection('file_metadata')
+                    # Find all GPX files for this trip
+                    cursor = collection.find({"trip_id": trip_id, "file_extension": "gpx"})
+                    for doc in cursor:
+                        try:
+                            # Use object_key (which is _id) and bucket to delete
+                            cls.delete_file(doc['_id'], bucket=doc.get('bucket', 'gps-data'))
+                            logging.getLogger(__name__).info(f"Deleted existing GPX file {doc['_id']} for trip {trip_id}")
+                        except Exception as e:
+                            logging.getLogger(__name__).warning(f"Failed to delete existing GPX {doc['_id']}: {e}")
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"Error checking/deleting existing GPX files: {e}")
+        
         result = handler.handle(file, trip_id=trip_id)
         
         # Handle legacy handlers that return strings
