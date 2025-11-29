@@ -21,19 +21,19 @@ function MapLayerController({ selectedLayer }) {
 
     // Add new tile layer based on selection
     const tileUrls = {
-      'openstreetmap': 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       'rudy map': 'https://tile.happyman.idv.tw/map/rudy/{z}/{x}/{y}.png',
-      'mapbox': 'https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}'
+      'happyman': 'https://tile.happyman.idv.tw/map/moi_osm/{z}/{x}/{y}.png',
+      'openstreetmap': 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
     };
 
     const attributions = {
-      'openstreetmap': '© OpenStreetMap contributors',
       'rudy map': 'Map data © Rudy contributors',
-      'mapbox': '© Mapbox contributors'
+      'happyman': 'Map data © Happyman contributors',
+      'openstreetmap': '© OpenStreetMap contributors'
     };
 
-    L.tileLayer(tileUrls[selectedLayer] || tileUrls['openstreetmap'], {
-      attribution: attributions[selectedLayer] || attributions['openstreetmap'],
+    L.tileLayer(tileUrls[selectedLayer] || tileUrls['rudy map'], {
+      attribution: attributions[selectedLayer] || attributions['rudy map'],
       maxZoom: 19
     }).addTo(map);
   }, [selectedLayer, map]);
@@ -73,26 +73,30 @@ function LeafletMapView({
   highlightedItemId
 }) {
   const [riverGeoJSON, setRiverGeoJSON] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const internalMapRef = useRef(null);
   const mapRef = externalMapRef || internalMapRef;
 
-  // Load river GeoJSON data once on mount
+  // Load river GeoJSON data lazily when a river is selected
   useEffect(() => {
     const loadRiverData = async () => {
-      try {
-        console.log('Loading river GeoJSON data...');
-        const data = await riversData();
-        console.log('River data loaded:', Object.keys(data).length, 'rivers');
-        setRiverGeoJSON(data);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error loading river data:', error);
-        setLoading(false);
+      // Only fetch if user selected a river AND we haven't loaded data yet
+      if (selectedRivers.length > 0 && Object.keys(riverGeoJSON).length === 0) {
+        try {
+          setLoading(true);
+          console.log('Loading river GeoJSON data...');
+          const data = await riversData();
+          console.log('River data loaded:', Object.keys(data).length, 'rivers');
+          setRiverGeoJSON(data);
+        } catch (error) {
+          console.error('Error loading river data:', error);
+        } finally {
+          setLoading(false);
+        }
       }
     };
     loadRiverData();
-  }, []);
+  }, [selectedRivers, riverGeoJSON]);
 
   const getGeoJSONStyle = (riverName) => {
     // Different colors for different rivers
@@ -150,15 +154,15 @@ function LeafletMapView({
 
   return (
     <div className="leaflet-map-view">
-      {/* Layer selector in top-left */}
+      {/* Layer selector in top-right */}
       <select
         className="layer-selector"
         value={selectedLayer}
         onChange={(e) => setSelectedLayer(e.target.value)}
       >
-        <option value="openstreetmap">openstreetmap</option>
         <option value="rudy map">rudy map</option>
-        <option value="mapbox">mapbox</option>
+        <option value="happyman">happyman</option>
+        <option value="openstreetmap">openstreetmap</option>
       </select>
 
       {/* Loading indicator */}
@@ -183,12 +187,6 @@ function LeafletMapView({
 
         {/* GPX center controller */}
         <GPXCenterController gpxTrack={gpxTrack} />
-
-        {/* Default tile layer (will be replaced by MapLayerController) */}
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='© OpenStreetMap contributors'
-        />
 
         {/* Render selected river GeoJSON layers */}
         {!loading && selectedRivers.map((riverName) => {

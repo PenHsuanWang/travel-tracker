@@ -1,7 +1,5 @@
 import React from 'react';
-import UploadPanel from '../panels/UploadPanel';
 import ImageGalleryPanel from '../panels/ImageGalleryPanel';
-import CategoriesPanel from '../panels/CategoriesPanel';
 import '../../styles/Sidebar.css';
 
 const formatDate = (value) => {
@@ -49,8 +47,6 @@ const TripSummaryCard = ({ trip, stats }) => {
 function TripSidebar({
     tripId,
     trip,
-    selectedRivers,
-    setSelectedRivers,
     stats,
     onTripDataChange,
     notice
@@ -64,14 +60,7 @@ function TripSidebar({
                 </div>
             )}
 
-            <UploadPanel tripId={tripId} onUploadComplete={onTripDataChange} />
-
             <ImageGalleryPanel tripId={tripId} onDataChange={onTripDataChange} />
-
-            <CategoriesPanel
-                selectedRivers={selectedRivers}
-                setSelectedRivers={setSelectedRivers}
-            />
         </aside>
     );
 }

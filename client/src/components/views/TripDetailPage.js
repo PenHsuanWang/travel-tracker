@@ -140,7 +140,7 @@ const TripDetailPage = () => {
     const [trip, setTrip] = useState(null);
     const [allTrips, setAllTrips] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [selectedLayer, setSelectedLayer] = useState('openstreetmap');
+    const [selectedLayer, setSelectedLayer] = useState('rudy map');
     const [selectedRivers, setSelectedRivers] = useState([]);
     const [tripStats, setTripStats] = useState({ photos: 0, tracks: 0 });
     const [tripNotice, setTripNotice] = useState('');
@@ -587,7 +587,25 @@ const TripDetailPage = () => {
         setPhotosLoading(true);
         try {
             const uploads = Array.from(fileList).map(file => uploadFile(file, tripId));
-            await Promise.all(uploads);
+            const results = await Promise.all(uploads);
+            
+            // Dispatch events for other components (like ImageLayer)
+            window.dispatchEvent(new CustomEvent('imageUploaded'));
+            
+            results.forEach(result => {
+                if (result && result.has_gps && result.gps) {
+                    window.dispatchEvent(new CustomEvent('imageUploadedWithGPS', {
+                        detail: {
+                            object_key: result.object_key || result.metadata_id, // Fallback if object_key missing
+                            original_filename: result.filename,
+                            thumb_url: result.file_url, // Or construct if needed
+                            gps: result.gps,
+                            metadata_id: result.metadata_id
+                        }
+                    }));
+                }
+            });
+
             // Refresh list after upload
             await loadTripPhotos();
             await refreshTripStats();
@@ -695,8 +713,6 @@ const TripDetailPage = () => {
                 <TripSidebar
                     tripId={tripId}
                     trip={trip}
-                    selectedRivers={selectedRivers}
-                    setSelectedRivers={setSelectedRivers}
                     stats={tripStats}
                     onTripDataChange={handleTripDataChange}
                     notice={tripNotice}
