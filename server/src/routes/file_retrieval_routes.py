@@ -9,6 +9,7 @@ from pydantic import BaseModel  # type: ignore[import-not-found]
 
 from src.services.file_retrieval_service import FileRetrievalService
 from src.services.gpx_analysis_retrieval_service import GpxAnalysisRetrievalService
+from src.services.gpx_analysis_service import GpxAnalysisService
 from src.services.photo_note_service import PhotoNoteService
 from src.models.file_metadata import FileMetadata
 
@@ -258,6 +259,36 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
     raw_bytes = retrieval_service.get_file_bytes(bucket, filename)
     if raw_bytes is None:
         raise HTTPException(status_code=404, detail="GPX file not found")
+
+    # Attempt to re-analyze on the fly to get full stats/profile if possible
+    # This handles cases where the pickle is missing/broken or metadata is incomplete (old files)
+    try:
+        analysis_result = GpxAnalysisService.analyze_gpx_data(raw_bytes, filename)
+        
+        # Use the fresh summary which includes elevation_profile
+        # Merge with existing track_summary if available to preserve other fields if any
+        fresh_summary = analysis_result.summary
+        if track_summary:
+            fresh_summary = {**track_summary, **fresh_summary}
+
+        payload = analysis_retrieval_service.build_track_payload(
+            analysis_result.analyzed_track, 
+            metadata_summary=fresh_summary
+        )
+        
+        return GpxAnalysisResponse(
+            filename=filename,
+            display_name=display_name,
+            analysis_status='recalculated_on_fly',
+            source="analysis_on_fly",
+            has_gpx_analysis=True,
+            track_summary=payload.get("track_summary"),
+            coordinates=payload.get("coordinates", []),
+            waypoints=payload.get("waypoints", []),
+            rest_points=payload.get("rest_points", [])
+        )
+    except Exception as exc:
+        logger.warning("On-the-fly analysis failed for %s: %s. Using simple fallback.", filename, exc)
 
     coordinates, waypoints, track_name = _parse_raw_gpx_bytes(raw_bytes)
     fallback_summary = track_summary or {

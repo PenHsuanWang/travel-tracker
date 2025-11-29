@@ -83,10 +83,15 @@ class GpxAnalysisService:
         latitudes: List[float] = []
         longitudes: List[float] = []
         elevations: List[float] = []
+        
+        # For elevation profile: list of [distance_m, elevation_m]
+        profile_points: List[List[float]] = []
+        current_dist = 0.0
 
         for point in track_points:
             delta_xy = point.get_delta_xy()
             total_distance_m += delta_xy
+            current_dist += delta_xy
 
             dt = point.get_point_delta_time()
             if dt and dt > 0:
@@ -98,13 +103,42 @@ class GpxAnalysisService:
                     elevation_gain_m += delta_z
                 elif delta_z < 0:
                     elevation_loss_m += abs(delta_z)
-
+            
+            # Collect lat/lon for bounding box
             if point.lat is not None:
                 latitudes.append(point.lat)
             if point.lon is not None:
                 longitudes.append(point.lon)
-            if point.elev is not None:
+
+            # Collect elevation for profile
+            # Use point.elevation if available, otherwise try to infer or skip
+            # AnalyzedTrkPoint usually wraps a TrkPoint which has elevation
+            elev = point.elevation if hasattr(point, 'elevation') else None
+            # If point doesn't have elevation directly, check if we can get it from the raw point
+            if elev is None and hasattr(point, 'raw_point') and hasattr(point.raw_point, 'elevation'):
+                 elev = point.raw_point.elevation
+            
+            if elev is not None:
+                elevations.append(elev)
+                profile_points.append([round(current_dist, 1), round(elev, 1)])
+            elif point.elev is not None: # Fallback to point.elev if available
                 elevations.append(point.elev)
+                profile_points.append([round(current_dist, 1), round(point.elev, 1)])
+
+
+        # Downsample profile if too large (target ~200 points)
+        target_points = 200
+        if len(profile_points) > target_points:
+            step = len(profile_points) / target_points
+            downsampled = []
+            for i in range(target_points):
+                idx = int(i * step)
+                if idx < len(profile_points):
+                    downsampled.append(profile_points[idx])
+            # Ensure last point is included
+            if profile_points[-1] not in downsampled:
+                downsampled.append(profile_points[-1])
+            profile_points = downsampled
 
         start_time = track_points[0].time
         end_time = track_points[-1].time
@@ -142,6 +176,7 @@ class GpxAnalysisService:
             "total_rest_duration_seconds": total_rest_duration_seconds,
             "waypoints_count": len(analyzed_track.get_waypoint_list() or []),
             "turn_points_count": len(getattr(analyzed_track, "get_great_turn_point_list", lambda: [])() or []),
+            "elevation_profile": profile_points
         }
 
         if latitudes and longitudes:

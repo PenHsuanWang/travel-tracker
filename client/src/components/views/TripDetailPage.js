@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import LeafletMapView from './LeafletMapView';
 import TripSidebar from '../layout/TripSidebar';
 import TimelinePanel from '../panels/TimelinePanel';
+import TripStatsHUD from '../panels/TripStatsHUD';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
 import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile } from '../../services/api';
 import '../../styles/MainBlock.css';
@@ -741,6 +742,9 @@ const TripDetailPage = () => {
                             gpxTrack={gpxTrack}
                             highlightedItemId={highlightedItemId}
                         />
+                        {gpxTrack && gpxTrack.summary && (
+                            <TripStatsHUD trackSummary={gpxTrack.summary} />
+                        )}
                     </main>
                     {timelineMode === 'side' && (
                         <>
