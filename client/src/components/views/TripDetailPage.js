@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import LeafletMapView from './LeafletMapView';
 import TripSidebar from '../layout/TripSidebar';
-import PhotoTimelinePanel from '../panels/PhotoTimelinePanel';
+import TimelinePanel from '../panels/TimelinePanel';
+import TripStatsHUD from '../panels/TripStatsHUD';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
-import { getTrip, getTrips, deleteTrip, listGpxFiles, listImageFiles, getImageUrl, updatePhotoNote } from '../../services/api';
+import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
 
@@ -35,17 +36,27 @@ const parseDateSafe = (value) => {
     return null;
 };
 
+const deriveNoteTitleValue = (providedTitle, noteValue) => {
+    if (providedTitle) return providedTitle;
+    if (noteValue) {
+        const firstLine = String(noteValue).split('\n')[0].trim();
+        return firstLine || null;
+    }
+    return null;
+};
+
 const normalizePhoto = (item) => {
     if (!item) return null;
     const metadata = item.metadata || {};
     const note = metadata.note || metadata.caption || metadata.notes || null;
-    const noteTitle = metadata.note_title || (note ? note.split('\n')[0] : null);
+    const noteTitle = deriveNoteTitleValue(metadata.note_title, note);
     const capturedDate = parseDateSafe(metadata.captured_at || metadata.date_taken || metadata.created_at);
     const lat = Number(metadata?.gps?.latitude ?? metadata?.gps?.lat ?? item.lat);
     const lon = Number(metadata?.gps?.longitude ?? metadata?.gps?.lon ?? item.lon);
     const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
 
     return {
+        type: 'photo',
         id: item.object_key,
         objectKey: item.object_key,
         fileName: metadata.original_filename || item.object_key,
@@ -53,6 +64,7 @@ const normalizePhoto = (item) => {
         imageUrl: getImageUrl(item.object_key),
         capturedAt: capturedDate ? capturedDate.toISOString() : null,
         capturedDate,
+        timestamp: capturedDate ? capturedDate.getTime() : 0,
         capturedSource: metadata.captured_source || (metadata.date_taken ? 'exif' : metadata.created_at ? 'fallback' : 'unknown'),
         lat: hasCoords ? lat : null,
         lon: hasCoords ? lon : null,
@@ -61,6 +73,34 @@ const normalizePhoto = (item) => {
         note,
         noteTitle,
         orderIndex: metadata.order_index ?? null,
+    };
+};
+
+const normalizeWaypoint = (waypoint, gpxFileName, index) => {
+    if (!waypoint) return null;
+    const capturedDate = parseDateSafe(waypoint.time);
+    const lat = Number(waypoint.lat);
+    const lon = Number(waypoint.lon);
+    const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+    const rawNote = waypoint.note || waypoint.desc || waypoint.name || null;
+    const waypointTitle = deriveNoteTitleValue(waypoint.title || waypoint.name || null, rawNote);
+
+    if (!hasCoords) return null;
+
+    return {
+        type: 'waypoint',
+        id: `waypoint-${gpxFileName}-${index}`,
+        gpxSource: gpxFileName,
+        fileName: `Waypoint ${index + 1}`,
+        capturedAt: capturedDate ? capturedDate.toISOString() : null,
+        capturedDate,
+        timestamp: capturedDate ? capturedDate.getTime() : 0,
+        capturedSource: 'gpx',
+        lat,
+        lon,
+        elev: waypoint.elev !== null && waypoint.elev !== undefined ? Number(waypoint.elev) : null,
+        note: rawNote,
+        noteTitle: waypointTitle,
     };
 };
 
@@ -101,17 +141,25 @@ const TripDetailPage = () => {
     const [trip, setTrip] = useState(null);
     const [allTrips, setAllTrips] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [selectedLayer, setSelectedLayer] = useState('openstreetmap');
+    const [selectedLayer, setSelectedLayer] = useState('rudy map');
     const [selectedRivers, setSelectedRivers] = useState([]);
     const [tripStats, setTripStats] = useState({ photos: 0, tracks: 0 });
     const [tripNotice, setTripNotice] = useState('');
     const [photos, setPhotos] = useState([]);
+    const [waypoints, setWaypoints] = useState([]);
     const [photosLoading, setPhotosLoading] = useState(false);
     const [selectedPhotoId, setSelectedPhotoId] = useState(null);
     const [isViewerOpen, setIsViewerOpen] = useState(false);
     const [timelineMode, setTimelineMode] = useState('side');
     const [timelineOpen, setTimelineOpen] = useState(true);
     const [timelineWidth, setTimelineWidth] = useState(() => getStoredTimelineWidth());
+
+    // Lifted GPX State
+    // Refactored: Single GPX file per trip
+    const [gpxFile, setGpxFile] = useState(null);
+    const [gpxTrack, setGpxTrack] = useState(null); // The analyzed track data
+    const [highlightedItemId, setHighlightedItemId] = useState(null);
+
     const mapRef = useRef(null);
     const navigate = useNavigate();
 
@@ -192,9 +240,65 @@ const TripDetailPage = () => {
         }
     }, [tripId]);
 
+    // Load GPX file (Single)
+    const refreshGpxTrack = useCallback(async () => {
+        if (!tripId) return;
+        try {
+            const files = await listGpxFilesWithMeta(tripId);
+            if (files && files.length > 0) {
+                // Take the first one (backend enforces single, but frontend should be robust)
+                const file = files[0];
+                setGpxFile(file);
+                
+                // Auto-load analysis
+                const objectKey = file.object_key;
+                try {
+                    const trackData = await fetchGpxAnalysis(objectKey, tripId);
+                    if (trackData.coordinates && trackData.coordinates.length > 0) {
+                        setGpxTrack({
+                            coordinates: trackData.coordinates,
+                            summary: trackData.track_summary,
+                            source: trackData.source,
+                            displayName: trackData.display_name || objectKey,
+                            waypoints: trackData.waypoints || [],
+                            rest_points: trackData.rest_points || []
+                        });
+                        console.log(`GPX track loaded: ${objectKey}`);
+                    }
+                } catch (err) {
+                    console.error('Error fetching analyzed GPX data:', err);
+                }
+            } else {
+                setGpxFile(null);
+                setGpxTrack(null);
+            }
+        } catch (err) {
+            console.error('Error listing GPX files:', err);
+        }
+    }, [tripId]);
+
+    useEffect(() => {
+        refreshGpxTrack();
+    }, [refreshGpxTrack]);
+
+    // Compute waypoints from loaded track
+    const trackWaypoints = useMemo(() => {
+        if (!gpxTrack) return [];
+        return (gpxTrack.waypoints || [])
+            .map((wp, idx) => normalizeWaypoint(wp, gpxFile?.object_key || 'track', idx))
+            .filter(Boolean);
+    }, [gpxTrack, gpxFile]);
+
+    // Merge photos and waypoints into unified timeline
+    // Note: We use trackWaypoints instead of the separate 'waypoints' state now
+    const timelineItems = useMemo(() => {
+        return [...photos, ...trackWaypoints].sort(sortPhotosChronologically);
+    }, [photos, trackWaypoints]);
+
     useEffect(() => {
         refreshTripStats();
         loadTripPhotos();
+        // loadTripWaypoints(); // Removed, now handled by gpxTracks
     }, [refreshTripStats, loadTripPhotos]);
 
     useEffect(() => {
@@ -253,6 +357,8 @@ const TripDetailPage = () => {
         setSelectedPhotoId(null);
         setIsViewerOpen(false);
         setPhotos([]);
+        setGpxFile(null);
+        setGpxTrack(null);
         setTripStats({ photos: 0, tracks: 0 });
     }, [tripId]);
 
@@ -313,7 +419,7 @@ const TripDetailPage = () => {
         const handleMouseMove = (moveEvent) => {
             const delta = startX - moveEvent.clientX;
             const nextWidth = clampTimelineWidth(startWidth + delta);
-            
+
             // Throttle updates using requestAnimationFrame for smooth resizing
             if (animationFrameId === null) {
                 animationFrameId = requestAnimationFrame(() => {
@@ -376,33 +482,60 @@ const TripDetailPage = () => {
         }
         refreshTripStats();
         loadTripPhotos();
-    }, [refreshTripStats, loadTripPhotos]);
-
-    const deriveNoteTitle = (noteTitleValue, noteValue) => {
-        if (noteTitleValue) return noteTitleValue;
-        if (noteValue) {
-            const firstLine = String(noteValue).split('\n')[0].trim();
-            return firstLine || null;
-        }
-        return null;
-    };
+        refreshGpxTrack();
+    }, [refreshTripStats, loadTripPhotos, refreshGpxTrack]);
 
     const applyNoteToPhotoState = useCallback((photoId, { note, noteTitle }) => {
         setPhotos((prev) =>
             prev.map((p) =>
                 p.id === photoId
                     ? {
-                          ...p,
-                          note,
-                          noteTitle: deriveNoteTitle(noteTitle, note),
-                      }
+                        ...p,
+                        note,
+                        noteTitle: deriveNoteTitleValue(noteTitle, note),
+                    }
                     : p
             )
         );
     }, []);
 
+    const applyNoteToWaypointState = useCallback((waypointId, { note, noteTitle, timestamp }) => {
+        // We need to update gpxTrack state because that's the source of truth for waypoints now
+        setGpxTrack((prevTrack) => {
+            if (!prevTrack) return prevTrack;
+            
+            const updatedWaypoints = (prevTrack.waypoints || []).map((wp, idx) => {
+                // Construct ID to match normalizeWaypoint logic: `waypoint-${gpxFileName}-${index}`
+                // Since we have single track, we use the source or 'track' as filename part
+                const filename = prevTrack.source || gpxFile?.object_key || 'track';
+                const id = `waypoint-${filename}-${idx}`;
+                
+                if (id === waypointId) {
+                    return {
+                        ...wp,
+                        note: note !== undefined ? note : wp.note,
+                        title: noteTitle !== undefined ? noteTitle : (wp.title || wp.name),
+                        time: timestamp ? new Date(timestamp).toISOString() : wp.time
+                    };
+                }
+                return wp;
+            });
+
+            return {
+                ...prevTrack,
+                waypoints: updatedWaypoints
+            };
+        });
+    }, [gpxFile]);
+
     const handleNoteSave = useCallback(
-        async ({ photoId, metadataId, note, noteTitle }) => {
+        async ({ itemType = 'photo', photoId, waypointId, metadataId, note, noteTitle, timestamp }) => {
+            if (itemType === 'waypoint' && waypointId) {
+                applyNoteToWaypointState(waypointId, { note, noteTitle, timestamp });
+                // TODO: Persist waypoint changes to backend (not yet implemented in API)
+                return;
+            }
+
             if (!photoId && !metadataId) return;
             const targetId = metadataId || photoId;
             const previous = photos.find((p) => p.id === photoId);
@@ -434,7 +567,7 @@ const TripDetailPage = () => {
                 alert('Failed to save note. Please try again.');
             }
         },
-        [applyNoteToPhotoState, photos]
+        [applyNoteToPhotoState, applyNoteToWaypointState, photos]
     );
 
     useEffect(() => {
@@ -449,6 +582,73 @@ const TripDetailPage = () => {
         window.addEventListener('photoNoteUpdated', handleExternalNoteUpdate);
         return () => window.removeEventListener('photoNoteUpdated', handleExternalNoteUpdate);
     }, [applyNoteToPhotoState]);
+
+    const handleAddPhoto = useCallback(async (fileList) => {
+        if (!tripId) return;
+        setPhotosLoading(true);
+        try {
+            const uploads = Array.from(fileList).map(file => uploadFile(file, tripId));
+            const results = await Promise.all(uploads);
+            
+            // Dispatch events for other components (like ImageLayer)
+            window.dispatchEvent(new CustomEvent('imageUploaded'));
+            
+            results.forEach(result => {
+                if (result && result.has_gps && result.gps) {
+                    window.dispatchEvent(new CustomEvent('imageUploadedWithGPS', {
+                        detail: {
+                            object_key: result.object_key || result.metadata_id, // Fallback if object_key missing
+                            original_filename: result.filename,
+                            thumb_url: result.file_url, // Or construct if needed
+                            gps: result.gps,
+                            metadata_id: result.metadata_id
+                        }
+                    }));
+                }
+            });
+
+            // Refresh list after upload
+            await loadTripPhotos();
+            await refreshTripStats();
+        } catch (error) {
+            console.error('Failed to upload photos:', error);
+            alert('Failed to upload some photos. Please try again.');
+        } finally {
+            setPhotosLoading(false);
+        }
+    }, [tripId, loadTripPhotos, refreshTripStats]);
+
+    const handleAddUrl = useCallback(() => {
+        // Placeholder for future implementation
+        const url = prompt("Enter photo URL (not yet fully implemented):");
+        if (url) {
+            console.log("Adding URL:", url);
+            alert("URL adding is not yet supported by the backend.");
+        }
+    }, []);
+
+    const handleDeletePhoto = useCallback(async (itemId) => {
+        if (!itemId) return;
+
+        // Check if it's a photo (not a waypoint)
+        const photo = photos.find(p => p.id === itemId);
+        if (!photo) {
+            console.warn("Item to delete not found or is not a photo:", itemId);
+            return;
+        }
+
+        try {
+            // Assuming itemId is the object_key or filename
+            await deleteImage(photo.fileName || photo.objectKey);
+
+            // Optimistic update or refresh
+            setPhotos(prev => prev.filter(p => p.id !== itemId));
+            await refreshTripStats();
+        } catch (error) {
+            console.error('Failed to delete photo:', error);
+            alert('Failed to delete photo. Please try again.');
+        }
+    }, [photos, refreshTripStats]);
 
     const handleTripChange = (event) => {
         const newTripId = event.target.value;
@@ -514,8 +714,6 @@ const TripDetailPage = () => {
                 <TripSidebar
                     tripId={tripId}
                     trip={trip}
-                    selectedRivers={selectedRivers}
-                    setSelectedRivers={setSelectedRivers}
                     stats={tripStats}
                     onTripDataChange={handleTripDataChange}
                     notice={tripNotice}
@@ -540,7 +738,13 @@ const TripDetailPage = () => {
                             tripId={tripId}
                             onImageSelected={handleMapPhotoSelected}
                             mapRef={mapRef}
+                            // GPX Props (Refactored)
+                            gpxTrack={gpxTrack}
+                            highlightedItemId={highlightedItemId}
                         />
+                        {gpxTrack && gpxTrack.summary && (
+                            <TripStatsHUD trackSummary={gpxTrack.summary} />
+                        )}
                     </main>
                     {timelineMode === 'side' && (
                         <>
@@ -551,28 +755,39 @@ const TripDetailPage = () => {
                                 aria-orientation="vertical"
                                 aria-label="Resize timeline"
                             />
-                            <PhotoTimelinePanel
-                                photos={orderedPhotos}
-                                selectedPhotoId={selectedPhotoId}
-                                onSelectPhoto={(photo) => handleSelectPhoto(photo, { openViewer: true, centerMap: true })}
-                                isOpen
-                                mode="side"
-                                loading={photosLoading}
-                                onEditNote={handleNoteSave}
-                            />
+                            <div style={{ width: 'var(--timeline-width)', flex: '0 0 var(--timeline-width)', height: '100%', borderLeft: '1px solid #e2e8f0' }}>
+                                <TimelinePanel
+                                    items={timelineItems}
+                                    onAddPhoto={handleAddPhoto}
+                                    onAddUrl={handleAddUrl}
+                                    onUpdateItem={handleNoteSave}
+                                    onDeleteItem={handleDeletePhoto}
+                                    onItemClick={(item) => handleSelectPhoto(item, { openViewer: true, centerMap: true })}
+                                    onItemHover={(id, isHovering) => setHighlightedItemId(isHovering ? id : null)}
+                                />
+                            </div>
                         </>
                     )}
                     {timelineMode !== 'side' && (
-                        <PhotoTimelinePanel
-                            photos={orderedPhotos}
-                            selectedPhotoId={selectedPhotoId}
-                            onSelectPhoto={(photo) => handleSelectPhoto(photo, { openViewer: true, centerMap: true })}
-                            isOpen={timelineOpen}
-                            mode={timelineMode === 'sheet' ? 'sheet' : 'overlay'}
-                            onClose={() => setTimelineOpen(false)}
-                            loading={photosLoading}
-                            onEditNote={handleNoteSave}
-                        />
+                        <div
+                            className={`absolute z-[1200] bg-white shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ${timelineMode === 'sheet'
+                                ? 'left-0 right-0 bottom-0 h-[70vh] rounded-t-2xl border-t border-slate-200'
+                                : 'right-4 top-4 bottom-4 w-[400px] max-w-[calc(100vw-32px)] rounded-2xl border border-slate-200'
+                                }`}
+                        >
+                            <div className="flex justify-end p-2 border-b border-slate-100 bg-slate-50">
+                                <button onClick={() => setTimelineOpen(false)} className="text-slate-500 hover:text-slate-700 text-sm font-medium px-2 py-1">Close</button>
+                            </div>
+                            <TimelinePanel
+                                items={timelineItems}
+                                onAddPhoto={handleAddPhoto}
+                                onAddUrl={handleAddUrl}
+                                onUpdateItem={handleNoteSave}
+                                onDeleteItem={handleDeletePhoto}
+                                onItemClick={(item) => handleSelectPhoto(item, { openViewer: true, centerMap: true })}
+                                onItemHover={(id, isHovering) => setHighlightedItemId(isHovering ? id : null)}
+                            />
+                        </div>
                     )}
                 </div>
             </div>

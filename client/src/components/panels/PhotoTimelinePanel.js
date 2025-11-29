@@ -1,5 +1,6 @@
 // client/src/components/panels/PhotoTimelinePanel.js
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import '../../styles/PhotoTimelinePanel.css';
 
 const sortChronologically = (a, b) => {
@@ -15,7 +16,7 @@ const formatDate = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     return 'Unknown date';
   }
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 const formatTime = (date) => {
@@ -25,31 +26,53 @@ const formatTime = (date) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
-const buildGroups = (photos) => {
-  const groups = [];
-  let dayCounter = 0;
-  let lastDayKey = null;
+const formatDayPeriod = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const hour = date.getHours();
+  if (hour < 6) return '清晨';
+  if (hour < 12) return '上午';
+  if (hour < 18) return '下午';
+  return '晚上';
+};
 
-  photos.forEach((photo) => {
-    const dayKey = photo.capturedDate ? photo.capturedDate.toISOString().slice(0, 10) : 'unknown';
-    if (dayKey !== lastDayKey) {
-      lastDayKey = dayKey;
-      const isUnknown = dayKey === 'unknown';
-      if (!isUnknown) {
-        dayCounter += 1;
-      }
-      groups.push({
-        id: dayKey,
-        label: isUnknown ? 'Unknown time' : `Day ${dayCounter}`,
-        dateLabel: isUnknown ? 'Ungrouped captures' : formatDate(photo.capturedDate),
-        photos: [],
-        isUnknown,
-      });
+const hasMarkdown = (note) => {
+  if (!note) return false;
+  const markdownPattern = /(\*\*|__|`|#|\[.+?\]\(.+?\)|-\s)/g;
+  return markdownPattern.test(note);
+};
+
+const getItemMeta = (item) => {
+  if (item.type === 'waypoint') {
+    return {
+      icon: '📍',
+      className: 'timeline-entry--waypoint',
+      label: 'Waypoint',
+    };
+  }
+  return {
+    icon: '📷',
+    className: 'timeline-entry--photo',
+    label: 'Photo',
+  };
+};
+
+const getSubtitle = (item) => {
+  if (item.type === 'waypoint') {
+    if (Number.isFinite(item.elev)) {
+      return `${Math.round(item.elev)}m elevation`;
     }
-    groups[groups.length - 1].photos.push(photo);
-  });
+    return 'Waypoint imported from GPX track';
+  }
+  return formatDate(item.capturedDate);
+};
 
-  return groups;
+const getTitle = (item) => {
+  if (item?.noteTitle) return item.noteTitle;
+  if (item?.note && item.type === 'waypoint') return item.note.split('\n')[0];
+  if (item?.fileName) return item.fileName;
+  return item.type === 'waypoint' ? 'Waypoint' : 'Untitled photo';
 };
 
 function PhotoTimelinePanel({
@@ -58,7 +81,7 @@ function PhotoTimelinePanel({
   onSelectPhoto,
   onEditNote,
   isOpen = true,
-  mode = 'side', // side | overlay | sheet
+  mode = 'side',
   onClose,
   loading = false,
 }) {
@@ -66,77 +89,84 @@ function PhotoTimelinePanel({
   const rowRefs = useRef({});
   const [editingId, setEditingId] = useState(null);
   const [draftNote, setDraftNote] = useState('');
-  const [expandedId, setExpandedId] = useState(null);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [localSelectionId, setLocalSelectionId] = useState(null);
 
-  const orderedPhotos = useMemo(() => {
-    return [...photos].sort(sortChronologically);
-  }, [photos]);
-
-  const groups = useMemo(() => buildGroups(orderedPhotos), [orderedPhotos]);
+  const orderedItems = useMemo(() => [...photos].sort(sortChronologically), [photos]);
+  const activeSelectionId = selectedPhotoId || localSelectionId;
+  const canEditTimelineItems = typeof onEditNote === 'function';
 
   useEffect(() => {
-    if (!isOpen || !selectedPhotoId) return;
-    const node = rowRefs.current[selectedPhotoId];
+    if (!isOpen || !activeSelectionId) return;
+    const node = rowRefs.current[activeSelectionId];
     if (node && typeof node.scrollIntoView === 'function') {
       node.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  }, [selectedPhotoId, isOpen]);
+  }, [activeSelectionId, isOpen]);
 
-  const deriveTitle = (photo) => {
-    // Only use explicit noteTitle, not the first line of note
-    if (photo?.noteTitle) return photo.noteTitle;
-    // Fallback to filename if no explicit title
-    return photo?.fileName || '';
-  };
-
-  const deriveSnippet = (photo, isExpanded) => {
-    if (!photo?.note) return '';
-    // PM requirement: show full text by default, only truncate very long notes
-    if (isExpanded || photo.note.length <= 500) {
-      return photo.note;
+  useEffect(() => {
+    if (selectedPhotoId) {
+      setLocalSelectionId(null);
     }
-    // Only truncate extremely long notes (>500 chars)
-    const snippet = photo.note.slice(0, 500);
-    return `${snippet}…`;
-  };
+  }, [selectedPhotoId]);
 
-  const toggleExpand = (photoId, event) => {
-    if (event) event.stopPropagation();
-    setExpandedId(expandedId === photoId ? null : photoId);
-  };
-
-  const handlePhotoClick = (photo, event) => {
-    // If clicking on the thumbnail, toggle expand
-    if (event.target.tagName === 'IMG' || event.target.closest('.thumb-cell')) {
-      toggleExpand(photo.id, event);
-    } else if (onSelectPhoto) {
-      onSelectPhoto(photo);
-    }
-  };
-
-  const startEdit = (photo, event) => {
-    if (event) event.stopPropagation();
-    setEditingId(photo.id);
-    setDraftNote(photo.note || '');
-  };
-
-  const cancelEdit = (event) => {
-    if (event) event.stopPropagation();
+  const closeEditor = () => {
     setEditingId(null);
     setDraftNote('');
+    setDraftTitle('');
   };
 
-  const saveEdit = (photo, event) => {
+  const startEdit = (item, event) => {
+    if (event) event.stopPropagation();
+    if (!canEditTimelineItems) return;
+    setEditingId(item.id);
+    setDraftNote(item.note || '');
+    setDraftTitle(item.noteTitle || '');
+  };
+
+  const saveEdit = (item, event) => {
     if (event) event.stopPropagation();
     if (typeof onEditNote === 'function') {
       onEditNote({
-        photoId: photo.id,
-        metadataId: photo.metadataId,
+        itemType: item.type,
+        photoId: item.type === 'photo' ? item.id : null,
+        waypointId: item.type === 'waypoint' ? item.id : null,
+        metadataId: item.metadataId,
         note: draftNote,
-        noteTitle: deriveTitle({ ...photo, note: draftNote }),
+        noteTitle: draftTitle || null,
       });
     }
-    setEditingId(null);
+    closeEditor();
+  };
+
+  const handleWaypointFocus = (item) => {
+    setLocalSelectionId(item.id);
+    if (typeof window === 'undefined') return;
+    if (item.lat === null || item.lon === null) return;
+    window.dispatchEvent(
+      new CustomEvent('centerMapOnLocation', {
+        detail: {
+          lat: item.lat,
+          lng: item.lon,
+          source: 'timeline-waypoint',
+        },
+      })
+    );
+  };
+
+  const handleActivate = (item) => {
+    if (item.type === 'photo') {
+      onSelectPhoto && onSelectPhoto(item);
+      return;
+    }
+    handleWaypointFocus(item);
+  };
+
+  const handleCardKeyDown = (item, event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleActivate(item);
+    }
   };
 
   if (!isOpen && mode !== 'side') {
@@ -147,9 +177,9 @@ function PhotoTimelinePanel({
     <section className={`PhotoTimelinePanel mode-${mode} ${isOpen ? 'open' : 'closed'}`}>
       <header className="timeline-header">
         <div>
-          <p className="eyebrow">Trip Photo Timeline</p>
-          <h3>{orderedPhotos.length ? `${orderedPhotos.length} photos` : 'No photos yet'}</h3>
-          <p className="subtitle">Chronological • Date Taken (captured_at)</p>
+          <p className="eyebrow">Trip Timeline</p>
+          <h3>{orderedItems.length ? `${orderedItems.length} recorded moments` : 'No items yet'}</h3>
+          <p className="subtitle">Photos and GPX waypoints are merged chronologically.</p>
         </div>
         {mode !== 'side' && (
           <button className="timeline-close" type="button" onClick={onClose}>
@@ -159,165 +189,123 @@ function PhotoTimelinePanel({
       </header>
 
       <div className="timeline-scroll" ref={listRef}>
-        {loading && <div className="timeline-empty">Loading photos…</div>}
-        {!loading && orderedPhotos.length === 0 && (
+        {loading && <div className="timeline-empty">Loading timeline…</div>}
+        {!loading && orderedItems.length === 0 && (
           <div className="timeline-empty">
-            <p>No trip photos available yet.</p>
-            <p className="muted">Uploads will appear here ordered by their Date Taken.</p>
+            <p>No trip photos or waypoints available yet.</p>
+            <p className="muted">Uploads and GPX tracks will appear here ordered by their timestamp.</p>
           </div>
         )}
 
-        {!loading && groups.map((group) => (
-          <div key={group.id} className="timeline-group">
-            <div className="timeline-day">
-              <span className="day-label">{group.label}</span>
-              <span className="day-date">{group.dateLabel}</span>
-            </div>
-            {group.photos.map((photo) => {
-              const isSelected = selectedPhotoId === photo.id;
-              const isEditing = editingId === photo.id;
-              const isExpanded = expandedId === photo.id;
-              const title = deriveTitle(photo);
-              const snippet = deriveSnippet(photo, isExpanded);
-              const hasLocation = photo.lat !== null && photo.lon !== null;
+        {!loading && orderedItems.map((item, index) => {
+          const meta = getItemMeta(item);
+          const subtitle = getSubtitle(item);
+          const title = getTitle(item);
+          const note = item.note || '';
+          const rowKey = item.id || `${item.type}-${index}`;
+          const isSelected = activeSelectionId === item.id;
+          const isEditing = editingId === item.id;
+          const canEdit = canEditTimelineItems;
+          const placeholderText = item.type === 'photo' ? 'Add a note about this moment…' : 'Add notes for this waypoint…';
+          const showNoteBody = Boolean(note);
+          const hasMediaAsset = item.type === 'photo' && (item.thumbnailUrl || item.imageUrl);
+          const timeLabel = formatTime(item.capturedDate);
+          const timePeriod = formatDayPeriod(item.capturedDate);
 
-              return (
-                <article
-                  key={photo.id}
-                  ref={(el) => {
-                    if (el) {
-                      rowRefs.current[photo.id] = el;
-                    } else {
-                      delete rowRefs.current[photo.id];
-                    }
-                  }}
-                  className={`timeline-row ${isSelected ? 'selected' : ''} ${isExpanded ? 'expanded' : ''}`}
+          return (
+            <div
+              key={rowKey}
+              className={`timeline-entry ${meta.className} ${isSelected ? 'selected' : ''}`}
+              ref={(el) => {
+                if (el) {
+                  rowRefs.current[item.id || rowKey] = el;
+                } else {
+                  delete rowRefs.current[item.id || rowKey];
+                }
+              }}
+            >
+              <div className="timeline-track" aria-hidden="true" />
+              <div className="timeline-header-row">
+                <div className="timeline-node" aria-label={meta.label} role="img">
+                  {meta.icon}
+                </div>
+                <time className="timeline-time" dateTime={item.capturedAt || undefined}>
+                  {timePeriod && <span className="timeline-time-period">{timePeriod}</span>}
+                  <span className="timeline-time-clock">{timeLabel}</span>
+                </time>
+              </div>
+              <div className="timeline-card-wrapper">
+                <div
+                  className="timeline-card"
                   role="button"
                   tabIndex={0}
-                  onClick={(e) => handlePhotoClick(photo, e)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onSelectPhoto && onSelectPhoto(photo);
-                    }
-                  }}
+                  onClick={() => handleActivate(item)}
+                  onKeyDown={(event) => handleCardKeyDown(item, event)}
                 >
-                  {isSelected && <span className="accent-bar" aria-hidden="true" />}
-                  
-                  <div className="timeline-item-header">
-                    <div className="time-cell">{formatTime(photo.capturedDate)}</div>
-                    {photo.capturedSource === 'fallback' && (
-                      <div className="meta-pill" title="Date Taken missing; using upload time">
-                        Fallback time
-                      </div>
+                  <div className="timeline-card-header">
+                    <div className="timeline-card-text">
+                      <p className="timeline-card-title">{title}</p>
+                      <p className="timeline-card-subtitle">{subtitle}</p>
+                    </div>
+                    {canEdit && !isEditing && (
+                      <button
+                        type="button"
+                        className="timeline-edit-btn"
+                        onClick={(event) => startEdit(item, event)}
+                        aria-label={`Edit note for ${title}`}
+                      >
+                        ✏️
+                      </button>
                     )}
                   </div>
 
-                  <div className="timeline-content-wrapper">
-                    <div 
-                      className="thumb-cell"
-                      onClick={(e) => toggleExpand(photo.id, e)}
-                      title={isExpanded ? 'Click to view smaller' : 'Click to view larger'}
-                      role="button"
-                      aria-label={isExpanded ? 'Collapse image' : 'Expand image to full size'}
-                    >
-                      <img 
-                        src={isExpanded ? photo.imageUrl : (photo.thumbnailUrl || photo.imageUrl)} 
-                        alt={title || photo.fileName}
+                  {hasMediaAsset && !isEditing && (
+                    <div className="timeline-media" role="presentation">
+                      <img
+                        src={item.thumbnailUrl || item.imageUrl}
+                        alt={title}
                         loading="lazy"
                       />
                     </div>
-                    
-                    <div className="text-cell">
-                      {/* Only show title heading if there's no note, or if there's an explicit noteTitle different from the note */}
-                      {(!snippet || (photo.noteTitle && photo.noteTitle !== snippet)) && (
-                        <h4 className="primary">{title || photo.fileName}</h4>
-                      )}
-                      {!isEditing && snippet && (
-                        <div className="secondary">
-                          {snippet}
-                        </div>
-                      )}
-                      {!isEditing && !snippet && (
-                        <div className="secondary">
-                          <span className="muted">Add a note about this moment…</span>
-                        </div>
-                      )}
-                      {hasLocation && (
-                        <button 
-                          className="view-on-map-link"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectPhoto && onSelectPhoto(photo);
-                          }}
-                          title="Center map on this photo location"
-                          aria-label={`View ${title || photo.fileName} on map`}
-                        >
-                          📍 View on map
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {isEditing && (
-                    <div className="note-editor" onClick={(e) => e.stopPropagation()}>
-                      <textarea
-                        value={draftNote}
-                        onChange={(e) => setDraftNote(e.target.value)}
-                        placeholder="Add a note about this moment… Share the story behind the photo."
-                        autoFocus
-                      />
-                      <div className="note-actions">
-                        <button type="button" onClick={(e) => saveEdit(photo, e)}>
-                          Save Note
-                        </button>
-                        <button type="button" className="ghost" onClick={cancelEdit}>
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
                   )}
 
-                  <div className="timeline-item-footer">
-                    <div className="actions-cell">
-                      {!isEditing && (
-                        <button 
-                          type="button" 
-                          className="ghost small" 
-                          onClick={(e) => startEdit(photo, e)}
-                          aria-label={`Edit note for ${title || photo.fileName}`}
-                        >
-                          ✏️ Edit note
-                        </button>
-                      )}
-                      {/* Only show Read more for very long notes (>500 chars) */}
-                      {(photo.note && photo.note.length > 500) && !isExpanded && (
-                        <button
-                          type="button"
-                          className="expand-toggle"
-                          onClick={(e) => toggleExpand(photo.id, e)}
-                          aria-label="Read full note"
-                        >
-                          Read more →
-                        </button>
-                      )}
-                      {isExpanded && (
-                        <button
-                          type="button"
-                          className="expand-toggle"
-                          onClick={(e) => toggleExpand(photo.id, e)}
-                          aria-label="Show less"
-                        >
-                          ← Show less
-                        </button>
-                      )}
-                    </div>
+                  <div className="timeline-card-body">
+                    {isEditing ? (
+                      <div className="timeline-edit-form" onClick={(event) => event.stopPropagation()}>
+                        <input
+                          type="text"
+                          value={draftTitle}
+                          onChange={(event) => setDraftTitle(event.target.value)}
+                          placeholder="Title"
+                        />
+                        <textarea
+                          value={draftNote}
+                          onChange={(event) => setDraftNote(event.target.value)}
+                          placeholder="Write the story behind this moment…"
+                          rows={4}
+                        />
+                        <div className="timeline-card-actions">
+                          <button type="button" className="ghost" onClick={closeEditor}>
+                            Cancel
+                          </button>
+                          <button type="button" onClick={(event) => saveEdit(item, event)}>
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : showNoteBody ? (
+                      <div className="timeline-note">
+                        {hasMarkdown(note) ? <ReactMarkdown>{note}</ReactMarkdown> : <p>{note}</p>}
+                      </div>
+                    ) : (
+                      <p className="timeline-note placeholder">{placeholderText}</p>
+                    )}
                   </div>
-                </article>
-              );
-            })}
-          </div>
-        ))}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </section>
   );

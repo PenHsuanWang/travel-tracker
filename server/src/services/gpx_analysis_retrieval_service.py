@@ -141,6 +141,12 @@ class GpxAnalysisRetrievalService:
     ) -> Dict[str, Any]:
         """Return a serializable payload from an analyzed track object."""
         summary = metadata_summary or GpxAnalysisService.extract_track_summary(analyzed_track)
+        
+        # Ensure elevation profile is present (for backward compatibility with old metadata)
+        if 'elevation_profile' not in summary:
+            full_summary = GpxAnalysisService.extract_track_summary(analyzed_track)
+            summary['elevation_profile'] = full_summary.get('elevation_profile')
+
         return {
             "coordinates": self.extract_coordinates(analyzed_track),
             "waypoints": self.extract_waypoints(analyzed_track),
