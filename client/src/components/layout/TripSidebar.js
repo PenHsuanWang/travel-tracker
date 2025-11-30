@@ -49,7 +49,8 @@ function TripSidebar({
     trip,
     stats,
     onTripDataChange,
-    notice
+    notice,
+    readOnly
 }) {
     return (
         <aside className="Sidebar">
@@ -60,7 +61,7 @@ function TripSidebar({
                 </div>
             )}
 
-            <ImageGalleryPanel tripId={tripId} onDataChange={onTripDataChange} />
+            <ImageGalleryPanel tripId={tripId} onDataChange={onTripDataChange} readOnly={readOnly} />
         </aside>
     );
 }

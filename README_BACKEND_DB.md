@@ -133,6 +133,7 @@ graph RL
         FRS["FileRetrievalService"]
         GARS["GpxAnalysisRetrievalService"]
         PNS["PhotoNoteService"]
+        AUTH["AuthService"]
     end
 
     subgraph "Storage Layer"
@@ -153,12 +154,15 @@ graph RL
     GARS -- "Reads Analysis Summaries from Metadata" --> MONGO
     
     PNS -- "Updates Notes & Order in File Metadata" --> MONGO
+    
+    AUTH -- "Reads/Writes User Credentials" --> MONGO
 
     style FUS fill:#cde4ff,stroke:#6a8ebf
     style TS fill:#cde4ff,stroke:#6a8ebf
     style FRS fill:#cde4ff,stroke:#6a8ebf
     style GARS fill:#cde4ff,stroke:#6a8ebf
     style PNS fill:#cde4ff,stroke:#6a8ebf
+    style AUTH fill:#cde4ff,stroke:#6a8ebf
 
     style MINIO fill:#d5e8d4,stroke:#82b366
     style MONGO fill:#d5e8d4,stroke:#82b366
@@ -167,6 +171,18 @@ graph RL
 ## 5. Service-Level Storage Interaction
 
 This section details which services interact with the storage layer and for what purpose.
+
+### `auth_routes.py` & `auth.py`
+
+-   **Module:** `auth` / `auth_routes`
+-   **Purpose:** Manages user authentication, registration, and token validation.
+-   **Functions & Storage Interaction:**
+    -   `register_user()`:
+        -   **MongoDB:** Checks if a username exists in the `users` collection. If not, inserts a new user document with hashed password and profile details.
+    -   `login_for_access_token()`:
+        -   **MongoDB:** Retrieves a user document from the `users` collection by username to verify the password hash.
+    -   `get_current_user()`:
+        -   **MongoDB:** Retrieves a user document from the `users` collection to validate the subject (`sub`) claim of the JWT token.
 
 ### `file_upload_service.py`
 

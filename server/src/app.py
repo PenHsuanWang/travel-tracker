@@ -1,6 +1,7 @@
 # server/src/app.py
 
 from dotenv import load_dotenv
+import os
 load_dotenv()  # Load environment variables from .env file
 
 from fastapi import FastAPI
@@ -10,16 +11,19 @@ from fastapi.middleware.gzip import GZipMiddleware
 from src.routes.map_routes import router as map_router
 from src.routes.gis_routes import router as gis_router
 from src.routes.file_upload_routes import router as file_upload_router
-from src.routes.file_upload_routes import router as file_upload_router
 from src.routes.file_retrieval_routes import router as file_retrieval_router
 from src.routes.trip_routes import router as trip_router
+from src.routes.auth_routes import router as auth_router
 
 app = FastAPI()
 
 # Enable CORS
+# In production, ALLOWED_ORIGINS should be set to the specific frontend domain
+origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,6 +42,8 @@ app.include_router(file_upload_router, prefix="/api/map")
 app.include_router(file_retrieval_router, prefix="/api")
 # Trip routes
 app.include_router(trip_router, prefix="/api/trips")
+# Auth routes
+app.include_router(auth_router, prefix="/api/auth")
 
 if __name__ == "__main__":
     import uvicorn

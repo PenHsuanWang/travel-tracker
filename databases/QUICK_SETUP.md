@@ -82,6 +82,11 @@ MINIO_SECRET_KEY=minioadmin
 MINIO_SECURE=false
 MONGODB_URI=mongodb://localhost:27017/
 MONGODB_DB=travel_tracker
+SECRET_KEY=your_super_secret_key_change_this_in_production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REGISTRATION_KEY=admin_secret_key
+ALLOWED_ORIGINS=*
 EOF
 ```
 

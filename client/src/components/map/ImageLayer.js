@@ -18,7 +18,7 @@ export async function fetchGeotaggedImagesForTrip(fetcher = getGeotaggedImages, 
  * Renders markers for geotagged images on the map using react-leaflet.
  * This component works with the Leaflet map from react-leaflet's useMap hook.
  */
-function ImageLayer({ onImageSelected = null, tripId = null }) {
+function ImageLayer({ onImageSelected = null, tripId = null, readOnly = false }) {
   const map = useMap();
   const [markers, setMarkers] = useState({});
   const markersRef = useRef({});
@@ -118,7 +118,7 @@ function ImageLayer({ onImageSelected = null, tripId = null }) {
           });
 
           // Create popup content with thumbnail
-          const popupContent = createPopupContent(image, handleMarkerSelected);
+          const popupContent = createPopupContent(image, handleMarkerSelected, readOnly);
           marker.bindPopup(popupContent, { maxWidth: 300 });
           const handler = registerMarkerEvents(marker, image);
 
@@ -198,7 +198,7 @@ function ImageLayer({ onImageSelected = null, tripId = null }) {
           metadata_id,
         };
 
-        const popupContent = createPopupContent(image, handleMarkerSelected);
+        const popupContent = createPopupContent(image, handleMarkerSelected, readOnly);
         marker.bindPopup(popupContent, { maxWidth: 300 });
         const handler = registerMarkerEvents(marker, image);
         marker.addTo(map);
@@ -321,7 +321,7 @@ function getDisplayName(filename) {
 /**
  * Create HTML content for marker popup
  */
-function createPopupContent(image, onMarkerSelected) {
+function createPopupContent(image, onMarkerSelected, readOnly) {
   const displayName = getDisplayName(image.original_filename);
   const truncatedName = displayName.length > 30
     ? `${displayName.substring(0, 27)}...`
@@ -391,85 +391,87 @@ function createPopupContent(image, onMarkerSelected) {
   const noteDisplay = document.createElement('div');
   noteDisplay.className = 'image-popup-note-display';
   const existingNote = image.note || '';
-  noteDisplay.textContent = existingNote || 'Add a note about this moment…';
+  noteDisplay.textContent = existingNote || (readOnly ? 'No note added.' : 'Add a note about this moment…');
   if (!existingNote) {
     noteDisplay.classList.add('muted');
   }
   noteContainer.appendChild(noteDisplay);
 
-  const noteEditor = document.createElement('textarea');
-  noteEditor.className = 'image-popup-note-editor';
-  noteEditor.value = existingNote;
-  noteEditor.style.display = 'none';
-  noteContainer.appendChild(noteEditor);
-
-  const noteActions = document.createElement('div');
-  noteActions.className = 'image-popup-note-actions';
-  noteActions.style.display = 'none';
-  const saveBtn = document.createElement('button');
-  saveBtn.type = 'button';
-  saveBtn.textContent = 'Save';
-  const cancelBtn = document.createElement('button');
-  cancelBtn.type = 'button';
-  cancelBtn.className = 'ghost';
-  cancelBtn.textContent = 'Cancel';
-  noteActions.appendChild(saveBtn);
-  noteActions.appendChild(cancelBtn);
-  noteContainer.appendChild(noteActions);
-
-  const toggleEditor = (show) => {
-    noteEditor.style.display = show ? 'block' : 'none';
-    noteActions.style.display = show ? 'flex' : 'none';
-    noteDisplay.style.display = show ? 'none' : 'block';
-    if (show) {
-      noteEditor.focus();
-      noteEditor.selectionStart = noteEditor.value.length;
-    }
-  };
-
-  noteDisplay.addEventListener('click', (event) => {
-    event.stopPropagation();
-    toggleEditor(true);
-  });
-
-  cancelBtn.addEventListener('click', (event) => {
-    event.stopPropagation();
+  if (!readOnly) {
+    const noteEditor = document.createElement('textarea');
+    noteEditor.className = 'image-popup-note-editor';
     noteEditor.value = existingNote;
-    toggleEditor(false);
-  });
+    noteEditor.style.display = 'none';
+    noteContainer.appendChild(noteEditor);
 
-  saveBtn.addEventListener('click', async (event) => {
-    event.stopPropagation();
-    const newNote = noteEditor.value;
-    try {
-      await updatePhotoNote(detail.metadata_id || detail.object_key, {
-        note: newNote,
-        note_title: newNote ? newNote.split('\n')[0] : null,
-      });
-      noteDisplay.textContent = newNote || 'Add a note about this moment…';
-      if (newNote) {
-        noteDisplay.classList.remove('muted');
-      } else {
-        noteDisplay.classList.add('muted');
+    const noteActions = document.createElement('div');
+    noteActions.className = 'image-popup-note-actions';
+    noteActions.style.display = 'none';
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.textContent = 'Save';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'ghost';
+    cancelBtn.textContent = 'Cancel';
+    noteActions.appendChild(saveBtn);
+    noteActions.appendChild(cancelBtn);
+    noteContainer.appendChild(noteActions);
+
+    const toggleEditor = (show) => {
+      noteEditor.style.display = show ? 'block' : 'none';
+      noteActions.style.display = show ? 'flex' : 'none';
+      noteDisplay.style.display = show ? 'none' : 'block';
+      if (show) {
+        noteEditor.focus();
+        noteEditor.selectionStart = noteEditor.value.length;
       }
+    };
+
+    noteDisplay.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleEditor(true);
+    });
+
+    cancelBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      noteEditor.value = existingNote;
       toggleEditor(false);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('photoNoteUpdated', {
-            detail: {
-              object_key: detail.object_key,
-              metadata_id: detail.metadata_id || detail.object_key,
-              note: newNote,
-              note_title: newNote ? newNote.split('\n')[0] : null,
-            },
-          })
-        );
+    });
+
+    saveBtn.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const newNote = noteEditor.value;
+      try {
+        await updatePhotoNote(detail.metadata_id || detail.object_key, {
+          note: newNote,
+          note_title: newNote ? newNote.split('\n')[0] : null,
+        });
+        noteDisplay.textContent = newNote || 'Add a note about this moment…';
+        if (newNote) {
+          noteDisplay.classList.remove('muted');
+        } else {
+          noteDisplay.classList.add('muted');
+        }
+        toggleEditor(false);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('photoNoteUpdated', {
+              detail: {
+                object_key: detail.object_key,
+                metadata_id: detail.metadata_id || detail.object_key,
+                note: newNote,
+                note_title: newNote ? newNote.split('\n')[0] : null,
+              },
+            })
+          );
+        }
+      } catch (err) {
+        console.error('[ImageLayer] Failed to save note', err);
+        alert('Failed to save note. Please try again.');
       }
-    } catch (err) {
-      console.error('[ImageLayer] Failed to save note', err);
-      alert('Failed to save note. Please try again.');
-    }
-  });
+    });
+  }
 
   container.appendChild(noteContainer);
 

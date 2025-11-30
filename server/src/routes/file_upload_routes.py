@@ -1,10 +1,12 @@
 # src/routes/file_upload_routes.py
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from src.controllers.file_upload_controller import FileUploadController
 from src.models.trip import Trip
+from src.auth import get_current_user
+from src.models.user import User
 
 router = APIRouter()
 
@@ -40,7 +42,8 @@ class UploadResponse(BaseModel):
 async def upload_file(
     file: UploadFile = File(...),
     uploader_id: Optional[str] = Query(None),
-    trip_id: Optional[str] = Query(None)
+    trip_id: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Upload a file and return metadata including EXIF data for images.
@@ -113,7 +116,7 @@ async def get_file_metadata(metadata_id: str):
 
 
 @router.delete("/delete/{filename:path}")
-async def delete_file(filename: str, bucket: str = Query(default="images")):
+async def delete_file(filename: str, bucket: str = Query(default="images"), current_user: User = Depends(get_current_user)):
     """
     Delete an image file and its metadata.
     

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { listImageFiles, getImageUrl, getFileMetadata, deleteImage } from '../../services/api';
 import '../../styles/ImageGalleryPanel.css';
 
-function ImageGalleryPanel({ tripId, onDataChange }) {
+function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
   const [imageFiles, setImageFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showImages, setShowImages] = useState(false);
@@ -487,14 +487,16 @@ function ImageGalleryPanel({ tripId, onDataChange }) {
                     {metadata?.gps && (
                       <div className="gps-indicator" title="Has GPS location">📍</div>
                     )}
-                    <button
-                      className="delete-button"
-                      onClick={(e) => handleDeleteImage(filename, e)}
-                      disabled={deleting === filename}
-                      title="Delete image"
-                    >
-                      {deleting === filename ? '⏳' : '🗑️'}
-                    </button>
+                    {!readOnly && (
+                      <button
+                        className="delete-button"
+                        onClick={(e) => handleDeleteImage(filename, e)}
+                        disabled={deleting === filename}
+                        title="Delete image"
+                      >
+                        {deleting === filename ? '⏳' : '🗑️'}
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -511,14 +513,16 @@ function ImageGalleryPanel({ tripId, onDataChange }) {
         <div className="image-modal" onClick={closeImageModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <button className="close-button" onClick={closeImageModal}>×</button>
-            <button
-              className="modal-delete-button"
-              onClick={(e) => handleDeleteImage(selectedImage, e)}
-              disabled={deleting === selectedImage}
-              title="Delete image"
-            >
-              {deleting === selectedImage ? '⏳ Deleting...' : '🗑️ Delete'}
-            </button>
+            {!readOnly && (
+              <button
+                className="modal-delete-button"
+                onClick={(e) => handleDeleteImage(selectedImage, e)}
+                disabled={deleting === selectedImage}
+                title="Delete image"
+              >
+                {deleting === selectedImage ? '⏳ Deleting...' : '🗑️ Delete'}
+              </button>
+            )}
             <div className="modal-layout">
               <div className="modal-image">
                 <img

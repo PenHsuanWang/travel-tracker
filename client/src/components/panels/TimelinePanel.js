@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 
 // --- TimelineItem Sub-component ---
 
-const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, isEditing, onEditToggle }) => {
+const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, isEditing, onEditToggle, readOnly }) => {
     const [editForm, setEditForm] = useState({
         title: item.title || '',
         timestamp: new Date(item.timestamp || Date.now()).toISOString().slice(0, 16), // Format for datetime-local
@@ -21,7 +21,7 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, isEdi
     }, [isEditing]);
 
     const handleCardClick = () => {
-        if (!isEditing) {
+        if (!isEditing && !readOnly) {
             onEditToggle(item.id);
         }
     };
@@ -245,7 +245,8 @@ const TimelinePanel = ({
     onUpdateItem,
     onDeleteItem,
     onItemClick,
-    onItemHover
+    onItemHover,
+    readOnly
 }) => {
     const fileInputRef = useRef(null);
     const [activeEditItemId, setActiveEditItemId] = useState(null);
@@ -274,30 +275,32 @@ const TimelinePanel = ({
                     <h1 className="text-2xl font-bold text-slate-800">Memories</h1>
                     <p className="text-sm text-slate-500">Capture your journey</p>
                 </div>
-                <div className="flex space-x-2">
-                    <button
-                        onClick={onAddUrl}
-                        className="flex items-center px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors shadow-sm"
-                    >
-                        <LinkIcon size={16} className="mr-2" />
-                        Add URL
-                    </button>
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center px-3 py-2 bg-indigo-600 rounded-lg text-sm font-medium text-white hover:bg-indigo-700 transition-colors shadow-sm"
-                    >
-                        <Camera size={16} className="mr-2" />
-                        Add Photos
-                    </button>
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileSelect}
-                        accept="image/*"
-                        multiple
-                        className="hidden"
-                    />
-                </div>
+                {!readOnly && (
+                    <div className="flex space-x-2">
+                        <button
+                            onClick={onAddUrl}
+                            className="flex items-center px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors shadow-sm"
+                        >
+                            <LinkIcon size={16} className="mr-2" />
+                            Add URL
+                        </button>
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex items-center px-3 py-2 bg-indigo-600 rounded-lg text-sm font-medium text-white hover:bg-indigo-700 transition-colors shadow-sm"
+                        >
+                            <Camera size={16} className="mr-2" />
+                            Add Photos
+                        </button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileSelect}
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Main Body Section (Journey Log) */}
@@ -323,6 +326,7 @@ const TimelinePanel = ({
                                     onHover={onItemHover}
                                     isEditing={activeEditItemId === item.id}
                                     onEditToggle={setActiveEditItemId}
+                                    readOnly={readOnly}
                                 />
                             ))
                         ) : (
