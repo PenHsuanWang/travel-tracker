@@ -18,7 +18,17 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     
     user_data = users_collection.find_one({"username": form_data.username})
     
-    if not user_data or not verify_password(form_data.password, user_data["hashed_password"]):
+    # Mitigate timing attacks by always performing password verification
+    if user_data:
+        password_valid = verify_password(form_data.password, user_data["hashed_password"])
+    else:
+        # Verify against a dummy hash to simulate work (prevents username enumeration)
+        # This is a valid bcrypt hash for "password"
+        dummy_hash = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J.fGqGZ9y"
+        verify_password(form_data.password, dummy_hash)
+        password_valid = False
+    
+    if not user_data or not password_valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",

@@ -1,6 +1,7 @@
 # server/src/app.py
 
 from dotenv import load_dotenv
+import os
 load_dotenv()  # Load environment variables from .env file
 
 from fastapi import FastAPI
@@ -17,9 +18,12 @@ from src.routes.auth_routes import router as auth_router
 app = FastAPI()
 
 # Enable CORS
+# In production, ALLOWED_ORIGINS should be set to the specific frontend domain
+origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
