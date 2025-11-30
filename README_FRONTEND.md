@@ -33,6 +33,7 @@ The application's primary navigation is defined in `App.js`, which sets up the f
     -   **Layout Management:** Serves as the main container integrating `TripSidebar`, `LeafletMapView`, and `TimelinePanel`
     -   **Trip Selector:** Header with quick-switch dropdown to navigate between trips and "Back to My Trips" link
     -   **State Management:** Manages photos, waypoints, GPX tracks, and timeline data with chronological sorting
+    -   **Access Control:** Determines `readOnly` status based on authentication. Propagates this state to child components (`TripSidebar`, `LeafletMapView`, `TimelinePanel`) to disable editing features for guest users.
     -   **Responsive Timeline:** Adaptive timeline display with three modes:
         -   **Side mode** (>1180px): Fixed-width resizable side panel
         -   **Overlay mode** (1024-1180px): Floating overlay on the right
@@ -43,11 +44,31 @@ The application's primary navigation is defined in `App.js`, which sets up the f
     -   **Photo Viewer:** Opens `PhotoViewerOverlay` for full-size image viewing with navigation
     -   **Event Communication:** Uses custom events for cross-component updates (imageUploaded, imageDeleted, photoNoteUpdated, centerMapOnLocation, mapImageSelected)
 
+### `/login` -> `LoginPage.js`
+
+-   **File:** `client/src/pages/LoginPage.js`
+-   **Purpose:** Allows users to authenticate with the system.
+-   **Functionality:**
+    -   **Form:** Captures username and password.
+    -   **Authentication:** Calls `authService.login` to retrieve a JWT.
+    -   **Redirection:** Redirects to the trips page upon successful login.
+
+### `/register` -> `RegisterPage.js`
+
+-   **File:** `client/src/pages/RegisterPage.js`
+-   **Purpose:** Allows new users to create an account.
+-   **Functionality:**
+    -   **Form:** Captures username, password, email, full name, and a registration key.
+    -   **Registration:** Calls `authService.register` to create a new user.
+    -   **Redirection:** Redirects to the login page upon successful registration.
+
 ## 3. Layout Components
 
 The consistent structure of the application is maintained by these components found in `client/src/components/layout/`.
 
--   **`Header.js`**: The top navigation bar displaying the application title/logo. Simple and clean design without cluttered navigation elements.
+-   **`Header.js`**: The top navigation bar displaying the application title/logo. It dynamically renders authentication controls:
+    -   **Guest**: Shows "Login" and "Register" links.
+    -   **Authenticated**: Shows "Hi, [Username]" and a "Logout" button.
 -   **`TripSidebar.js`**: The left-hand collapsible panel on the `TripDetailPage`. Contains:
     -   `TripSummaryCard`: Displays trip overview, name, region, dates, notes, and statistics (photo/track counts)
     -   `ImageGalleryPanel`: Photo browsing interface
@@ -93,7 +114,7 @@ These components provide the primary features of the application, mostly within 
         -   **User Interaction:**
             -   **Hover:** Displays tooltip with image filename
             -   **Click:** Opens popup with thumbnail, filename, coordinates, and note editor
-            -   **Note Editing:** In-popup text area for adding/updating photo notes with save button
+            -   **Note Editing:** In-popup text area for adding/updating photo notes (hidden in read-only mode).
             -   **View Details:** Button to open full photo viewer
         -   **Real-time Updates:** Listens for global events:
             -   `imageUploaded`: Adds new markers for uploaded photos
@@ -152,7 +173,7 @@ These components provide the primary features of the application, mostly within 
             -   **Hover:** Highlights corresponding marker on map
             -   **Edit button:** Opens inline editor for title and note (supports Markdown)
             -   **Delete button:** Removes item (photos only; waypoints are from GPX)
-        4.  **Add Actions:** 
+        4.  **Add Actions:** (Hidden in read-only mode)
             -   "Add Photo" button to upload new images
             -   "Add URL" button (placeholder for future web image import)
         5.  **Chronological Sorting:** Items automatically sorted by capture/waypoint timestamp
@@ -195,6 +216,19 @@ The application uses a combination of:
 
 ## 6. Key User Flows
 
+### Authentication
+1.  **Guest Access (View-Only):**
+    -   Users can view all trips, maps, and photos without logging in.
+    -   Editing controls (upload, delete, edit notes) are hidden.
+2.  **Login:**
+    -   User navigates to `/login`.
+    -   Enters credentials.
+    -   Upon success, is redirected to `/trips` with "Edit Mode" enabled.
+3.  **Registration:**
+    -   User navigates to `/register`.
+    -   Enters details and the required registration key.
+    -   Upon success, can proceed to login.
+
 ### Creating and Managing Trips
 1. User visits `/trips` and sees the trips list
 2. Clicks "+ New Trip" to open the creation modal
@@ -229,8 +263,9 @@ The application uses a combination of:
 ## 7. Technical Notes
 
 ### State Management
--   **Local Component State**: Most components use React `useState` and `useEffect` hooks
--   **Props Drilling**: Parent-to-child communication via props
+-   **Global Auth State:** `AuthContext.js` provides `user` and `isAuthenticated` state to the entire app via the Context API.
+-   **Local Component State:** Most components use React `useState` and `useEffect` hooks
+-   **Props Drilling:** Parent-to-child communication via props
 -   **Event-Based Communication**: Cross-component updates using custom DOM events:
     -   `imageUploaded`, `imageUploadedWithGPS`: Notify components of new photos
     -   `imageDeleted`: Trigger marker and gallery removal

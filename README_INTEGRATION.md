@@ -67,6 +67,17 @@ Each route renders a different React component, but all share the same HTML docu
 
 The following sections detail the API endpoints exposed by the backend and consumed by the frontend.
 
+### Authentication API
+
+-   **Prefix**: `/api/auth`
+-   **Frontend Service**: `client/src/services/authService.js`
+-   **Backend Router**: `server/src/routes/auth_routes.py`
+
+| Method | Endpoint    | Frontend Function | Description                                                                 |
+| :----- | :---------- | :---------------- | :-------------------------------------------------------------------------- |
+| `POST` | `/login`    | `login(...)`      | Authenticates a user. Expects `username` and `password` (OAuth2 form data). Returns a JWT access token. |
+| `POST` | `/register` | `register(...)`   | Registers a new user. Expects JSON body with `username`, `password`, `registration_key`, and optional `email`, `full_name`. |
+
 ### Trips API
 
 -   **Prefix**: `/api/trips`
@@ -133,7 +144,22 @@ This covers file uploads, metadata management, and raw file retrieval.
 
 ## 4. Key Interaction Flows
 
-### Flow 0: Viewing the Trips List Page
+### Flow 0: Authentication (Login)
+
+1.  **User Action**: User enters credentials on `/login` page.
+2.  **Frontend**:
+    -   Calls `authService.login(username, password)` → `POST /api/auth/login`.
+3.  **Backend**:
+    -   Verifies credentials against `users` collection.
+    -   Generates a JWT signed with `SECRET_KEY`.
+    -   Returns `{ access_token: "...", token_type: "bearer" }`.
+4.  **Frontend**:
+    -   Stores token in `localStorage`.
+    -   Updates `AuthContext` state to `isAuthenticated = true`.
+    -   Redirects user to `/trips`.
+    -   Subsequent API requests include `Authorization: Bearer <token>` header via Axios interceptor.
+
+### Flow 1: Viewing the Trips List Page
 
 1.  **User Action**: Navigates to `/trips` in the browser (or is redirected from `/`).
 2.  **Frontend** (`TripsPage` component):
