@@ -185,5 +185,99 @@ docker start myminio      # Start if stopped
 
 ---
 
-**Last Updated**: October 30, 2025
+# 🐳 Docker Deployment Suite
+
+> **Note:** This section consolidates the deployment documentation. For full details, see `DOCKER_README.md` and `DOCKER_DEPLOYMENT_GUIDE.md`.
+
+## 1. Architecture Overview
+
+The Docker setup orchestrates four services in a secure, isolated bridge network:
+
+| Service | Container Name | Internal Port | Exposed Port | Description |
+|---------|----------------|---------------|--------------|-------------|
+| **Frontend** | `travel-tracker-frontend` | 80 | **80** | Nginx serving React build |
+| **Backend** | `travel-tracker-backend` | 8000 | - | FastAPI (Non-root user) |
+| **Database** | `travel-tracker-database` | 27017 | - | MongoDB 7 (Auth enabled) |
+| **Storage** | `travel-tracker-storage` | 9000 | **9001** (Console) | MinIO S3-compatible |
+
+**Key Features:**
+- **Multi-stage Builds:** Optimized image sizes (Frontend ~50MB, Backend ~300MB).
+- **Security:** Non-root users, strict network isolation, secrets management.
+- **Persistence:** Named volumes (`mongo_data`, `minio_data`) ensure data survives restarts.
+- **Health Checks:** Automatic dependency management (Backend waits for DB/Storage).
+
+## 2. Local Build & Run (Development)
+
+Use `docker-compose.build.yml` to build images locally and start the stack.
+
+```bash
+# Option 1: Build and Run in foreground
+docker-compose -f docker-compose.build.yml up --build
+
+# Option 2: Run in background (Detached)
+docker-compose -f docker-compose.build.yml up --build -d
+
+# Stop and remove containers
+docker-compose -f docker-compose.build.yml down
+
+# Stop and remove volumes (Clean Reset)
+docker-compose -f docker-compose.build.yml down -v
+```
+
+**Configuration (`.env.local`):**
+Create a `.env.local` file to override defaults if needed:
+```env
+FRONTEND_PORT=8080
+MONGODB_PASSWORD=mysecret
+```
+
+## 3. Production Deployment Scripts
+
+Use the provided shell scripts for a standardized deployment workflow.
+
+### Step 1: Build Images
+```bash
+# Build with version tag
+./build.sh --version 1.0.0
+```
+
+### Step 2: Configure Environment
+```bash
+cp .env.production.example .env.production
+# Edit .env.production with your secure credentials
+```
+
+### Step 3: Deploy
+```bash
+# Deploy locally
+./deploy.sh
+
+# OR Deploy to remote server via SSH
+./deploy.sh --remote user@example.com --version 1.0.0
+```
+
+## 4. Troubleshooting & Maintenance
+
+| Issue | Solution |
+|-------|----------|
+| **Build Fails** | Run `docker-compose -f docker-compose.build.yml build --no-cache` to clear cache. |
+| **DB Connection Error** | Check logs: `docker-compose -f docker-compose.build.yml logs database`. Ensure `.env` credentials match volume data. |
+| **Port Conflict** | Change `FRONTEND_PORT` in `.env.local` or stop conflicting services (e.g., local Nginx/Apache). |
+| **Permission Denied** | Ensure scripts are executable: `chmod +x build.sh deploy.sh`. |
+
+**Useful Commands:**
+```bash
+# Check Service Status
+docker-compose -f docker-compose.build.yml ps
+
+# View Real-time Logs
+docker-compose -f docker-compose.build.yml logs -f
+
+# Access Backend Shell
+docker exec -it travel-tracker-backend bash
+```
+
+---
+
+**Last Updated**: November 30, 2025
 **Status**: ✅ All Systems Operational
