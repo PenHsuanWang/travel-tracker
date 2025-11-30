@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form, Depends
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from src.models.trip import Trip
 from src.services.trip_service import TripService
 from src.services.file_upload_service import FileUploadService
 from datetime import datetime
+from src.auth import get_current_user
+from src.models.user import User
 
 router = APIRouter()
 trip_service = TripService()
@@ -21,7 +23,7 @@ class TripCreateWithGpxResponse(BaseModel):
     upload_metadata: Optional[Dict[str, Any]] = None
 
 @router.post("/", response_model=Trip, status_code=status.HTTP_201_CREATED)
-async def create_trip(trip: Trip):
+async def create_trip(trip: Trip, current_user: User = Depends(get_current_user)):
     """
     Create a new trip.
     """
@@ -49,6 +51,7 @@ async def create_trip_with_gpx(
     region: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     gpx_file: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Create a new trip, optionally ingesting a GPX file to auto-fill dates.
@@ -126,7 +129,7 @@ async def get_trip(trip_id: str):
     return trip
 
 @router.put("/{trip_id}", response_model=Trip)
-async def update_trip(trip_id: str, update_data: Dict[str, Any]):
+async def update_trip(trip_id: str, update_data: Dict[str, Any], current_user: User = Depends(get_current_user)):
     """
     Update a trip.
     """
@@ -136,7 +139,7 @@ async def update_trip(trip_id: str, update_data: Dict[str, Any]):
     return trip
 
 @router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_trip(trip_id: str):
+async def delete_trip(trip_id: str, current_user: User = Depends(get_current_user)):
     """
     Delete a trip.
     """

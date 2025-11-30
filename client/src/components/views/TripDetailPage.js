@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import LeafletMapView from './LeafletMapView';
 import TripSidebar from '../layout/TripSidebar';
 import TimelinePanel from '../panels/TimelinePanel';
@@ -137,6 +138,7 @@ const getStoredTimelineWidth = () => {
 };
 
 const TripDetailPage = () => {
+    const { isAuthenticated } = useAuth();
     const { tripId } = useParams();
     const [trip, setTrip] = useState(null);
     const [allTrips, setAllTrips] = useState([]);
@@ -153,6 +155,8 @@ const TripDetailPage = () => {
     const [timelineMode, setTimelineMode] = useState('side');
     const [timelineOpen, setTimelineOpen] = useState(true);
     const [timelineWidth, setTimelineWidth] = useState(() => getStoredTimelineWidth());
+
+    const readOnly = !isAuthenticated;
 
     // Lifted GPX State
     // Refactored: Single GPX file per trip
@@ -701,13 +705,15 @@ const TripDetailPage = () => {
                             </option>
                         ))}
                     </select>
-                    <button
-                        type="button"
-                        className="ghost-button danger-button"
-                        onClick={handleDeleteTrip}
-                    >
-                        Delete Trip
-                    </button>
+                    {!readOnly && (
+                        <button
+                            type="button"
+                            className="ghost-button danger-button"
+                            onClick={handleDeleteTrip}
+                        >
+                            Delete Trip
+                        </button>
+                    )}
                 </div>
             </div>
             <div className="MainBlock">
@@ -717,6 +723,7 @@ const TripDetailPage = () => {
                     stats={tripStats}
                     onTripDataChange={handleTripDataChange}
                     notice={tripNotice}
+                    readOnly={readOnly}
                 />
                 <div
                     className={`MapAndTimeline ${timelineMode !== 'side' ? 'timeline-floating' : ''} ${timelineMode === 'sheet' ? 'timeline-sheet' : ''}`}
@@ -741,6 +748,7 @@ const TripDetailPage = () => {
                             // GPX Props (Refactored)
                             gpxTrack={gpxTrack}
                             highlightedItemId={highlightedItemId}
+                            readOnly={readOnly}
                         />
                         {gpxTrack && gpxTrack.summary && (
                             <TripStatsHUD trackSummary={gpxTrack.summary} />
@@ -764,6 +772,7 @@ const TripDetailPage = () => {
                                     onDeleteItem={handleDeletePhoto}
                                     onItemClick={(item) => handleSelectPhoto(item, { openViewer: true, centerMap: true })}
                                     onItemHover={(id, isHovering) => setHighlightedItemId(isHovering ? id : null)}
+                                    readOnly={readOnly}
                                 />
                             </div>
                         </>
@@ -786,6 +795,7 @@ const TripDetailPage = () => {
                                 onDeleteItem={handleDeletePhoto}
                                 onItemClick={(item) => handleSelectPhoto(item, { openViewer: true, centerMap: true })}
                                 onItemHover={(id, isHovering) => setHighlightedItemId(isHovering ? id : null)}
+                                readOnly={readOnly}
                             />
                         </div>
                     )}
