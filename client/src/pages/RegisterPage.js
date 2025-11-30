@@ -18,10 +18,27 @@ const RegisterPage = () => {
     e.preventDefault();
     setError('');
     try {
-      await authService.register(username, password, email, fullName, registrationKey);
+      // Send null for empty optional fields to avoid validation errors
+      await authService.register(
+        username, 
+        password, 
+        email || null, 
+        fullName || null, 
+        registrationKey
+      );
       navigate('/login');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to register.');
+      const detail = err.response?.data?.detail;
+      if (typeof detail === 'string') {
+        setError(detail);
+      } else if (Array.isArray(detail)) {
+        // Handle Pydantic validation errors
+        setError(detail.map(e => e.msg).join(', '));
+      } else if (typeof detail === 'object' && detail !== null) {
+        setError(JSON.stringify(detail));
+      } else {
+        setError('Failed to register.');
+      }
     }
   };
 
