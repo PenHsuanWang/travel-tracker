@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  # Frontend - Nginx serving React static files
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_BASE_URL=/api
+    image: travel-tracker-frontend:${VERSION:-latest}
+    container_name: travel-tracker-frontend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - travel-tracker-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.travel-tracker.service=frontend"
+      - "com.travel-tracker.version=${VERSION:-latest}"
+
+  # Backend - FastAPI application
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: travel-tracker-backend:${VERSION:-latest}
+    container_name: travel-tracker-backend
+    environment:
+      # MinIO Configuration
+      - MINIO_ENDPOINT=storage:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_SECURE=false
+      # MongoDB Configuration
+      - MONGODB_HOST=database
+      - MONGODB_PORT=27017
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-travel_tracker}
+      - MONGODB_USERNAME=${MONGODB_USERNAME}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+    depends_on:
+      database:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+    networks:
+      - travel-tracker-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.travel-tracker.service=backend"
+      - "com.travel-tracker.version=${VERSION:-latest}"
+
+  # Database - MongoDB
+  database:
+    image: mongo:7
+    container_name: travel-tracker-database
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGODB_DATABASE:-travel_tracker}
+    volumes:
+      - mongo_data:/data/db
+      - mongo_config:/data/configdb
+    networks:
+      - travel-tracker-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    labels:
+      - "com.travel-tracker.service=database"
+      - "com.travel-tracker.version=${VERSION:-latest}"
+
+  # Storage - MinIO S3-compatible object storage
+  storage:
+    image: minio/minio:latest
+    container_name: travel-tracker-storage
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    networks:
+      - travel-tracker-network
+    restart: unless-stopped
+    # Optionally expose MinIO console for administration
+    # Uncomment the following lines to access MinIO console at http://host:9001
+    # ports:
+    #   - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    labels:
+      - "com.travel-tracker.service=storage"
+      - "com.travel-tracker.version=${VERSION:-latest}"
+
+volumes:
+  mongo_data:
+    driver: local
+    labels:
+      - "com.travel-tracker.volume=database"
+  mongo_config:
+    driver: local
+    labels:
+      - "com.travel-tracker.volume=database-config"
+  minio_data:
+    driver: local
+    labels:
+      - "com.travel-tracker.volume=storage"
+
+networks:
+  travel-tracker-network:
+    driver: bridge
+    labels:
+      - "com.travel-tracker.network=main"

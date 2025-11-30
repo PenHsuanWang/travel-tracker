@@ -1,0 +1,15 @@
+# Docker production environment files
+.env.production
+.env.prod
+.env.staging
+
+# Docker build artifacts
+docker-compose.override.yml
+
+# Backup files
+*-backup-*.tar.gz
+backup/
+backups/
+
+# Debug reports
+debug-*.txt
