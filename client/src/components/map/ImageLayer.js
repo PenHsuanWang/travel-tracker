@@ -27,7 +27,7 @@ function ImageLayer({ onImageSelected = null, tripId = null, readOnly = false, p
     markersRef.current = markers;
   }, [markers]);
 
-  const handleMarkerSelected = useCallback((image) => {
+  const handleMarkerSelected = useCallback((image, selectionOptions = {}) => {
     if (!image) {
       return;
     }
@@ -38,12 +38,13 @@ function ImageLayer({ onImageSelected = null, tripId = null, readOnly = false, p
       lat: Number(image.lat),
       lon: Number(image.lon),
       metadata_id: image.metadata_id || null,
+      source: selectionOptions.interactionSource || selectionOptions.source || 'map-marker',
     };
 
     window.dispatchEvent(new CustomEvent('mapImageSelected', { detail }));
 
     if (typeof onImageSelected === 'function') {
-      onImageSelected(image);
+      onImageSelected(image, selectionOptions);
     }
   }, [onImageSelected]);
 
@@ -213,7 +214,11 @@ function ImageLayer({ onImageSelected = null, tripId = null, readOnly = false, p
 
       if (entry) {
         entry.marker.openPopup();
-        handleMarkerSelected(entry.image);
+        const selectionOptions = {
+          preventViewer: Boolean(detail.preventViewer),
+          interactionSource: detail.source || 'programmatic-center',
+        };
+        handleMarkerSelected(entry.image, selectionOptions);
       }
     };
 
@@ -285,6 +290,12 @@ function createPopupContent(image, onMarkerSelected, readOnly, onPhotoUpdate) {
     event.stopPropagation();
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('timelineScrollToItem', { detail: { itemId: image.object_key } }));
+    }
+    if (typeof onMarkerSelected === 'function') {
+      onMarkerSelected(image, {
+        forceViewer: true,
+        interactionSource: 'popup-thumbnail-dblclick',
+      });
     }
   });
 

@@ -469,11 +469,16 @@ const TripDetailPage = () => {
     }, [timelineMode, timelineWidth]);
 
     const handleMapPhotoSelected = useCallback(
-        (image) => {
+        (image, meta = {}) => {
             if (!image) return;
             const key = image.object_key || image.objectKey;
             if (!key) return;
-            handleSelectPhoto(key, { openViewer: true, centerMap: false, ensureTimeline: true });
+            const shouldOpenViewer = meta.forceViewer ? true : !meta.preventViewer;
+            handleSelectPhoto(key, {
+                openViewer: shouldOpenViewer,
+                centerMap: false,
+                ensureTimeline: true,
+            });
         },
         [handleSelectPhoto]
     );
