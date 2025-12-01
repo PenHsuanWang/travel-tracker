@@ -1,6 +1,7 @@
-# Docker Compose for Local Build and Testing
-# This file builds images locally and runs them
-# Usage: docker-compose -f docker-compose.build.yml up --build
+# Docker Compose for Production Build
+# This file builds production-ready images and runs the complete stack
+# Includes MongoDB, MinIO with automated bucket setup, Backend, and Frontend
+# Usage: docker-compose -f docker-compose.build.yml up -d --build
 
 services:
   # Frontend - Build from local Dockerfile
@@ -38,7 +39,7 @@ services:
       # MinIO Configuration
       - MINIO_ENDPOINT=storage:9000
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin123}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_SECURE=false
       # MongoDB Configuration
       - MONGODB_HOST=database
@@ -51,6 +52,8 @@ services:
         condition: service_healthy
       storage:
         condition: service_healthy
+      storage-setup:
+        condition: service_completed_successfully
     networks:
       - travel-tracker-network
     restart: unless-stopped
@@ -89,7 +92,7 @@ services:
     command: server /data --console-address ":9001"
     environment:
       - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
-      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin123}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
     volumes:
       - minio_data:/data
     networks:
@@ -104,6 +107,33 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+
+  # MinIO Setup - Create buckets and set policies
+  storage-setup:
+    image: minio/mc:latest
+    container_name: travel-tracker-storage-setup
+    depends_on:
+      storage:
+        condition: service_healthy
+    networks:
+      - travel-tracker-network
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for MinIO to be ready...';
+      sleep 5;
+      mc alias set myminio http://storage:9000 ${MINIO_ACCESS_KEY:-minioadmin} ${MINIO_SECRET_KEY:-minioadmin};
+      echo 'Creating buckets...';
+      mc mb myminio/gps-data --ignore-existing;
+      mc mb myminio/gps-analysis-data --ignore-existing;
+      mc mb myminio/images --ignore-existing;
+      mc mb myminio/gis-data --ignore-existing;
+      echo 'Setting bucket policies...';
+      mc anonymous set download myminio/gps-data;
+      mc anonymous set download myminio/gps-analysis-data;
+      mc anonymous set download myminio/images;
+      mc anonymous set download myminio/gis-data;
+      echo 'MinIO buckets configured successfully!';
+      "
 
 volumes:
   mongo_data:
