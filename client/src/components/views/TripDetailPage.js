@@ -155,6 +155,7 @@ const TripDetailPage = () => {
     const [timelineMode, setTimelineMode] = useState('side');
     const [timelineOpen, setTimelineOpen] = useState(true);
     const [timelineWidth, setTimelineWidth] = useState(() => getStoredTimelineWidth());
+    const [scrollToItemId, setScrollToItemId] = useState(null);
 
     const readOnly = !isAuthenticated;
 
@@ -166,6 +167,20 @@ const TripDetailPage = () => {
 
     const mapRef = useRef(null);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const handleScrollRequest = (event) => {
+            const { itemId } = event.detail || {};
+            if (itemId) {
+                setScrollToItemId(itemId);
+                if (timelineMode !== 'side') {
+                    setTimelineOpen(true);
+                }
+            }
+        };
+        window.addEventListener('timelineScrollToItem', handleScrollRequest);
+        return () => window.removeEventListener('timelineScrollToItem', handleScrollRequest);
+    }, [timelineMode]);
 
     useEffect(() => {
         const fetchTripDetails = async () => {
@@ -574,6 +589,14 @@ const TripDetailPage = () => {
         [applyNoteToPhotoState, applyNoteToWaypointState, photos]
     );
 
+    const handleMapPhotoUpdate = useCallback((photoId, note, save = false) => {
+        if (save) {
+            handleNoteSave({ photoId, note });
+        } else {
+            applyNoteToPhotoState(photoId, { note });
+        }
+    }, [handleNoteSave, applyNoteToPhotoState]);
+
     useEffect(() => {
         const handleExternalNoteUpdate = (event) => {
             const detail = event.detail || {};
@@ -749,6 +772,9 @@ const TripDetailPage = () => {
                             gpxTrack={gpxTrack}
                             highlightedItemId={highlightedItemId}
                             readOnly={readOnly}
+                            // Photo Props (Lifted State)
+                            photos={photos}
+                            onPhotoUpdate={handleMapPhotoUpdate}
                         />
                         {gpxTrack && gpxTrack.summary && (
                             <TripStatsHUD trackSummary={gpxTrack.summary} />
@@ -766,6 +792,7 @@ const TripDetailPage = () => {
                             <div style={{ width: 'var(--timeline-width)', flex: '0 0 var(--timeline-width)', height: '100%', borderLeft: '1px solid #e2e8f0' }}>
                                 <TimelinePanel
                                     items={timelineItems}
+                                    scrollToItemId={scrollToItemId}
                                     onAddPhoto={handleAddPhoto}
                                     onAddUrl={handleAddUrl}
                                     onUpdateItem={handleNoteSave}
@@ -789,6 +816,7 @@ const TripDetailPage = () => {
                             </div>
                             <TimelinePanel
                                 items={timelineItems}
+                                scrollToItemId={scrollToItemId}
                                 onAddPhoto={handleAddPhoto}
                                 onAddUrl={handleAddUrl}
                                 onUpdateItem={handleNoteSave}

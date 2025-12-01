@@ -71,7 +71,9 @@ function LeafletMapView({
   // Refactored props
   gpxTrack,
   highlightedItemId,
-  readOnly
+  readOnly,
+  photos,
+  onPhotoUpdate
 }) {
   const [riverGeoJSON, setRiverGeoJSON] = useState({});
   const [loading, setLoading] = useState(false);
@@ -299,7 +301,13 @@ function LeafletMapView({
         )}
 
         {/* Image Layer - displays markers for geotagged images */}
-        <ImageLayer tripId={tripId} onImageSelected={onImageSelected} readOnly={readOnly} />
+        <ImageLayer 
+          tripId={tripId} 
+          onImageSelected={onImageSelected} 
+          readOnly={readOnly} 
+          photos={photos}
+          onPhotoUpdate={onPhotoUpdate}
+        />
       </MapContainer>
     </div>
   );
