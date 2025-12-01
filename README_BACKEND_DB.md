@@ -73,11 +73,13 @@ retrieved = sm.load_data('mongodb', trip_id, collection_name=collection)
 
 **Purpose**: Storing and retrieving binary files (objects).
 
-**Configuration**: The `MinIOAdapter` is configured via the following environment variables:
+**Configuration**: The `MinIOAdapter` is configured via the following environment variables. For local development, these should be placed in a `server/.env` file.
 -   `MINIO_ENDPOINT` (default: `localhost:9000`)
 -   `MINIO_ACCESS_KEY` (Required)
 -   `MINIO_SECRET_KEY` (Required)
 -   `MINIO_SECURE` (default: `False`)
+
+> **Note on Local Development**: When running the development environment using `docker-compose.dbonly.yml` and starting the backend on the host, the default credentials are `minioadmin` for both `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`. Your `server/.env` file should reflect this.
 
 **Common Buckets Used**
 

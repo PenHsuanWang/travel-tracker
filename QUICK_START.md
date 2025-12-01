@@ -1,5 +1,26 @@
 # 🚀 Travel Tracker - Quick Start Guide
 
+## 📋 Docker Compose Configurations
+
+**Choose your setup:**
+
+### 🔧 Development (Databases Only)
+Run MongoDB and MinIO in Docker, develop backend/frontend on host:
+```bash
+docker-compose -f docker-compose.dbonly.yml up -d
+```
+Then run backend and frontend separately on your host machine.
+
+### 🏗️ Production Build
+Complete containerized stack (Frontend + Backend + Databases):
+```bash
+docker-compose -f docker-compose.build.yml up -d --build
+```
+
+**📚 See [DOCKER_COMPOSE_GUIDE.md](./DOCKER_COMPOSE_GUIDE.md) for detailed instructions**
+
+---
+
 ## ✅ Current Status: ALL SYSTEMS RUNNING
 
 ### 🌐 Access URLs
@@ -15,8 +36,8 @@
 ### 🔑 Default Credentials
 
 **MinIO:**
-- Access Key: `your-access-key`
-- Secret Key: `your-secret-key`
+- Access Key: `minioadmin`
+- Secret Key: `minioadmin`
 
 ---
 
@@ -100,7 +121,8 @@ npm start
 
 ### Start MinIO (if not running)
 ```bash
-docker start myminio
+# Try to start an existing MinIO container; otherwise bring up the DB-only compose set
+docker start minio || docker-compose -f docker-compose.dbonly.yml up -d
 ```
 
 ---
@@ -115,7 +137,7 @@ Press `Ctrl+C` in the frontend terminal
 
 ### Stop MinIO
 ```bash
-docker stop myminio
+docker stop minio
 ```
 
 ---
@@ -158,7 +180,7 @@ Run this command to verify all services:
 ```bash
 curl -s http://localhost:5002/api/map/layers && \
 curl -s http://localhost:3000 | grep -q "React" && \
-docker ps | grep -q myminio && \
+docker ps | grep -q minio && \
 echo "✅ All services are running!"
 ```
 
@@ -179,8 +201,8 @@ cd client && npm start
 
 ### MinIO connection errors
 ```bash
-docker ps | grep myminio  # Check if running
-docker start myminio      # Start if stopped
+docker ps | grep minio  # Check if running
+docker start minio || docker-compose -f docker-compose.dbonly.yml up -d  # Start if stopped
 ```
 
 ---
