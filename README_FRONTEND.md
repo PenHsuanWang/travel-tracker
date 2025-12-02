@@ -107,21 +107,17 @@ These components provide the primary features of the application, mostly within 
         -   Uses React-Leaflet components: `MapContainer`, `TileLayer`, `GeoJSON`, `Polyline`, `Marker`, `Popup`, `Tooltip`
 
 -   **`ImageLayer.js`**:
-    -   **Purpose:** A React-Leaflet component that fetches and displays geotagged image markers on the map
+    -   **Purpose:** A React-Leaflet component that renders geotagged image markers on the map.
     -   **Functionality & User Experience:**
-        -   Fetches geotagged image metadata from backend using `getGeotaggedImages` API
+        -   Renders markers from a `photos` prop supplied by the parent (the component no longer fetches images itself). New props: `photos` (array) and `onPhotoUpdate(photoKey, note, saveNow)` (callback for note edits).
         -   Creates custom-styled circular markers (`.photo-marker`) with image thumbnails
         -   **User Interaction:**
             -   **Hover:** Displays tooltip with image filename
-            -   **Click:** Opens popup with thumbnail, filename, coordinates, and note editor
-            -   **Note Editing:** In-popup text area for adding/updating photo notes (hidden in read-only mode).
-            -   **View Details:** Button to open full photo viewer
-        -   **Real-time Updates:** Listens for global events:
-            -   `imageUploaded`: Adds new markers for uploaded photos
-            -   `imageDeleted`: Removes markers for deleted photos
-            -   `centerMapOnLocation`: Centers map and opens popup for specific photo
-            -   `photoNoteUpdated`: Updates popup content when notes are edited elsewhere
-        -   **Trip Context:** Filters images by trip ID when provided
+            -   **Click:** Opens a popup with thumbnail, filename, coordinates, and note editor. Marker click no longer automatically opens the photo viewer/lightbox.
+            -   **Note Editing:** In-popup text editor performs optimistic updates and reports changes via `onPhotoUpdate`. Parents should persist changes and re-supply `photos` so the map and popup content stay in sync.
+            -   **Viewer control:** Selection emits metadata via `onImageSelected(image, meta)` and `mapImageSelected` events; `meta` may include `preventViewer`, `forceViewer`, and `source` so the parent decides whether to open the full viewer.
+        -   **Real-time Updates:** The component expects the parent to update the `photos` prop when images are uploaded or deleted — `ImageLayer` will create/update/remove markers to match the provided array.
+        -   **Trip Context:** Parent should pass only photos relevant to the current trip; `ImageLayer` renders markers from that list.
 
 -   **`MapToolbar.js`**:
     -   **Purpose:** Provides UI controls for switching map base layers
@@ -149,7 +145,7 @@ These components provide the primary features of the application, mostly within 
             -   "View on Map" button (if photo has GPS coordinates)
             -   Delete button
         4.  **Hover Interaction:** Displays detailed tooltip with file info, GPS coordinates, and EXIF camera metadata
-        5.  **Click Interaction:** Opens full-size image viewer modal with metadata sidebar
+        5.  **Click Interaction:** Opens full-size image viewer modal with metadata sidebar (gallery interactions dispatch selection metadata; the parent may set `preventViewer: true` so the viewer is not always opened automatically).
         6.  **Map Synchronization:** 
             -   Clicking thumbnail scrolls to and highlights the photo
             -   "View on Map" centers map on photo location
@@ -168,7 +164,7 @@ These components provide the primary features of the application, mostly within 
             -   Thumbnail (for photos)
             -   Note/description field
         3.  **User Interactions:**
-            -   **Click photo card:** Opens full photo viewer
+            -   **Click photo card:** Typically opens the photo viewer, but `TripDetailPage` now controls whether the viewer opens. Map and popup selections include metadata (`preventViewer` / `forceViewer`) so the parent can suppress or force the viewer.
             -   **Click waypoint card:** Centers map on waypoint location
             -   **Hover:** Highlights corresponding marker on map
             -   **Edit button:** Opens inline editor for title and note (supports Markdown)
@@ -267,11 +263,11 @@ The application uses a combination of:
 -   **Local Component State:** Most components use React `useState` and `useEffect` hooks
 -   **Props Drilling:** Parent-to-child communication via props
 -   **Event-Based Communication**: Cross-component updates using custom DOM events:
-    -   `imageUploaded`, `imageUploadedWithGPS`: Notify components of new photos
-    -   `imageDeleted`: Trigger marker and gallery removal
-    -   `photoNoteUpdated`: Sync note changes across components
-    -   `centerMapOnLocation`: Center map on specific coordinates
-    -   `mapImageSelected`: Notify when photo marker is clicked
+     -   `imageUploaded`, `imageUploadedWithGPS`: (Emitted by upload logic) parents should update the `photos` array they supply to `ImageGalleryPanel` / `ImageLayer` so the UI can re-sync markers and gallery items. `ImageLayer` no longer relies on these events to create markers directly.
+     -   `imageDeleted`: (Emitted where appropriate) parents should remove deleted photos from their `photos` array so `ImageLayer` removes markers.
+     -   `photoNoteUpdated` (legacy): Note edits from the `ImageLayer` popup are reported to the parent via the `onPhotoUpdate(photoKey, note, saveNow)` prop; if you previously relied on a global `photoNoteUpdated` event, reemit it from the parent handler or adapt consumers to the callback contract.
+     -   `centerMapOnLocation`: Centers the map on specific coordinates. When centering on a photo marker the centering call may include selection metadata (e.g. `{ object_key, preventViewer }`) so the parent can decide viewer behavior.
+     -   `mapImageSelected`: Notifies when a photo marker is selected. Payloads now include `source` and may include `preventViewer` / `forceViewer` so parents decide whether to open the viewer.
 
 ### API Integration
 -   All backend communication goes through `client/src/services/api.js`
