@@ -63,6 +63,16 @@ export const deleteTrip = async (tripId) => {
   await apiClient.delete(`/trips/${tripId}`);
 };
 
+export const searchUsers = async (query) => {
+  const response = await apiClient.get('/users/search', { params: { q: query } });
+  return response.data;
+};
+
+export const updateTripMembers = async (tripId, memberIds) => {
+  const response = await apiClient.put(`/trips/${tripId}/members`, { member_ids: memberIds });
+  return response.data;
+};
+
 // --- File API ---
 
 export const updatePhotoNote = async (metadataId, { note, note_title }) => {
