@@ -174,10 +174,10 @@ graph RL
 
 This section details which services interact with the storage layer and for what purpose.
 
-### `auth_routes.py` & `auth.py`
+### `auth_routes.py` & `auth.py` & `user_routes.py`
 
--   **Module:** `auth` / `auth_routes`
--   **Purpose:** Manages user authentication, registration, and token validation.
+-   **Module:** `auth` / `auth_routes` / `user_routes`
+-   **Purpose:** Manages user authentication, registration, token validation, and user profiles.
 -   **Functions & Storage Interaction:**
     -   `register_user()`:
         -   **MongoDB:** Checks if a username exists in the `users` collection. If not, inserts a new user document with hashed password and profile details.
@@ -185,6 +185,15 @@ This section details which services interact with the storage layer and for what
         -   **MongoDB:** Retrieves a user document from the `users` collection by username to verify the password hash.
     -   `get_current_user()`:
         -   **MongoDB:** Retrieves a user document from the `users` collection to validate the subject (`sub`) claim of the JWT token.
+    -   `read_users_me()` / `get_user_profile()`:
+        -   **MongoDB:** Retrieves user profile data and fetches pinned trips from the `trips` collection.
+    -   `update_user_me()`:
+        -   **MongoDB:** Updates user fields (bio, location, pinned_trips) in the `users` collection.
+    -   `upload_avatar()`:
+        -   **MinIO:** Saves the avatar image to the `images` bucket via `FileUploadService`.
+        -   **MongoDB:** Updates the user's `avatar_url` field.
+    -   `search_users()`:
+        -   **MongoDB:** Performs a regex search on `username` or `full_name` in the `users` collection.
 
 ### `file_upload_service.py`
 
@@ -214,6 +223,8 @@ This section details which services interact with the storage layer and for what
         -   **MongoDB:** Loads a single `Trip` document from the `trips` collection by its ID.
     -   `update_trip()`:
         -   **MongoDB:** Updates an existing `Trip` document in the `trips` collection.
+    -   `update_members()`:
+        -   **MongoDB:** Updates the `member_ids` field of a `Trip` document.
     -   `delete_trip()`:
         -   **MongoDB:** Deletes the `Trip` document from the `trips` collection. It also queries and deletes all associated documents from the `file_metadata` collection.
         -   **MinIO:** Deletes all associated file objects (both original files and analysis artifacts) from their respective buckets based on the metadata retrieved before deletion.

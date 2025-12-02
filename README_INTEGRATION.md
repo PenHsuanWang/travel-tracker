@@ -34,6 +34,9 @@ The application has the following client-side routes defined in `client/src/App.
 | `/` | `Navigate` | Root path redirects to `/trips` | Browser address bar |
 | `/trips` | `TripsPage` | List view of all trips with search, filter, sort, and bulk operations | Root redirect, "Back to My Trips" link in trip detail header, browser back button |
 | `/trips/:tripId` | `TripDetailPage` | Detailed view of a single trip with interactive map, sidebar panels, and photo timeline | "View Trip" or "Open Map" buttons on trip cards, quick-switch dropdown in trip detail header |
+| `/profile/me` | `ProfilePage` | Personal dashboard showing user stats, bio, and pinned trips | Header profile link |
+| `/profile/:username` | `ProfilePage` | Public profile view of another user | Clicking on member/owner names in trip details |
+| `/settings/profile` | `SettingsPage` | Form to edit profile details and upload avatar | "Edit Profile" button on personal dashboard |
 
 **User Navigation Flow**:
 ```
@@ -67,16 +70,21 @@ Each route renders a different React component, but all share the same HTML docu
 
 The following sections detail the API endpoints exposed by the backend and consumed by the frontend.
 
-### Authentication API
+### Authentication and User API
 
--   **Prefix**: `/api/auth`
--   **Frontend Service**: `client/src/services/authService.js`
--   **Backend Router**: `server/src/routes/auth_routes.py`
+-   **Prefix**: `/api/auth`, `/api/users`
+-   **Frontend Service**: `client/src/services/authService.js`, `client/src/services/userService.js`
+-   **Backend Router**: `server/src/routes/auth_routes.py`, `server/src/routes/user_routes.py`
 
 | Method | Endpoint    | Frontend Function | Description                                                                 |
 | :----- | :---------- | :---------------- | :-------------------------------------------------------------------------- |
-| `POST` | `/login`    | `login(...)`      | Authenticates a user. Expects `username` and `password` (OAuth2 form data). Returns a JWT access token. |
-| `POST` | `/register` | `register(...)`   | Registers a new user. Expects JSON body with `username`, `password`, `registration_key`, and optional `email`, `full_name`. |
+| `POST` | `/auth/login`    | `login(...)`      | Authenticates a user. Expects `username` and `password` (OAuth2 form data). Returns a JWT access token. |
+| `POST` | `/auth/register` | `register(...)`   | Registers a new user. Expects JSON body with `username`, `password`, `registration_key`, and optional `email`, `full_name`. |
+| `GET`  | `/users/me`      | `getProfile()`    | Retrieves the current user's profile, including stats and pinned trips. |
+| `PUT`  | `/users/me`      | `updateProfile(...)` | Updates user profile details (bio, location, pinned trips). |
+| `POST` | `/users/me/avatar` | `uploadAvatar(...)` | Uploads a new profile picture. |
+| `GET`  | `/users/search`  | `searchUsers(q)`  | Searches for users by name or username. Used for adding trip members. |
+| `GET`  | `/users/{username}` | `getUserProfile(...)` | Retrieves the public profile of another user. |
 
 ### Trips API
 
@@ -91,6 +99,7 @@ The following sections detail the API endpoints exposed by the backend and consu
 | `GET`  | `/`                         | `getTrips()`              | Retrieves a list of all `Trip` objects.                                                                            |
 | `GET`  | `/{trip_id}`                | `getTrip(tripId)`         | Retrieves a single `Trip` object by its ID.                                                                        |
 | `PUT`  | `/{trip_id}`                | `updateTrip(id, data)`    | Updates an existing trip's details. Expects a JSON body with the fields to update.                                   |
+| `PUT`  | `/{trip_id}/members`        | `updateTripMembers(id, memberIds)` | Updates the list of members for a trip. Only accessible by the trip owner.                                   |
 | `DELETE` | `/{trip_id}`                | `deleteTrip(tripId)`      | Deletes a trip and all its associated files (from MinIO) and metadata (from MongoDB).                              |
 
 ### File and Data API
@@ -156,8 +165,32 @@ This covers file uploads, metadata management, and raw file retrieval.
 4.  **Frontend**:
     -   Stores token in `localStorage`.
     -   Updates `AuthContext` state to `isAuthenticated = true`.
+    -   Fetches user profile via `GET /api/users/me` to populate user details (avatar, etc.).
     -   Redirects user to `/trips`.
     -   Subsequent API requests include `Authorization: Bearer <token>` header via Axios interceptor.
+
+### Flow 0.5: Managing Trip Members
+
+1.  **User Action**: Trip owner clicks the "+" button in the "Members" section of the sidebar on `/trips/:tripId`.
+2.  **Frontend**:
+    -   Opens `ManageMembersModal`.
+    -   User types in the search box.
+    -   Calls `userService.searchUsers(query)` → `GET /api/users/search?q={query}`.
+3.  **Backend**:
+    -   Queries `users` collection for matching usernames or full names.
+    -   Returns list of matching user objects (excluding sensitive data).
+4.  **Frontend**:
+    -   Displays search results.
+    -   User selects a user to add.
+    -   User clicks "Save Changes".
+    -   Calls `api.updateTripMembers(tripId, memberIds)` → `PUT /api/trips/{tripId}/members`.
+5.  **Backend**:
+    -   Verifies the requester is the trip owner.
+    -   Updates the `member_ids` array in the `Trip` document.
+    -   Returns the updated trip.
+6.  **Frontend**:
+    -   Updates local trip state with new members list.
+    -   Sidebar updates to show the new member.
 
 ### Flow 1: Viewing the Trips List Page
 

@@ -62,20 +62,47 @@ The application's primary navigation is defined in `App.js`, which sets up the f
     -   **Registration:** Calls `authService.register` to create a new user.
     -   **Redirection:** Redirects to the login page upon successful registration.
 
+### `/profile/me` -> `ProfilePage.js`
+
+-   **File:** `client/src/pages/ProfilePage.js`
+-   **Purpose:** The personal dashboard for the logged-in user.
+-   **Functionality:**
+    -   **Profile Header:** Displays avatar, username, bio, location, and member-since date.
+    -   **Statistics:** Shows aggregated stats (total trips, distance, elevation, badges earned).
+    -   **Tabs:** Switches between "Featured Trips" (pinned) and "All Trips".
+    -   **Edit Profile:** Link to the settings page.
+
+### `/profile/:username` -> `ProfilePage.js`
+
+-   **File:** `client/src/pages/ProfilePage.js`
+-   **Purpose:** Public profile view for other users.
+-   **Functionality:** Similar to the personal dashboard but read-only (no edit controls).
+
+### `/settings/profile` -> `SettingsPage.js`
+
+-   **File:** `client/src/pages/SettingsPage.js`
+-   **Purpose:** Form to update user profile details.
+-   **Functionality:**
+    -   **Avatar Upload:** Upload a new profile picture.
+    -   **Profile Fields:** Edit Full Name, Bio, and Location.
+    -   **Pinned Trips:** Select trips to feature on the profile.
+
 ## 3. Layout Components
 
 The consistent structure of the application is maintained by these components found in `client/src/components/layout/`.
 
 -   **`Header.js`**: The top navigation bar displaying the application title/logo. It dynamically renders authentication controls:
     -   **Guest**: Shows "Login" and "Register" links.
-    -   **Authenticated**: Shows "Hi, [Username]" and a "Logout" button.
+    -   **Authenticated**: Shows user avatar and username (linking to profile) and a "Logout" button.
 -   **`TripSidebar.js`**: The left-hand collapsible panel on the `TripDetailPage`. Contains:
-    -   `TripSummaryCard`: Displays trip overview, name, region, dates, notes, and statistics (photo/track counts)
+    -   `TripSummaryCard`: Displays trip overview, name, region, dates, notes, and statistics.
+        -   **Organizer Section:** Displays the trip owner's avatar and name.
+        -   **Members Section:** Lists all trip members. If the user is the owner, a "+" button allows adding new members via `ManageMembersModal`.
     -   `ImageGalleryPanel`: Photo browsing interface
-    -   `TripStatsHUD`: A floating panel at the bottom of the map displaying trip statistics (distance, duration, elevation gain, max elevation) and an interactive elevation profile graph.
+    -   `TripStatsHUD`: A floating panel at the bottom of the map displaying trip statistics.
     -   `Footer.js`: Application footer with copyright information or links.
 
-**Note:** The original documentation mentioned `Sidebar.js` and `MainArea.js`, but the actual implementation uses `TripSidebar.js` for the trip detail page sidebar, and the map view is handled by `LeafletMapView.js` rather than a generic `MainArea.js` component.
+**Note:** The original documentation mentioned `Sidebar.js` and `MainArea.js`, but the actual implementation uses `TripSidebar.js` for the trip detail page sidebar.
 
 ## 4. Panels and Core Components
 
@@ -181,12 +208,14 @@ These components provide the primary features of the application, mostly within 
 This directory contains reusable UI elements shared across the application.
 
 -   **`CreateTripModal.js`**: Modal dialog for creating a new trip. Contains a form capturing trip name, start date, end date, region, and notes. Calls the `createTrip` API to save the new trip record.
+-   **`ManageMembersModal.js`**: Modal dialog for managing trip members. Allows the trip owner to search for users by name and add/remove them from the trip.
 -   **`PhotoViewerOverlay.js`**: Full-screen overlay that appears when a user clicks on a photo thumbnail. Displays the image in a larger view with:
     -   Navigation controls (previous/next arrows)
     -   Image counter (e.g., "3 / 24")
     -   Close button
     -   Keyboard navigation support (arrow keys, Escape)
 -   **`TripStatsHUD.js`**: Heads-up display component showing real-time trip statistics (photo count, track count, etc.)
+-   **`ProtectedRoute.js`**: Wrapper component that redirects unauthenticated users to the login page.
 -   **`Button.js`**, **`Input.js`**, **`Checkbox.js`**: Styled form elements providing consistent UI across the application with standardized props and styling
 
 ## 4. Additional Component Directories
