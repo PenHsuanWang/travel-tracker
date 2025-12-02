@@ -97,7 +97,18 @@ const CreateTripModal = ({ isOpen, onClose, onTripCreated }) => {
             setGpxFile(null);
         } catch (err) {
             console.error("Failed to create trip:", err);
-            setError("Failed to create trip. Please try again.");
+            let errorMessage = "Failed to create trip. Please try again.";
+            if (err.response && err.response.data && err.response.data.detail) {
+                const detail = err.response.data.detail;
+                if (typeof detail === 'object' && detail.message) {
+                    // Handle structured error from the backend
+                    errorMessage = `${detail.message} (Details: ${detail.error_details || 'N/A'})`;
+                } else {
+                    // Handle simple string detail
+                    errorMessage = `An error occurred: ${String(detail)}`;
+                }
+            }
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }

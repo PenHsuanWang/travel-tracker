@@ -103,11 +103,19 @@ async def create_trip_with_gpx(
             gpx_error=gpx_error,
             upload_metadata=upload_metadata,
         )
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+        # Log the full traceback for debugging on the server
+        import traceback
+        traceback.print_exc()
+        # Return a structured error to the client
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "An unexpected error occurred on the server.",
+                "error_type": type(e).__name__,
+                "error_details": str(e),
+            },
+        )
 @router.get("/", response_model=List[Trip])
 async def list_trips():
     """

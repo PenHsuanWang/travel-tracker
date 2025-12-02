@@ -26,13 +26,22 @@ class TripService:
         """
         Create a new trip.
         """
+        # Convert the Pydantic model to a dictionary for storage.
+        # Pydantic's default_factory for `created_at` should have already run.
+        trip_dict = trip_data.model_dump(by_alias=True)
+
+        # As a safeguard against schema validation errors, ensure `created_at` is present.
+        if 'created_at' not in trip_dict or trip_dict['created_at'] is None:
+            trip_dict['created_at'] = datetime.utcnow()
+
         self.storage_manager.save_data(
-            trip_data.id,
-            trip_data.model_dump(by_alias=True),
+            trip_dict['id'],  # Use id from the dict
+            trip_dict,
             adapter_name='mongodb',
             collection_name=self.collection_name
         )
-        return trip_data
+        # Return a new Trip instance from the dictionary that was actually saved
+        return Trip(**trip_dict)
 
     def get_trips(self) -> List[Trip]:
         """
