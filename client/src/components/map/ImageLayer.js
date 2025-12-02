@@ -18,17 +18,16 @@ export async function fetchGeotaggedImagesForTrip(fetcher = getGeotaggedImages, 
  * Renders markers for geotagged images on the map using react-leaflet.
  * This component works with the Leaflet map from react-leaflet's useMap hook.
  */
-function ImageLayer({ onImageSelected = null, tripId = null, readOnly = false }) {
+function ImageLayer({ onImageSelected = null, tripId = null, readOnly = false, photos = [], onPhotoUpdate = null }) {
   const map = useMap();
   const [markers, setMarkers] = useState({});
   const markersRef = useRef({});
-
 
   useEffect(() => {
     markersRef.current = markers;
   }, [markers]);
 
-  const handleMarkerSelected = useCallback((image) => {
+  const handleMarkerSelected = useCallback((image, selectionOptions = {}) => {
     if (!image) {
       return;
     }
@@ -39,21 +38,23 @@ function ImageLayer({ onImageSelected = null, tripId = null, readOnly = false })
       lat: Number(image.lat),
       lon: Number(image.lon),
       metadata_id: image.metadata_id || null,
+      source: selectionOptions.interactionSource || selectionOptions.source || 'map-marker',
     };
 
     window.dispatchEvent(new CustomEvent('mapImageSelected', { detail }));
 
     if (typeof onImageSelected === 'function') {
-      onImageSelected(image);
+      onImageSelected(image, selectionOptions);
     }
   }, [onImageSelected]);
 
   const registerMarkerEvents = useCallback((marker, image) => {
-    const handler = () => handleMarkerSelected(image);
-    marker.on('click', handler);
-    marker.on('popupopen', handler);
+    // We rely on Leaflet's default behavior to open the popup on click.
+    // We do NOT want to trigger handleMarkerSelected (which opens the lightbox) immediately.
+    // So we don't attach the handler to 'click' or 'popupopen'.
+    const handler = () => {};
     return handler;
-  }, [handleMarkerSelected]);
+  }, []);
 
   const detachMarkerEntry = useCallback((entry) => {
     if (!entry) return;
@@ -78,179 +79,114 @@ function ImageLayer({ onImageSelected = null, tripId = null, readOnly = false })
   /**
    * Load geotagged images and create markers
    */
-  const loadGeotaggedImages = useCallback(async () => {
+  /**
+   * Sync markers with photos prop
+   */
+  useEffect(() => {
     if (!map) return;
 
-    try {
-      const tripContextLog = tripId ? ` for trip ${tripId}` : '';
-      console.log(`[ImageLayer] Loading geotagged images${tripContextLog}...`);
-      clearAllMarkers();
-      const images = await fetchGeotaggedImagesForTrip(getGeotaggedImages, tripId);
-      console.log('[ImageLayer] Loaded', images?.length || 0, 'geotagged images for trip context');
+    const currentMarkers = { ...markersRef.current };
+    const newMarkers = {};
+    const processedKeys = new Set();
 
-      const newMarkers = {};
+    // 1. Update or Create markers
+    (photos || []).forEach((photo) => {
+        const key = photo.objectKey || photo.id;
+        if (!key) return;
+        
+        processedKeys.add(key);
 
-      (images || []).forEach((image) => {
-        try {
-          // Validate GPS coordinates
-          if (!Number.isFinite(Number(image.lat)) || !Number.isFinite(Number(image.lon))) {
-            console.warn('[ImageLayer] Skipping image with invalid coordinates:', image.object_key);
-            return;
-          }
-
-          const lat = Number(image.lat);
-          const lon = Number(image.lon);
-
-          // Create marker with display name (no UUID)
-          const displayName = getDisplayName(image.original_filename);
-          const marker = L.marker([lat, lon], {
-            title: displayName,
-            icon: createPhotoMarkerIcon(image),
-            riseOnHover: true,
-            zIndexOffset: 150,
-          });
-
-          marker.bindTooltip(displayName, {
-            direction: 'top',
-            offset: [0, -38],
-            opacity: 0.95,
-            className: 'photo-tooltip',
-          });
-
-          // Create popup content with thumbnail
-          const popupContent = createPopupContent(image, handleMarkerSelected, readOnly);
-          marker.bindPopup(popupContent, { maxWidth: 300 });
-          const handler = registerMarkerEvents(marker, image);
-
-          // Add to map
-          marker.addTo(map);
-
-          // Store marker by object_key for later removal/updates
-          newMarkers[image.object_key] = {
-            marker,
-            image,
-            handler,
-          };
-
-          console.log('[ImageLayer] Created marker for:', image.original_filename, `(${lat}, ${lon})`);
-        } catch (err) {
-          console.error('[ImageLayer] Error creating marker for', image.object_key, ':', err);
-        }
-      });
-
-      setMarkers(newMarkers);
-      markersRef.current = newMarkers;
-    } catch (err) {
-      console.error('[ImageLayer] Error loading geotagged images:', err);
-    }
-  }, [map, tripId, clearAllMarkers, handleMarkerSelected, registerMarkerEvents]);
-
-  /**
-   * Initial load when map is ready
-   */
-  useEffect(() => {
-    if (map) {
-      loadGeotaggedImages();
-    }
-  }, [map, loadGeotaggedImages]);
-
-  /**
-   * Listen for image upload events with GPS data
-   */
-  useEffect(() => {
-    const handleImageUploadedWithGPS = (event) => {
-      console.log('[ImageLayer] Image uploaded with GPS event received', event.detail);
-      const { gps, object_key, original_filename, thumb_url, metadata_id } = event.detail;
-
-      if (!map) return;
-
-      if (!gps || !Number.isFinite(Number(gps.latitude)) || !Number.isFinite(Number(gps.longitude))) {
-        console.log('[ImageLayer] Uploaded image has no GPS, skipping marker');
-        return;
-      }
-
-      const lat = Number(gps.latitude);
-      const lon = Number(gps.longitude);
-
-      try {
-        // Create marker with display name (no UUID)
-        const displayName = getDisplayName(original_filename);
-        const marker = L.marker([lat, lon], {
-          title: displayName,
-          icon: createPhotoMarkerIcon(image),
-          riseOnHover: true,
-          zIndexOffset: 150,
-        });
-
-        marker.bindTooltip(displayName, {
-          direction: 'top',
-          offset: [0, -38],
-          opacity: 0.95,
-          className: 'photo-tooltip',
-        });
-
+        // Normalize photo data for ImageLayer
         const image = {
-          object_key,
-          original_filename,
-          lat,
-          lon,
-          thumb_url,
-          metadata_id,
+            object_key: key,
+            original_filename: photo.fileName,
+            lat: Number(photo.lat),
+            lon: Number(photo.lon),
+            thumb_url: photo.thumbnailUrl,
+            note: photo.note,
+            metadata_id: photo.metadataId
         };
 
-        const popupContent = createPopupContent(image, handleMarkerSelected, readOnly);
-        marker.bindPopup(popupContent, { maxWidth: 300 });
-        const handler = registerMarkerEvents(marker, image);
-        marker.addTo(map);
+        if (!Number.isFinite(image.lat) || !Number.isFinite(image.lon)) {
+            return;
+        }
 
-        setMarkers((prev) => {
-          const updated = {
-            ...prev,
-            [object_key]: { marker, image, handler },
-          };
-          markersRef.current = updated;
-          return updated;
-        });
+        if (currentMarkers[key]) {
+            // Update existing marker
+            const entry = currentMarkers[key];
+            entry.image = image; // Update data reference
+            newMarkers[key] = entry;
 
-        console.log('[ImageLayer] Added marker for newly uploaded image:', original_filename);
-      } catch (err) {
-        console.error('[ImageLayer] Error adding marker for uploaded image:', err);
-      }
-    };
+            // Update Popup DOM if open
+            if (entry.marker.isPopupOpen()) {
+                 const popupContent = entry.marker.getPopup().getContent();
+                 if (popupContent instanceof HTMLElement) {
+                     const textarea = popupContent.querySelector('textarea');
+                     const noteDisplay = popupContent.querySelector('.image-popup-note-display');
+                     
+                     // Only update textarea if it's NOT focused (to avoid overwriting user typing)
+                     if (textarea && document.activeElement !== textarea) {
+                         textarea.value = image.note || '';
+                     }
+                     
+                     // Always update display div
+                     if (noteDisplay) {
+                         const displayText = image.note || (readOnly ? 'No note added.' : 'Add a note about this moment…');
+                         if (noteDisplay.textContent !== displayText) {
+                             noteDisplay.textContent = displayText;
+                             if (!image.note) noteDisplay.classList.add('muted');
+                             else noteDisplay.classList.remove('muted');
+                         }
+                     }
+                 }
+            }
+        } else {
+            // Create new marker
+            try {
+                const displayName = getDisplayName(image.original_filename);
+                const marker = L.marker([image.lat, image.lon], {
+                    title: displayName,
+                    icon: createPhotoMarkerIcon(image),
+                    riseOnHover: true,
+                    zIndexOffset: 150,
+                });
 
-    window.addEventListener('imageUploadedWithGPS', handleImageUploadedWithGPS);
-    return () => window.removeEventListener('imageUploadedWithGPS', handleImageUploadedWithGPS);
-  }, [map, onImageSelected, registerMarkerEvents, handleMarkerSelected]);
+                marker.bindTooltip(displayName, {
+                    direction: 'top',
+                    offset: [0, -38],
+                    opacity: 0.95,
+                    className: 'photo-tooltip',
+                });
 
-  /**
-   * Listen for image delete events
-   */
-  useEffect(() => {
-    const handleImageDeleted = (event) => {
-      console.log('[ImageLayer] Image deleted event received');
-      const { object_key } = event.detail;
+                // Create popup content
+                const popupContent = createPopupContent(image, handleMarkerSelected, readOnly, onPhotoUpdate);
+                marker.bindPopup(popupContent, { maxWidth: 300 });
+                
+                const handler = registerMarkerEvents(marker, image);
+                marker.addTo(map);
 
-      if (!map) return;
-      const entry = markersRef.current[object_key];
-      if (!entry) return;
+                newMarkers[key] = {
+                    marker,
+                    image,
+                    handler,
+                };
+            } catch (err) {
+                console.error('[ImageLayer] Error creating marker for', key, err);
+            }
+        }
+    });
 
-      try {
-        detachMarkerEntry(entry);
-        setMarkers((prev) => {
-          const updated = { ...prev };
-          delete updated[object_key];
-          markersRef.current = updated;
-          return updated;
-        });
-        console.log('[ImageLayer] Removed marker for deleted image:', object_key);
-      } catch (err) {
-        console.error('[ImageLayer] Error removing marker:', err);
-      }
-    };
+    // 2. Remove old markers
+    Object.keys(currentMarkers).forEach((key) => {
+        if (!processedKeys.has(key)) {
+            detachMarkerEntry(currentMarkers[key]);
+        }
+    });
 
-    window.addEventListener('imageDeleted', handleImageDeleted);
-    return () => window.removeEventListener('imageDeleted', handleImageDeleted);
-  }, [map, detachMarkerEntry]);
+    setMarkers(newMarkers);
+    markersRef.current = newMarkers;
+
+  }, [map, photos, readOnly, onPhotoUpdate, handleMarkerSelected, registerMarkerEvents, detachMarkerEntry]);
 
   /**
    * Center and open popup when sidebar requests
@@ -270,7 +206,6 @@ function ImageLayer({ onImageSelected = null, tripId = null, readOnly = false })
 
       const targetLatLng = entry ? entry.marker.getLatLng() : fallbackLatLng;
       if (!targetLatLng) {
-        console.warn('[ImageLayer] Unable to center map — missing coordinates for', objectKey);
         return;
       }
 
@@ -279,7 +214,11 @@ function ImageLayer({ onImageSelected = null, tripId = null, readOnly = false })
 
       if (entry) {
         entry.marker.openPopup();
-        handleMarkerSelected(entry.image);
+        const selectionOptions = {
+          preventViewer: Boolean(detail.preventViewer),
+          interactionSource: detail.source || 'programmatic-center',
+        };
+        handleMarkerSelected(entry.image, selectionOptions);
       }
     };
 
@@ -321,29 +260,12 @@ function getDisplayName(filename) {
 /**
  * Create HTML content for marker popup
  */
-function createPopupContent(image, onMarkerSelected, readOnly) {
+function createPopupContent(image, onMarkerSelected, readOnly, onPhotoUpdate) {
   const displayName = getDisplayName(image.original_filename);
   const truncatedName = displayName.length > 30
     ? `${displayName.substring(0, 27)}...`
     : displayName;
   const resolvedThumbUrl = resolveThumbUrl(image.thumb_url);
-
-  if (typeof document === 'undefined') {
-    return `
-      <div class="image-popup">
-        <div class="image-popup-name">${truncatedName}</div>
-        <div class="image-popup-coords"><small>${Number(image.lat).toFixed(4)}°, ${Number(image.lon).toFixed(4)}°</small></div>
-      </div>
-    `;
-  }
-
-  const detail = {
-    object_key: image.object_key,
-    original_filename: image.original_filename,
-    lat: Number(image.lat),
-    lon: Number(image.lon),
-    metadata_id: image.metadata_id || null,
-  };
 
   const container = document.createElement('div');
   container.className = 'image-popup';
@@ -355,17 +277,27 @@ function createPopupContent(image, onMarkerSelected, readOnly) {
   imageEl.alt = displayName;
   imageEl.src = resolvedThumbUrl || FALLBACK_THUMBNAIL;
   imageEl.style.display = 'none';
-  imageEl.onload = () => {
-    imageEl.style.display = 'block';
-  };
+  imageEl.onload = () => { imageEl.style.display = 'block'; };
   imageEl.onerror = () => {
-    if (imageEl.src !== FALLBACK_THUMBNAIL) {
-      imageEl.src = FALLBACK_THUMBNAIL;
-    }
+    if (imageEl.src !== FALLBACK_THUMBNAIL) imageEl.src = FALLBACK_THUMBNAIL;
     imageEl.style.display = 'block';
   };
   thumbnailWrapper.appendChild(imageEl);
   container.appendChild(thumbnailWrapper);
+
+  thumbnailWrapper.addEventListener('dblclick', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('timelineScrollToItem', { detail: { itemId: image.object_key } }));
+    }
+    if (typeof onMarkerSelected === 'function') {
+      onMarkerSelected(image, {
+        forceViewer: true,
+        interactionSource: 'popup-thumbnail-dblclick',
+      });
+    }
+  });
 
   const nameEl = document.createElement('div');
   nameEl.className = 'image-popup-name';
@@ -376,7 +308,7 @@ function createPopupContent(image, onMarkerSelected, readOnly) {
   const coordsEl = document.createElement('div');
   coordsEl.className = 'image-popup-coords';
   const coordsText = document.createElement('small');
-  coordsText.textContent = `${detail.lat.toFixed(4)}°, ${detail.lon.toFixed(4)}°`;
+  coordsText.textContent = `${image.lat.toFixed(4)}°, ${image.lon.toFixed(4)}°`;
   coordsEl.appendChild(coordsText);
   container.appendChild(coordsEl);
 
@@ -392,9 +324,7 @@ function createPopupContent(image, onMarkerSelected, readOnly) {
   noteDisplay.className = 'image-popup-note-display';
   const existingNote = image.note || '';
   noteDisplay.textContent = existingNote || (readOnly ? 'No note added.' : 'Add a note about this moment…');
-  if (!existingNote) {
-    noteDisplay.classList.add('muted');
-  }
+  if (!existingNote) noteDisplay.classList.add('muted');
   noteContainer.appendChild(noteDisplay);
 
   if (!readOnly) {
@@ -404,23 +334,8 @@ function createPopupContent(image, onMarkerSelected, readOnly) {
     noteEditor.style.display = 'none';
     noteContainer.appendChild(noteEditor);
 
-    const noteActions = document.createElement('div');
-    noteActions.className = 'image-popup-note-actions';
-    noteActions.style.display = 'none';
-    const saveBtn = document.createElement('button');
-    saveBtn.type = 'button';
-    saveBtn.textContent = 'Save';
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'ghost';
-    cancelBtn.textContent = 'Cancel';
-    noteActions.appendChild(saveBtn);
-    noteActions.appendChild(cancelBtn);
-    noteContainer.appendChild(noteActions);
-
     const toggleEditor = (show) => {
       noteEditor.style.display = show ? 'block' : 'none';
-      noteActions.style.display = show ? 'flex' : 'none';
       noteDisplay.style.display = show ? 'none' : 'block';
       if (show) {
         noteEditor.focus();
@@ -433,75 +348,48 @@ function createPopupContent(image, onMarkerSelected, readOnly) {
       toggleEditor(true);
     });
 
-    cancelBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      noteEditor.value = existingNote;
-      toggleEditor(false);
+    // Real-time sync on input
+    noteEditor.addEventListener('input', (e) => {
+        const newNote = e.target.value;
+        if (onPhotoUpdate) {
+            onPhotoUpdate(image.object_key, newNote, false); // false = do not save to backend yet
+        }
     });
 
-    saveBtn.addEventListener('click', async (event) => {
-      event.stopPropagation();
+    // Save on blur
+    noteEditor.addEventListener('blur', () => {
       const newNote = noteEditor.value;
-      try {
-        await updatePhotoNote(detail.metadata_id || detail.object_key, {
-          note: newNote,
-          note_title: newNote ? newNote.split('\n')[0] : null,
-        });
-        noteDisplay.textContent = newNote || 'Add a note about this moment…';
-        if (newNote) {
-          noteDisplay.classList.remove('muted');
-        } else {
-          noteDisplay.classList.add('muted');
-        }
-        toggleEditor(false);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('photoNoteUpdated', {
-              detail: {
-                object_key: detail.object_key,
-                metadata_id: detail.metadata_id || detail.object_key,
-                note: newNote,
-                note_title: newNote ? newNote.split('\n')[0] : null,
-              },
-            })
-          );
-        }
-      } catch (err) {
-        console.error('[ImageLayer] Failed to save note', err);
-        alert('Failed to save note. Please try again.');
+      // Optimistic update for display
+      noteDisplay.textContent = newNote || 'Add a note about this moment…';
+      if (newNote) noteDisplay.classList.remove('muted');
+      else noteDisplay.classList.add('muted');
+      
+      toggleEditor(false);
+
+      if (onPhotoUpdate) {
+          onPhotoUpdate(image.object_key, newNote, true); // true = save to backend
       }
     });
+
+    noteEditor.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        noteEditor.blur(); // Triggers save via blur
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        noteEditor.value = image.note || ''; // Revert to last known state
+        toggleEditor(false);
+      }
+    });
+
+    noteEditor.addEventListener('click', (e) => e.stopPropagation());
   }
 
   container.appendChild(noteContainer);
 
-  const buttonEl = document.createElement('button');
-  buttonEl.className = 'image-popup-button';
-  buttonEl.type = 'button';
-  buttonEl.textContent = 'View Details';
-  container.appendChild(buttonEl);
-
-  const dispatchSelection = () => {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('mapImageSelected', { detail }));
-      window.dispatchEvent(new CustomEvent('viewImageDetails', { detail }));
-    }
-    if (typeof onMarkerSelected === 'function') {
-      onMarkerSelected(image);
-    }
-  };
-
-  const attachSelectionHandler = (node) => {
-    node.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      dispatchSelection();
-    });
-  };
-
-  attachSelectionHandler(buttonEl);
-  attachSelectionHandler(thumbnailWrapper);
-  attachSelectionHandler(nameEl);
+  // Removed "View Details" button and click handlers to prevent lightbox from opening
+  // per user request "remove all the lightbox from clicking photo marker"
 
   return container;
 }

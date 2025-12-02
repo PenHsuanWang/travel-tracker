@@ -174,6 +174,8 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
         object_key: filename,
         lat,
         lng: lon,
+        preventViewer: true,
+        source: 'image-gallery',
       }
     }));
   };
