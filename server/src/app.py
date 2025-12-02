@@ -14,6 +14,12 @@ from src.routes.file_upload_routes import router as file_upload_router
 from src.routes.file_retrieval_routes import router as file_retrieval_router
 from src.routes.trip_routes import router as trip_router
 from src.routes.auth_routes import router as auth_router
+from src.routes.user_routes import router as user_router
+from src.events.event_bus import EventBus
+from src.services.achievement_engine import achievement_engine
+
+# Subscribe to events
+EventBus.subscribe("GPX_PROCESSED", achievement_engine.handle_gpx_processed)
 
 app = FastAPI()
 
@@ -44,6 +50,8 @@ app.include_router(file_retrieval_router, prefix="/api")
 app.include_router(trip_router, prefix="/api/trips")
 # Auth routes
 app.include_router(auth_router, prefix="/api/auth")
+# User routes
+app.include_router(user_router, prefix="/api/users")
 
 if __name__ == "__main__":
     import uvicorn

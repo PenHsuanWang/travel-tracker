@@ -1,8 +1,9 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from src.models.trip import Trip
+from src.models.trip import Trip, TripResponse
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
+from bson import ObjectId
 import logging
 
 class TripService:
@@ -34,50 +35,61 @@ class TripService:
         )
         return trip_data
 
-    def get_trips(self) -> List[Trip]:
+    def get_trips(self, user_id: Optional[str] = None) -> List[TripResponse]:
         """
-        Get all trips.
+        Get all trips. Optionally filter by user_id (membership).
         """
-        # This is a bit of a hack since StorageManager doesn't have a list_all method for MongoDB
-        # We'll need to access the adapter directly or extend StorageManager.
-        # For now, let's assume we can use the adapter directly if needed, 
-        # but StorageManager has list_keys which might not be enough for full docs.
-        # Let's use the adapter directly for querying.
-        
         adapter = self.storage_manager.adapters.get('mongodb')
         if not adapter:
             raise RuntimeError("MongoDB adapter not initialized")
             
-        # We need to access the underlying collection to find all
-        # The adapter exposes 'find' method? Let's check MongoDBAdapter.
-        # Assuming standard pymongo usage via adapter if it exposes the collection or a find method.
-        # Looking at previous code, it seems we might need to extend the adapter or use what's available.
-        # The MongoDBAdapter likely has a find method or similar.
-        # Let's try to use list_keys to get IDs then load_batch, or better yet, 
-        # if the adapter supports a query method.
+        collection = adapter.get_collection(self.collection_name)
         
-        # Since I can't see MongoDBAdapter source right now, I'll assume I can iterate or find.
-        # If StorageManager is strict, I might need to implement a 'find' or 'list_all' there.
-        # Let's try to use the adapter's find method if it exists, or implement a simple listing.
-        
-        # HACK: Accessing internal db object of adapter if possible, or assuming adapter has `find`.
-        # Let's assume we can get all documents.
-        
-        # Re-reading StorageManager: it has list_keys.
-        # Let's use list_keys to get all IDs, then load_batch_data.
-        # This is inefficient for large datasets but fine for MVP.
-        
-        keys = self.storage_manager.list_keys('mongodb', collection_name=self.collection_name)
-        trips_data = self.storage_manager.load_batch_data('mongodb', keys, collection_name=self.collection_name)
+        query = {}
+        if user_id:
+            # Filter where user_id is in member_ids
+            query["member_ids"] = user_id
+            
+        cursor = collection.find(query)
         
         trips = []
-        for key, data in trips_data.items():
-            if data:
-                trips.append(Trip(**data))
-        
+        for data in cursor:
+            trips.append(Trip(**data))
+            
         # Sort by start_date descending
         trips.sort(key=lambda x: x.start_date or datetime.min, reverse=True)
-        return trips
+        
+        # Populate owner details
+        owner_ids = list(set(t.owner_id for t in trips if t.owner_id))
+        users_map = {}
+        
+        if owner_ids:
+            users_collection = adapter.get_collection('users')
+            owner_obj_ids = []
+            for oid in owner_ids:
+                try:
+                    owner_obj_ids.append(ObjectId(oid))
+                except:
+                    pass
+            
+            if owner_obj_ids:
+                users_cursor = users_collection.find({"_id": {"$in": owner_obj_ids}})
+                for u in users_cursor:
+                    uid = str(u["_id"])
+                    users_map[uid] = {
+                        "id": uid,
+                        "username": u.get("username", "Unknown"),
+                        "avatar_url": u.get("avatar_url")
+                    }
+        
+        result = []
+        for t in trips:
+            tr = TripResponse(**t.model_dump())
+            if t.owner_id and t.owner_id in users_map:
+                tr.owner = users_map[t.owner_id]
+            result.append(tr)
+            
+        return result
 
     def get_trip(self, trip_id: str) -> Optional[Trip]:
         """
@@ -115,6 +127,24 @@ class TripService:
             collection_name=self.collection_name
         )
         return updated_trip
+
+    def update_members(self, trip_id: str, member_ids: List[str], current_user_id: str) -> Optional[Trip]:
+        """
+        Update trip members. Only owner can do this.
+        """
+        trip = self.get_trip(trip_id)
+        if not trip:
+            return None
+        
+        if trip.owner_id != current_user_id:
+            # We'll let the controller handle the exception or return None/False
+            raise PermissionError("Only the owner can manage members.")
+            
+        # Ensure owner is always a member
+        if trip.owner_id not in member_ids:
+            member_ids.append(trip.owner_id)
+            
+        return self.update_trip(trip_id, {"member_ids": member_ids})
 
     def delete_trip(self, trip_id: str) -> bool:
         """

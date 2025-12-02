@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Tuple
 import logging
 from src.services.trip_service import TripService
+from src.events.event_bus import EventBus
 
 
 class FileUploadService:
@@ -152,8 +153,9 @@ class FileUploadService:
         handler = HandlerFactory.get_handler(file_extension)
 
         # Enforce trip scoping for GPX and image uploads to avoid cross-trip leakage
-        if file_extension in {"gpx", "jpg", "jpeg", "png", "gif"} and not trip_id:
-            raise ValueError("trip_id is required when uploading GPX tracks or photos")
+        # Exception: Avatars (images without trip_id) are allowed
+        if file_extension == "gpx" and not trip_id:
+            raise ValueError("trip_id is required when uploading GPX tracks")
         
         # Enforce single GPX file per trip: delete existing GPX files before uploading new one
         if file_extension == "gpx" and trip_id:
@@ -255,6 +257,23 @@ class FileUploadService:
                 response_payload["gpx_end_datetime"] = auto_fill_details.get("end_datetime")
                 if auto_fill_details.get("trip"):
                     response_payload["trip"] = auto_fill_details["trip"]
+
+                # Publish GPX_PROCESSED event for gamification
+                if result.track_summary:
+                    try:
+                        trip = service.trip_service.get_trip(trip_id)
+                        if trip:
+                            stats = {
+                                "distance_km": result.track_summary.get("total_distance_km", 0),
+                                "elevation_gain_m": result.track_summary.get("elevation_gain_m", 0),
+                            }
+                            EventBus.publish("GPX_PROCESSED", {
+                                "trip_id": trip_id,
+                                "stats": stats,
+                                "member_ids": trip.member_ids
+                            })
+                    except Exception as e:
+                        logging.getLogger(__name__).error(f"Failed to publish GPX_PROCESSED event: {e}")
 
             return response_payload
         

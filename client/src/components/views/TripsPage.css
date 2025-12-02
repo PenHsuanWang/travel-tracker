@@ -551,3 +551,25 @@
     padding: 16px;
   }
 }
+
+.trip-owner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  padding: 4px 8px;
+  border-radius: 20px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.owner-avatar-small {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.owner-name {
+  font-weight: 600;
+}

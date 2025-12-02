@@ -71,6 +71,7 @@ const TripCard = ({
     const gpxLabel = trip.has_gpx ? '✓' : '–';
     const photosLabel =
         typeof trip.photo_count === 'number' ? trip.photo_count : '—';
+    const owner = trip.owner;
 
     const handleCardClick = () => {
         if (selectMode) {
@@ -166,6 +167,17 @@ const TripCard = ({
                     <div className="trip-title">
                         {trip.name || trip.title || 'Untitled trip'}
                     </div>
+                    {owner && (
+                        <div className="trip-owner">
+                            <img 
+                                src={owner.avatar_url ? (owner.avatar_url.startsWith('http') ? owner.avatar_url : getImageUrl(owner.avatar_url)) : '/default-avatar.png'} 
+                                alt={owner.username} 
+                                className="owner-avatar-small" 
+                                title={`Owner: ${owner.username}`}
+                            />
+                            <span className="owner-name">{owner.username}</span>
+                        </div>
+                    )}
                     <div className="trip-date">
                         {formatDateRange(trip.start_date, trip.end_date)}
                     </div>

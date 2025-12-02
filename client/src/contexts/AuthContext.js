@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import authService from '../services/authService';
+import userService from '../services/userService';
 
 const AuthContext = createContext(null);
 
@@ -8,20 +9,31 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const currentUser = authService.getCurrentUser();
-    const token = localStorage.getItem('token');
-    if (currentUser && token) {
-      setUser(currentUser);
+  const fetchUser = async () => {
+    try {
+      const userData = await userService.getProfile();
+      setUser(userData);
       setIsAuthenticated(true);
+    } catch (error) {
+      console.error("Failed to fetch user profile", error);
+      authService.logout();
+      setUser(null);
+      setIsAuthenticated(false);
     }
-    setLoading(false);
+  };
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      fetchUser().finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   const login = async (username, password) => {
     const data = await authService.login(username, password);
-    setUser({ username });
-    setIsAuthenticated(true);
+    await fetchUser();
     return data;
   };
 

@@ -100,3 +100,37 @@
   color: #0f172a;
   font-weight: 700;
 }
+
+.auth-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-profile-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: #0f172a;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.user-profile-link:hover {
+  background-color: #f1f5f9;
+}
+
+.header-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #2f855a;
+}
+
+.user-greeting {
+  font-size: 0.9rem;
+}
