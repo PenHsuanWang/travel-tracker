@@ -30,18 +30,9 @@ const searchUsers = async (query) => {
 };
 
 const getStats = async () => {
-    // Assuming we might add a specific stats endpoint later, 
-    // but for now stats are part of the profile.
-    // If we added /users/me/stats in the design, we should implement it.
-    // Design says: GET /api/users/me/stats - Get aggregated stats
-    // But in user_routes.py I didn't explicitly create a separate stats endpoint, 
-    // I just included stats in the User model. 
-    // Let's check user_routes.py content if I can... 
-    // Actually, I recall adding it to the User model, so getProfile returns it.
-    // But the design doc mentioned /api/users/me/stats. 
-    // If I didn't implement it, I'll just use getProfile for now.
-    return getProfile();
-}
+  const response = await apiClient.get('/users/me/stats');
+  return response.data;
+};
 
 const userService = {
   getProfile,

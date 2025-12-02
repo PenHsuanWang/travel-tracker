@@ -261,6 +261,14 @@ class FileUploadService:
                 # Publish GPX_PROCESSED event for gamification
                 if result.track_summary:
                     try:
+                        stats_payload = {
+                            "distance_km": result.track_summary.get("total_distance_km") or (result.track_summary.get("total_distance_m") or 0) / 1000,
+                            "elevation_gain_m": result.track_summary.get("elevation_gain_m", 0),
+                            "moving_time_sec": result.track_summary.get("duration_seconds", 0),
+                            "max_altitude_m": result.track_summary.get("max_elevation_m") or result.track_summary.get("max_altitude_m") or 0,
+                        }
+                        service.trip_service.update_trip_stats(trip_id, stats_payload)
+
                         trip = service.trip_service.get_trip(trip_id)
                         if trip:
                             stats = {

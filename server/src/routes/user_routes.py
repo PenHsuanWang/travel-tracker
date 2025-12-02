@@ -18,6 +18,22 @@ class UserUpdate(BaseModel):
 class UserProfile(User):
     pinned_trips: List[TripResponse] = []
 
+class UserStats(BaseModel):
+    total_distance_km: float = 0.0
+    total_elevation_gain_m: float = 0.0
+    total_trips: int = 0
+    earned_badges: List[str] = []
+
+@router.get("/me/stats", response_model=UserStats)
+async def read_user_stats(current_user: User = Depends(get_current_user)):
+    """Return aggregated statistics for the authenticated user."""
+    return UserStats(
+        total_distance_km=current_user.total_distance_km or 0.0,
+        total_elevation_gain_m=current_user.total_elevation_gain_m or 0.0,
+        total_trips=current_user.total_trips or 0,
+        earned_badges=current_user.earned_badges or [],
+    )
+
 @router.get("/me", response_model=UserProfile)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     """
@@ -28,6 +44,7 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     # Convert current_user to dict to append pinned_trips
     user_response = current_user.model_dump()
     user_response["pinned_trips"] = []
+    
     
     if current_user.pinned_trip_ids:
         trips_collection = mongo_adapter.get_collection("trips")
@@ -57,8 +74,32 @@ async def update_user_me(user_update: UserUpdate, current_user: User = Depends(g
         
     # Validate pinned trips if provided
     if "pinned_trip_ids" in update_data:
-        # TODO: Verify user is a member of these trips
-        pass
+        pinned_ids = update_data.get("pinned_trip_ids") or []
+        # Remove duplicates while preserving order
+        seen = set()
+        deduped = []
+        for trip_id in pinned_ids:
+            if trip_id not in seen:
+                seen.add(trip_id)
+                deduped.append(trip_id)
+
+        if len(deduped) > 3:
+            raise HTTPException(status_code=400, detail="You can only pin up to 3 trips.")
+
+        if deduped and not current_user.id:
+            raise HTTPException(status_code=400, detail="User ID missing; cannot validate pinned trips.")
+
+        if deduped:
+            trips_collection = mongo_adapter.get_collection("trips")
+            for trip_id in deduped:
+                trip_doc = trips_collection.find_one({
+                    "id": trip_id,
+                    "member_ids": current_user.id
+                })
+                if not trip_doc:
+                    raise HTTPException(status_code=400, detail="Pinned trips must belong to you.")
+
+        update_data["pinned_trip_ids"] = deduped
         
     users_collection.update_one(
         {"username": current_user.username},
@@ -166,7 +207,7 @@ async def search_users(q: str = Query(..., min_length=2), current_user: User = D
     return users
 
 @router.get("/{username}", response_model=UserProfile)
-async def get_user_profile(username: str, current_user: User = Depends(get_current_user)):
+async def get_user_profile(username: str):
     """
     Get public profile of another user with pinned trips.
     """

@@ -57,6 +57,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     
     # Convert ObjectId to string for Pydantic compatibility
     if "_id" in user_data:
-        user_data["_id"] = str(user_data["_id"])
+        user_data["id"] = str(user_data.pop("_id"))
         
     return UserInDB(**user_data)

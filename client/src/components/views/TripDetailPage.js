@@ -166,8 +166,9 @@ const TripDetailPage = () => {
         if (trip.owner_id && String(trip.owner_id) === String(userId)) return true;
         // Check owner object match (fallback)
         if (trip.owner && trip.owner.id && String(trip.owner.id) === String(userId)) return true;
+        if (trip.owner && trip.owner.username && user?.username && trip.owner.username === user.username) return true;
         return false;
-    }, [userId, trip]);
+    }, [userId, trip, user?.username]);
 
     // Lifted GPX State
     // Refactored: Single GPX file per trip

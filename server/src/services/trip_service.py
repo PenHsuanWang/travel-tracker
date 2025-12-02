@@ -1,8 +1,9 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from src.models.trip import Trip, TripResponse
+from src.models.trip import Trip, TripResponse, TripStats
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
+from src.events.event_bus import EventBus
 from bson import ObjectId
 import logging
 
@@ -158,7 +159,11 @@ class TripService:
         # Update fields
         trip_dict = current_trip.model_dump()
         for key, value in update_data.items():
-            if key in trip_dict:
+            if key not in trip_dict:
+                continue
+            if key == "stats" and isinstance(value, dict):
+                trip_dict[key] = TripStats(**{**trip_dict.get("stats", {}), **value}).model_dump()
+            else:
                 trip_dict[key] = value
         
         updated_trip = Trip(**trip_dict)
@@ -186,8 +191,36 @@ class TripService:
         # Ensure owner is always a member
         if trip.owner_id not in member_ids:
             member_ids.append(trip.owner_id)
-            
-        return self.update_trip(trip_id, {"member_ids": member_ids})
+
+        existing_members = set(trip.member_ids or [])
+        new_members = [mid for mid in member_ids if mid not in existing_members]
+        updated = self.update_trip(trip_id, {"member_ids": member_ids})
+
+        if updated and new_members and getattr(trip, "stats", None):
+            EventBus.publish("MEMBER_ADDED", {
+                "trip_id": trip_id,
+                "member_ids": new_members,
+                "stats": trip.stats.model_dump() if hasattr(trip, "stats") else {}
+            })
+
+        return updated
+
+    def update_trip_stats(self, trip_id: str, stats: Dict[str, Any]) -> Optional[Trip]:
+        """Persist denormalized trip statistics."""
+        trip = self.get_trip(trip_id)
+        if not trip:
+            return None
+
+        existing_stats = trip.stats.model_dump() if getattr(trip, "stats", None) else TripStats().model_dump()
+        updated_stats = {
+            **existing_stats,
+            "distance_km": float(stats.get("distance_km", existing_stats.get("distance_km", 0.0)) or 0.0),
+            "elevation_gain_m": float(stats.get("elevation_gain_m", existing_stats.get("elevation_gain_m", 0.0)) or 0.0),
+            "moving_time_sec": float(stats.get("moving_time_sec", existing_stats.get("moving_time_sec", 0.0)) or 0.0),
+            "max_altitude_m": float(stats.get("max_altitude_m", existing_stats.get("max_altitude_m", 0.0)) or 0.0),
+        }
+
+        return self.update_trip(trip_id, {"stats": updated_stats})
 
     def delete_trip(self, trip_id: str) -> bool:
         """

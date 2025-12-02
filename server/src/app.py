@@ -20,6 +20,7 @@ from src.services.achievement_engine import achievement_engine
 
 # Subscribe to events
 EventBus.subscribe("GPX_PROCESSED", achievement_engine.handle_gpx_processed)
+EventBus.subscribe("MEMBER_ADDED", achievement_engine.handle_member_added)
 
 app = FastAPI()
 

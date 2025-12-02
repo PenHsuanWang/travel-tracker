@@ -44,8 +44,8 @@ export const createTripWithGpx = async (tripData, gpxFile) => {
   return response.data;
 };
 
-export const getTrips = async () => {
-  const response = await apiClient.get('/trips/');
+export const getTrips = async (params = {}) => {
+  const response = await apiClient.get('/trips/', { params });
   return response.data;
 };
 

@@ -22,6 +22,39 @@ class AchievementEngine:
             "climber-level-3": {"name": "Climber Level 3", "threshold_m": 5000.0},
         }
 
+    def _increment_user_totals(self, user_id: str, distance_km: float, elevation_gain_m: float, trip_increment: bool = True):
+        adapter = self.storage_manager.adapters.get('mongodb')
+        if not adapter:
+            return
+        users_collection = adapter.get_collection(self.collection_name)
+
+        from bson import ObjectId
+
+        try:
+            try:
+                oid = ObjectId(user_id)
+                query = {"_id": oid}
+            except Exception:
+                query = {"_id": user_id}
+
+            inc_payload = {
+                "total_distance_km": distance_km,
+                "total_elevation_gain_m": elevation_gain_m,
+            }
+            if trip_increment:
+                inc_payload["total_trips"] = 1
+
+            update_result = users_collection.find_one_and_update(
+                query,
+                {"$inc": inc_payload},
+                return_document=True
+            )
+
+            if update_result:
+                self._check_and_award_badges(update_result, users_collection)
+        except Exception as e:
+            logger.error(f"Failed to update stats for user {user_id}: {e}")
+
     def handle_gpx_processed(self, payload: Dict[str, Any]):
         """
         Event handler for GPX_PROCESSED.
@@ -39,47 +72,21 @@ class AchievementEngine:
         
         logger.info(f"Processing achievements for trip {trip_id} (Dist: {distance_km}km, Elev: {elevation_gain_m}m)")
         
-        adapter = self.storage_manager.adapters.get('mongodb')
-        users_collection = adapter.get_collection(self.collection_name)
-        
-        from bson import ObjectId
-        
         for user_id in member_ids:
-            try:
-                # Update stats
-                # We use $inc to be atomic
-                # Also increment total_trips
-                
-                # First, get current user to check badges
-                # Note: In a real system, we might want to do this in a transaction or use more complex logic
-                # But for now, we'll fetch, check, and update.
-                # Actually, we can use find_one_and_update to get the NEW document, then check badges?
-                # Or just update stats first.
-                
-                # Convert string ID to ObjectId if needed
-                try:
-                    oid = ObjectId(user_id)
-                    query = {"_id": oid}
-                except:
-                    query = {"_id": user_id} # Fallback if string IDs are used
-                
-                update_result = users_collection.find_one_and_update(
-                    query,
-                    {
-                        "$inc": {
-                            "total_distance_km": distance_km,
-                            "total_elevation_gain_m": elevation_gain_m,
-                            "total_trips": 1
-                        }
-                    },
-                    return_document=True # Return the updated document
-                )
-                
-                if update_result:
-                    self._check_and_award_badges(update_result, users_collection)
-                    
-            except Exception as e:
-                logger.error(f"Failed to update stats for user {user_id}: {e}")
+            self._increment_user_totals(user_id, distance_km, elevation_gain_m, trip_increment=True)
+
+    def handle_member_added(self, payload: Dict[str, Any]):
+        """Grant trip credit to newly added members."""
+        stats = payload.get("stats", {})
+        member_ids = payload.get("member_ids", [])
+        if not stats or not member_ids:
+            return
+
+        distance_km = stats.get("distance_km", 0)
+        elevation_gain_m = stats.get("elevation_gain_m", 0)
+
+        for user_id in member_ids:
+            self._increment_user_totals(user_id, distance_km, elevation_gain_m, trip_increment=True)
 
     def _check_and_award_badges(self, user_doc: Dict[str, Any], collection):
         user_badges = set(user_doc.get("earned_badges", []))
