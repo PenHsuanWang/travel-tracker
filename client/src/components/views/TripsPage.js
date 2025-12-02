@@ -9,6 +9,7 @@ import {
     updateTrip,
     uploadFile,
 } from '../../services/api';
+import userService from '../../services/userService';
 import CreateTripModal from '../common/CreateTripModal';
 import './TripsPage.css';
 
@@ -58,6 +59,8 @@ const TripCard = ({
     onOpenCover,
     onDelete,
     readOnly,
+    isPinned,
+    onTogglePin
 }) => {
     const coverUrl =
         trip.cover_image_url ||
@@ -150,12 +153,14 @@ const TripCard = ({
                             )}
                             <button
                                 type="button"
-                                className="ghost-button ghost-icon"
-                                onClick={(e) => e.stopPropagation()}
-                                aria-label="More cover options (coming soon)"
-                                title="More options coming soon"
+                                className={`ghost-button ghost-icon ${isPinned ? 'pinned' : ''}`}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onTogglePin(trip.id);
+                                }}
+                                title={isPinned ? "Unpin from profile" : "Pin to profile"}
                             >
-                                ⋯
+                                {isPinned ? '★' : '☆'}
                             </button>
                         </div>
                     </div>
@@ -170,7 +175,7 @@ const TripCard = ({
                     {owner && (
                         <div className="trip-owner">
                             <img 
-                                src={owner.avatar_url ? (owner.avatar_url.startsWith('http') ? owner.avatar_url : getImageUrl(owner.avatar_url)) : '/default-avatar.png'} 
+                                src={owner.avatar_url ? (owner.avatar_url.startsWith('http') ? owner.avatar_url : getImageUrl(owner.avatar_url)) : '/default-avatar.svg'} 
                                 alt={owner.username} 
                                 className="owner-avatar-small" 
                                 title={`Owner: ${owner.username}`}
@@ -664,7 +669,7 @@ const CoverImageModal = ({ trip, onClose, onSave }) => {
 };
 
 const TripsPage = () => {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user, fetchUser } = useAuth();
     const [trips, setTrips] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -726,6 +731,35 @@ const TripsPage = () => {
         setSelectedTripIds((prev) =>
             prev.includes(tripId) ? prev.filter((id) => id !== tripId) : [...prev, tripId]
         );
+    };
+
+    const handleTogglePin = async (tripId) => {
+        if (!user) return;
+        
+        const currentPinned = user.pinned_trip_ids || [];
+        const isPinned = currentPinned.includes(tripId);
+        
+        let newPinned;
+        if (isPinned) {
+            newPinned = currentPinned.filter(id => id !== tripId);
+        } else {
+            if (currentPinned.length >= 3) {
+                alert("You can only pin up to 3 trips.");
+                return;
+            }
+            newPinned = [...currentPinned, tripId];
+        }
+        
+        try {
+            await userService.updateProfile({ pinned_trip_ids: newPinned });
+            // Refresh user profile to update UI
+            if (fetchUser) {
+                await fetchUser();
+            }
+        } catch (error) {
+            console.error("Failed to update pinned trips", error);
+            alert("Failed to update pinned trips.");
+        }
     };
 
     const handleFilterChange = (partial) => {
@@ -937,6 +971,8 @@ const TripsPage = () => {
                             onOpenCover={setCoverModalTrip}
                             onDelete={handleDeleteTrip}
                             readOnly={readOnly}
+                            isPinned={user?.pinned_trip_ids?.includes(trip.id)}
+                            onTogglePin={handleTogglePin}
                         />
                     ))}
                 </div>

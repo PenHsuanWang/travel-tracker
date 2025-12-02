@@ -1,4 +1,5 @@
 import React from 'react';
+import { getImageUrl } from '../../services/api';
 import ImageGalleryPanel from '../panels/ImageGalleryPanel';
 import '../../styles/Sidebar.css';
 
@@ -36,6 +37,26 @@ const TripSummaryCard = ({ trip, stats }) => {
             {trip.notes && (
                 <p style={{ fontStyle: 'italic' }}>{trip.notes}</p>
             )}
+            
+            {/* Members Section */}
+            {trip.members && trip.members.length > 0 && (
+                <div className="trip-members-section">
+                    <p className="section-label">Members</p>
+                    <div className="members-list">
+                        {trip.members.map(member => (
+                            <div key={member.id} className="member-item" title={member.username}>
+                                <img 
+                                    src={member.avatar_url ? (member.avatar_url.startsWith('http') ? member.avatar_url : getImageUrl(member.avatar_url)) : '/default-avatar.svg'} 
+                                    alt={member.username} 
+                                    className="member-avatar"
+                                />
+                                <span className="member-name">{member.username}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="TripSummaryStats">
                 <div className="TripSummaryStat">🖼 {stats.photos} photos</div>
                 <div className="TripSummaryStat">🧭 {stats.tracks} tracks</div>

@@ -54,6 +54,7 @@ class Trip(BaseModel):
 
 class TripResponse(Trip):
     owner: Optional[UserSummary] = None
+    members: List[UserSummary] = []
 
 class TripMembersUpdate(BaseModel):
     member_ids: List[str]

@@ -91,18 +91,61 @@ class TripService:
             
         return result
 
-    def get_trip(self, trip_id: str) -> Optional[Trip]:
+    def get_trip(self, trip_id: str) -> Optional[TripResponse]:
         """
-        Get a specific trip by ID.
+        Get a specific trip by ID with owner and members populated.
         """
         data = self.storage_manager.load_data(
             'mongodb',
             trip_id,
             collection_name=self.collection_name
         )
-        if data:
-            return Trip(**data)
-        return None
+        if not data:
+            return None
+            
+        trip = Trip(**data)
+        trip_response = TripResponse(**trip.model_dump())
+        
+        # Populate owner and members
+        adapter = self.storage_manager.adapters.get('mongodb')
+        if adapter:
+            users_collection = adapter.get_collection('users')
+            
+            # Collect all user IDs (owner + members)
+            user_ids_to_fetch = set()
+            if trip.owner_id:
+                user_ids_to_fetch.add(trip.owner_id)
+            if trip.member_ids:
+                user_ids_to_fetch.update(trip.member_ids)
+                
+            if user_ids_to_fetch:
+                obj_ids = []
+                for uid in user_ids_to_fetch:
+                    try:
+                        obj_ids.append(ObjectId(uid))
+                    except:
+                        pass
+                
+                if obj_ids:
+                    users_cursor = users_collection.find({"_id": {"$in": obj_ids}})
+                    users_map = {}
+                    for u in users_cursor:
+                        uid = str(u["_id"])
+                        users_map[uid] = {
+                            "id": uid,
+                            "username": u.get("username", "Unknown"),
+                            "avatar_url": u.get("avatar_url")
+                        }
+                        
+                    if trip.owner_id and trip.owner_id in users_map:
+                        trip_response.owner = users_map[trip.owner_id]
+                        
+                    if trip.member_ids:
+                        trip_response.members = [
+                            users_map[mid] for mid in trip.member_ids if mid in users_map
+                        ]
+                        
+        return trip_response
 
     def update_trip(self, trip_id: str, update_data: Dict[str, Any]) -> Optional[Trip]:
         """

@@ -127,7 +127,7 @@ async def list_trips(user_id: Optional[str] = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{trip_id}", response_model=Trip)
+@router.get("/{trip_id}", response_model=TripResponse)
 async def get_trip(trip_id: str):
     """
     Get a specific trip by ID.
