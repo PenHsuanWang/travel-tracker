@@ -5,7 +5,9 @@ from datetime import datetime
 class User(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    id: Optional[str] = Field(alias="_id", default=None)
+    # Use plain `id` field (string) for API compatibility. Database layer will
+    # convert ObjectId to string before constructing models.
+    id: Optional[str] = Field(default=None)
     username: str
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None

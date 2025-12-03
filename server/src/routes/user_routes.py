@@ -33,18 +33,36 @@ def _load_user_by_username(username: str) -> UserInDB:
     if not user_data:
         raise HTTPException(status_code=404, detail="User not found")
     if "_id" in user_data:
-        user_data["_id"] = str(user_data["_id"])
+        user_data["id"] = str(user_data.pop("_id"))
     return UserInDB(**user_data)
 
 
 def _build_profile_response(user_obj: UserInDB) -> dict:
+    """Build a profile dict ensuring compatibility with frontend expectations.
+    Construct the response from model attributes to guarantee `id` is present.
+    """
     mongo_adapter = AdapterFactory.create_mongodb_adapter()
-    user_response = user_obj.model_dump()
-    user_response["pinned_trips"] = []
 
-    if user_obj.pinned_trip_ids:
+    user_response = {
+        "id": str(user_obj.id) if getattr(user_obj, "id", None) else None,
+        "username": getattr(user_obj, "username", None),
+        "email": getattr(user_obj, "email", None),
+        "full_name": getattr(user_obj, "full_name", None),
+        "bio": getattr(user_obj, "bio", None),
+        "location": getattr(user_obj, "location", None),
+        "avatar_url": getattr(user_obj, "avatar_url", None),
+        "pinned_trip_ids": list(getattr(user_obj, "pinned_trip_ids", []) or []),
+        "total_distance_km": getattr(user_obj, "total_distance_km", 0.0),
+        "total_elevation_gain_m": getattr(user_obj, "total_elevation_gain_m", 0.0),
+        "total_trips": getattr(user_obj, "total_trips", 0),
+        "earned_badges": list(getattr(user_obj, "earned_badges", []) or []),
+        "created_at": getattr(user_obj, "created_at", None),
+        "pinned_trips": [],
+    }
+
+    if user_response["pinned_trip_ids"]:
         trips_collection = mongo_adapter.get_collection("trips")
-        cursor = trips_collection.find({"id": {"$in": user_obj.pinned_trip_ids}})
+        cursor = trips_collection.find({"id": {"$in": user_response["pinned_trip_ids"]}})
         for trip_doc in cursor:
             trip_doc.pop("_id", None)
             user_response["pinned_trips"].append(trip_doc)
@@ -127,11 +145,10 @@ async def update_user_me(user_update: UserUpdate, current_user: User = Depends(g
         {"$set": update_data}
     )
     
-    # Fetch updated user
+    # Fetch updated user and normalize _id -> id
     updated_user_data = users_collection.find_one({"username": current_user.username})
-    if "_id" in updated_user_data:
-        updated_user_data["_id"] = str(updated_user_data["_id"])
-    
+    if updated_user_data and "_id" in updated_user_data:
+        updated_user_data["id"] = str(updated_user_data.pop("_id"))
     updated_user = UserInDB(**updated_user_data)
     stats = user_stats_service.sync_user_stats(updated_user.id)
     updated_user.total_distance_km = stats["total_distance_km"]
@@ -169,8 +186,8 @@ async def upload_avatar(file: UploadFile = File(...), current_user: User = Depen
         
         # Return updated user
         updated_user_data = users_collection.find_one({"username": current_user.username})
-        if "_id" in updated_user_data:
-            updated_user_data["_id"] = str(updated_user_data["_id"])
+        if updated_user_data and "_id" in updated_user_data:
+            updated_user_data["id"] = str(updated_user_data.pop("_id"))
             
         updated_user = UserInDB(**updated_user_data)
         stats = user_stats_service.sync_user_stats(updated_user.id)
