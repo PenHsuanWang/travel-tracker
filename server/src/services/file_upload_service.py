@@ -97,6 +97,8 @@ class FileUploadService:
             "metadata_extracted": metadata_extracted,
             "start_datetime": start_dt.isoformat() if start_dt else None,
             "end_datetime": end_dt.isoformat() if end_dt else None,
+            "activity_start_datetime": None,
+            "activity_end_datetime": None,
             "trip": None,
         }
 
@@ -121,18 +123,28 @@ class FileUploadService:
             result["reason"] = "trip_not_found"
             return result
 
-        if trip.start_date or trip.end_date:
-            result["reason"] = "trip_dates_already_set"
-            result["trip"] = trip.model_dump(by_alias=True)
-            return result
+        activity_start = self._floor_to_date(start_dt)
+        activity_end = self._floor_to_date(end_dt)
+        result["activity_start_datetime"] = activity_start.isoformat()
+        result["activity_end_datetime"] = activity_end.isoformat()
 
         update_payload = {
-            "start_date": self._floor_to_date(start_dt),
-            "end_date": self._floor_to_date(end_dt),
+            "activity_start_date": activity_start,
+            "activity_end_date": activity_end,
         }
+        applied = False
+        if not trip.start_date:
+            update_payload["start_date"] = activity_start
+            applied = True
+        if not trip.end_date:
+            update_payload["end_date"] = activity_end
+            applied = True
+
         updated_trip = self.trip_service.update_trip(trip_id, update_payload)
         if updated_trip:
-            result["applied"] = True
+            result["applied"] = applied
+            if not applied and trip.start_date and trip.end_date:
+                result["reason"] = "trip_dates_already_set"
             result["trip"] = updated_trip.model_dump(by_alias=True)
         else:
             result["reason"] = "trip_update_failed"
@@ -255,6 +267,8 @@ class FileUploadService:
                 response_payload["gpx_metadata_extracted"] = auto_fill_details.get("metadata_extracted")
                 response_payload["gpx_start_datetime"] = auto_fill_details.get("start_datetime")
                 response_payload["gpx_end_datetime"] = auto_fill_details.get("end_datetime")
+                response_payload["activity_start_datetime"] = auto_fill_details.get("activity_start_datetime")
+                response_payload["activity_end_datetime"] = auto_fill_details.get("activity_end_datetime")
                 if auto_fill_details.get("trip"):
                     response_payload["trip"] = auto_fill_details["trip"]
 

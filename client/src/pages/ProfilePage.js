@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import userService from '../services/userService';
 import { getImageUrl, getTrips } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/ProfilePage.css';
+import ActivityHeatmap from '../components/common/ActivityHeatmap';
 
 const ProfilePage = () => {
   const { username } = useParams();
@@ -84,6 +85,54 @@ const ProfilePage = () => {
     };
   }, [isOwnProfile, profile]);
 
+  const activityData = useMemo(() => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const normalizeDate = (value) => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
+    };
+
+    const uniqueTrips = new Map();
+    (memberTrips || []).forEach((trip) => {
+      if (trip?.id && !uniqueTrips.has(trip.id)) {
+        uniqueTrips.set(trip.id, trip);
+      }
+    });
+    (profile?.pinned_trips || []).forEach((trip) => {
+      if (trip?.id && !uniqueTrips.has(trip.id)) {
+        uniqueTrips.set(trip.id, trip);
+      }
+    });
+
+    const entries = [];
+    uniqueTrips.forEach((trip) => {
+      const startDate = normalizeDate(
+        trip.activity_start_date || trip.start_date || trip.created_at
+      );
+      if (!startDate) return;
+      const candidateEnd = normalizeDate(
+        trip.activity_end_date || trip.end_date
+      ) || startDate;
+      const start = startDate <= candidateEnd ? startDate : candidateEnd;
+      const end = startDate <= candidateEnd ? candidateEnd : startDate;
+      const totalDistance = Number(trip.stats?.distance_km) || 0;
+      const dayCount = Math.max(1, Math.round((end - start) / DAY_MS) + 1);
+      const perDayValue = totalDistance > 0 ? totalDistance / dayCount : 1;
+
+      for (let cursor = new Date(start); cursor <= end; cursor = new Date(cursor.getTime() + DAY_MS)) {
+        entries.push({
+          date: cursor.toISOString().split('T')[0],
+          value: perDayValue,
+          metadata: [{ tripId: trip.id, tripName: trip.name }],
+        });
+      }
+    });
+
+    return entries;
+  }, [memberTrips, profile?.pinned_trips]);
+
   if (loading) return <div className="profile-loading">Loading profile...</div>;
   if (error) return <div className="profile-error">{error}</div>;
   if (!profile) return <div className="profile-not-found">User not found.</div>;
@@ -130,6 +179,8 @@ const ProfilePage = () => {
           <span className="stat-label">Elevation</span>
         </div>
       </div>
+
+      <ActivityHeatmap data={activityData} />
 
       {/* Placeholder for Badges/Achievements */}
       <div className="profile-section">

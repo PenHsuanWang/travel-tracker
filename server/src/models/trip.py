@@ -37,6 +37,8 @@ class Trip(BaseModel):
     member_ids: List[str] = Field(default=[], index=True)
     is_public: bool = Field(default=True)
     stats: TripStats = Field(default_factory=TripStats)
+    activity_start_date: Optional[datetime] = None
+    activity_end_date: Optional[datetime] = None
 
     class Config:
         populate_by_name = True

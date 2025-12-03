@@ -5,6 +5,7 @@ from src.models.user import User, UserInDB
 from src.models.trip import TripResponse
 from src.utils.adapter_factory import AdapterFactory
 from src.services.file_upload_service import FileUploadService
+from src.services.user_stats_service import user_stats_service
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -24,14 +25,43 @@ class UserStats(BaseModel):
     total_trips: int = 0
     earned_badges: List[str] = []
 
+
+def _load_user_by_username(username: str) -> UserInDB:
+    mongo_adapter = AdapterFactory.create_mongodb_adapter()
+    users_collection = mongo_adapter.get_collection("users")
+    user_data = users_collection.find_one({"username": username})
+    if not user_data:
+        raise HTTPException(status_code=404, detail="User not found")
+    if "_id" in user_data:
+        user_data["_id"] = str(user_data["_id"])
+    return UserInDB(**user_data)
+
+
+def _build_profile_response(user_obj: UserInDB) -> dict:
+    mongo_adapter = AdapterFactory.create_mongodb_adapter()
+    user_response = user_obj.model_dump()
+    user_response["pinned_trips"] = []
+
+    if user_obj.pinned_trip_ids:
+        trips_collection = mongo_adapter.get_collection("trips")
+        cursor = trips_collection.find({"id": {"$in": user_obj.pinned_trip_ids}})
+        for trip_doc in cursor:
+            trip_doc.pop("_id", None)
+            user_response["pinned_trips"].append(trip_doc)
+
+    return user_response
+
+
 @router.get("/me/stats", response_model=UserStats)
 async def read_user_stats(current_user: User = Depends(get_current_user)):
     """Return aggregated statistics for the authenticated user."""
+    stats = user_stats_service.sync_user_stats(current_user.id)
+    refreshed_user = _load_user_by_username(current_user.username)
     return UserStats(
-        total_distance_km=current_user.total_distance_km or 0.0,
-        total_elevation_gain_m=current_user.total_elevation_gain_m or 0.0,
-        total_trips=current_user.total_trips or 0,
-        earned_badges=current_user.earned_badges or [],
+        total_distance_km=stats["total_distance_km"],
+        total_elevation_gain_m=stats["total_elevation_gain_m"],
+        total_trips=stats["total_trips"],
+        earned_badges=refreshed_user.earned_badges or [],
     )
 
 @router.get("/me", response_model=UserProfile)
@@ -39,24 +69,9 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     """
     Get current user's profile with pinned trips.
     """
-    mongo_adapter = AdapterFactory.create_mongodb_adapter()
-    
-    # Convert current_user to dict to append pinned_trips
-    user_response = current_user.model_dump()
-    user_response["pinned_trips"] = []
-    
-    
-    if current_user.pinned_trip_ids:
-        trips_collection = mongo_adapter.get_collection("trips")
-        # Find trips where id is in pinned_trip_ids
-        cursor = trips_collection.find({"id": {"$in": current_user.pinned_trip_ids}})
-        
-        for trip_doc in cursor:
-            if "_id" in trip_doc:
-                del trip_doc["_id"] # Remove Mongo ID, use 'id' field
-            user_response["pinned_trips"].append(trip_doc)
-            
-    return user_response
+    user_stats_service.sync_user_stats(current_user.id)
+    refreshed_user = _load_user_by_username(current_user.username)
+    return _build_profile_response(refreshed_user)
 
 @router.put("/me", response_model=UserProfile)
 async def update_user_me(user_update: UserUpdate, current_user: User = Depends(get_current_user)):
@@ -91,10 +106,16 @@ async def update_user_me(user_update: UserUpdate, current_user: User = Depends(g
 
         if deduped:
             trips_collection = mongo_adapter.get_collection("trips")
+            from bson import ObjectId
             for trip_id in deduped:
+                membership_match = [{"member_ids": current_user.id}]
+                try:
+                    membership_match.append({"member_ids": ObjectId(current_user.id)})
+                except Exception:
+                    pass
                 trip_doc = trips_collection.find_one({
                     "id": trip_id,
-                    "member_ids": current_user.id
+                    "$or": membership_match
                 })
                 if not trip_doc:
                     raise HTTPException(status_code=400, detail="Pinned trips must belong to you.")
@@ -112,20 +133,12 @@ async def update_user_me(user_update: UserUpdate, current_user: User = Depends(g
         updated_user_data["_id"] = str(updated_user_data["_id"])
     
     updated_user = UserInDB(**updated_user_data)
+    stats = user_stats_service.sync_user_stats(updated_user.id)
+    updated_user.total_distance_km = stats["total_distance_km"]
+    updated_user.total_elevation_gain_m = stats["total_elevation_gain_m"]
+    updated_user.total_trips = stats["total_trips"]
     
-    # Populate pinned trips for response
-    user_response = updated_user.model_dump()
-    user_response["pinned_trips"] = []
-    
-    if updated_user.pinned_trip_ids:
-        trips_collection = mongo_adapter.get_collection("trips")
-        cursor = trips_collection.find({"id": {"$in": updated_user.pinned_trip_ids}})
-        for trip_doc in cursor:
-            if "_id" in trip_doc:
-                del trip_doc["_id"]
-            user_response["pinned_trips"].append(trip_doc)
-            
-    return user_response
+    return _build_profile_response(updated_user)
 
 @router.post("/me/avatar", response_model=UserProfile)
 async def upload_avatar(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
@@ -160,21 +173,12 @@ async def upload_avatar(file: UploadFile = File(...), current_user: User = Depen
             updated_user_data["_id"] = str(updated_user_data["_id"])
             
         updated_user = UserInDB(**updated_user_data)
+        stats = user_stats_service.sync_user_stats(updated_user.id)
+        updated_user.total_distance_km = stats["total_distance_km"]
+        updated_user.total_elevation_gain_m = stats["total_elevation_gain_m"]
+        updated_user.total_trips = stats["total_trips"]
         
-        # Populate pinned trips (empty or existing)
-        # For simplicity, we can just call read_users_me logic or duplicate it
-        # Let's duplicate the minimal logic
-        user_response = updated_user.model_dump()
-        user_response["pinned_trips"] = []
-        if updated_user.pinned_trip_ids:
-            trips_collection = mongo_adapter.get_collection("trips")
-            cursor = trips_collection.find({"id": {"$in": updated_user.pinned_trip_ids}})
-            for trip_doc in cursor:
-                if "_id" in trip_doc:
-                    del trip_doc["_id"]
-                user_response["pinned_trips"].append(trip_doc)
-                
-        return user_response
+        return _build_profile_response(updated_user)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -211,29 +215,9 @@ async def get_user_profile(username: str):
     """
     Get public profile of another user with pinned trips.
     """
-    mongo_adapter = AdapterFactory.create_mongodb_adapter()
-    users_collection = mongo_adapter.get_collection("users")
-    
-    user_data = users_collection.find_one({"username": username})
-    
-    if not user_data:
-        raise HTTPException(status_code=404, detail="User not found")
-        
-    if "_id" in user_data:
-        user_data["_id"] = str(user_data["_id"])
-        
-    user_obj = UserInDB(**user_data)
-    
-    # Populate pinned trips
-    user_response = user_obj.model_dump()
-    user_response["pinned_trips"] = []
-    
-    if user_obj.pinned_trip_ids:
-        trips_collection = mongo_adapter.get_collection("trips")
-        cursor = trips_collection.find({"id": {"$in": user_obj.pinned_trip_ids}})
-        for trip_doc in cursor:
-            if "_id" in trip_doc:
-                del trip_doc["_id"]
-            user_response["pinned_trips"].append(trip_doc)
-            
-    return user_response
+    user_obj = _load_user_by_username(username)
+    stats = user_stats_service.sync_user_stats(user_obj.id)
+    user_obj.total_distance_km = stats["total_distance_km"]
+    user_obj.total_elevation_gain_m = stats["total_elevation_gain_m"]
+    user_obj.total_trips = stats["total_trips"]
+    return _build_profile_response(user_obj)

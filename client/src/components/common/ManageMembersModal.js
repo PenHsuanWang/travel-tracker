@@ -60,7 +60,7 @@ const ManageMembersModal = ({ isOpen, onClose, trip, onTripUpdated }) => {
         setSaving(true);
         setError(null);
         try {
-            const memberIds = selectedMembers.map(m => m.id);
+            const memberIds = selectedMembers.map(m => m.id).filter(id => id);
             const updatedTrip = await updateTripMembers(trip.id, memberIds);
             
             // The updatedTrip from backend might not have full member objects populated immediately 

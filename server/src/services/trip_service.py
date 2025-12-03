@@ -4,6 +4,7 @@ from src.models.trip import Trip, TripResponse, TripStats
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
 from src.events.event_bus import EventBus
+from src.services.user_stats_service import user_stats_service
 from bson import ObjectId
 import logging
 
@@ -34,6 +35,7 @@ class TripService:
             adapter_name='mongodb',
             collection_name=self.collection_name
         )
+        user_stats_service.sync_multiple_users(trip_data.member_ids or [])
         return trip_data
 
     def get_trips(self, user_id: Optional[str] = None) -> List[TripResponse]:
@@ -48,9 +50,13 @@ class TripService:
         
         query = {}
         if user_id:
-            # Filter where user_id is in member_ids
-            query["member_ids"] = user_id
-            
+            match_conditions = [{"member_ids": user_id}]
+            try:
+                match_conditions.append({"member_ids": ObjectId(user_id)})
+            except Exception:
+                pass
+            query["$or"] = match_conditions
+        
         cursor = collection.find(query)
         
         trips = []
@@ -196,6 +202,12 @@ class TripService:
         new_members = [mid for mid in member_ids if mid not in existing_members]
         updated = self.update_trip(trip_id, {"member_ids": member_ids})
 
+        if updated:
+            affected_users = set(existing_members) | set(member_ids)
+            if trip.owner_id:
+                affected_users.add(trip.owner_id)
+            user_stats_service.sync_multiple_users(affected_users)
+
         if updated and new_members and getattr(trip, "stats", None):
             EventBus.publish("MEMBER_ADDED", {
                 "trip_id": trip_id,
@@ -220,12 +232,19 @@ class TripService:
             "max_altitude_m": float(stats.get("max_altitude_m", existing_stats.get("max_altitude_m", 0.0)) or 0.0),
         }
 
-        return self.update_trip(trip_id, {"stats": updated_stats})
+        updated_trip = self.update_trip(trip_id, {"stats": updated_stats})
+        if updated_trip:
+            user_stats_service.sync_multiple_users(updated_trip.member_ids or [])
+        return updated_trip
 
     def delete_trip(self, trip_id: str) -> bool:
         """
         Delete a trip and cascade-delete associated files/metadata.
         """
+        existing_trip = self.get_trip(trip_id)
+        if not existing_trip:
+            return False
+
         adapter = self.storage_manager.adapters.get('mongodb')
         if not adapter:
             raise RuntimeError("MongoDB adapter not initialized")
@@ -233,6 +252,9 @@ class TripService:
         minio_adapter = self.storage_manager.adapters.get('minio')
         deleted_objects = []
         errors = []
+        affected_users = set(existing_trip.member_ids or [])
+        if existing_trip.owner_id:
+            affected_users.add(existing_trip.owner_id)
 
         metadata_collection = None
         # Collect all file metadata for the trip so we can clean both metadata and storage.
@@ -285,4 +307,6 @@ class TripService:
                 len(deleted_objects),
                 errors,
             )
+        if trip_deleted:
+            user_stats_service.sync_multiple_users(affected_users)
         return bool(trip_deleted)
