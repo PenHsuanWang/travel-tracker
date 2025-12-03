@@ -204,6 +204,7 @@ This section details which services interact with the storage layer and for what
         -   **MinIO:** The appropriate `data_io_handler` (e.g., `ImageHandler`) saves the file content to a MinIO bucket (the repo uses `images` for photos and `gps-data` for raw GPX). For GPX files, it also saves a serialized analysis object to the `gps-analysis-data` bucket.
         -   **MongoDB:** Saves a comprehensive `FileMetadata` document to the `file_metadata` collection, containing details about the file, EXIF data, GPS coordinates, and analysis summaries.
         -   **GPX Handling:** Manages the 1:1 relationship between a trip and a GPX file. When a new GPX file is uploaded for a trip, it replaces any existing GPX file and its associated metadata.
+        -   **Event Hooks:** When GPX analysis completes the service updates the trip's denormalized stats via `TripService.update_trip_stats(...)` and publishes a `GPX_PROCESSED` event on the internal `EventBus`. This keeps the `UserStatsService`/`AchievementEngine` pipeline informed about new distance and elevation data.
     -   `get_file_metadata()`:
         -   **MongoDB:** Loads a specific `FileMetadata` document from the `file_metadata` collection.
     -   `delete_file()`:
@@ -263,3 +264,28 @@ This section details which services interact with the storage layer and for what
         -   **MongoDB:** Updates the `note` and `note_title` fields of a specific document in the `file_metadata` collection.
     -   `update_order()`:
         -   **MongoDB:** Updates the `order_index` field of a specific document in the `file_metadata` collection.
+
+### `user_stats_service.py`
+
+-   **Module:** `src/services/user_stats_service.py`
+-   **Purpose:** Recalculates and persists derived statistics (`total_distance_km`, `total_elevation_gain_m`, `total_trips`) for every user based on the trips where they appear in `member_ids`.
+-   **Functions & Storage Interaction:**
+    -   `calculate_stats(user_id)`:
+        -   **MongoDB:** Runs an aggregation pipeline on the `trips` collection summing `trip.stats.*` values for any document whose `member_ids` array contains the target user (string or `ObjectId`).
+    -   `sync_user_stats(user_id)` / `sync_multiple_users(user_ids)`:
+        -   **MongoDB:** Writes the aggregated totals back onto the corresponding `users` document so profile queries can read denormalized stats without recomputation.
+
+### `achievement_engine.py`
+
+-   **Module:** `src/services/achievement_engine.py`
+-   **Purpose:** Listens for `EventBus` notifications and awards badges whenever a user's cumulative stats cross predefined thresholds.
+-   **Functions & Storage Interaction:**
+    -   `handle_gpx_processed(payload)` / `handle_member_added(payload)`:
+        -   **MongoDB:** Uses `$inc` updates on the `users` collection to increment totals for every user in the event payload, then calls `_check_and_award_badges` to append earned badge IDs.
+    -   `_check_and_award_badges(user_doc, collection)`:
+        -   **MongoDB:** Issues `$addToSet` updates to persist newly earned badges without duplicates.
+
+### `events/event_bus.py`
+
+-   Provides an in-process pub/sub utility used by `FileUploadService` and `TripService` to emit lifecycle events (`GPX_PROCESSED`, `MEMBER_ADDED`).
+-   Subscriptions are registered in `src/app.py`, wiring the `AchievementEngine` handlers at application startup.

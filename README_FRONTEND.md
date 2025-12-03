@@ -67,10 +67,11 @@ The application's primary navigation is defined in `App.js`, which sets up the f
 -   **File:** `client/src/pages/ProfilePage.js`
 -   **Purpose:** The personal dashboard for the logged-in user.
 -   **Functionality:**
-    -   **Profile Header:** Displays avatar, username, bio, location, and member-since date.
-    -   **Statistics:** Shows aggregated stats (total trips, distance, elevation, badges earned).
-    -   **Tabs:** Switches between "Featured Trips" (pinned) and "All Trips".
-    -   **Edit Profile:** Link to the settings page.
+    -   **Profile Header:** Displays avatar, username, optional full name/bio/location, and an "Edit Profile" link when viewing your own account.
+    -   **Stats Tiles:** Pulls denormalized metrics (`total_trips`, `total_distance_km`, `total_elevation_gain_m`) from `/users/me/stats` when available, otherwise falls back to values embedded in the profile payload.
+    -   **Activity Heatmap:** Uses `ActivityHeatmap` to paint a calendar-style heatmap derived from every trip where the user is listed as a member (including pinned trips). Clicking a cell scrolls the recent timeline to the associated trip.
+    -   **Recent Activity Timeline:** Renders up to five recent trips with `TripTimeline`/`TripTimelineCard`, including hover-to-highlight ranges on the heatmap and quick navigation to `/trips` for the full log.
+    -   **Achievements:** Displays earned badge icons via `BadgeIcon`; shows a placeholder message when no badges exist.
 
 ### `/profile/:username` -> `ProfilePage.js`
 
@@ -84,8 +85,7 @@ The application's primary navigation is defined in `App.js`, which sets up the f
 -   **Purpose:** Form to update user profile details.
 -   **Functionality:**
     -   **Avatar Upload:** Upload a new profile picture.
-    -   **Profile Fields:** Edit Full Name, Bio, and Location.
-    -   **Pinned Trips:** Select trips to feature on the profile.
+    -   **Profile Fields:** Edit Full Name, Bio, and Location (pinned trip management has not been implemented yet).
 
 ## 3. Layout Components
 
@@ -209,6 +209,9 @@ This directory contains reusable UI elements shared across the application.
 
 -   **`CreateTripModal.js`**: Modal dialog for creating a new trip. Contains a form capturing trip name, start date, end date, region, and notes. Calls the `createTrip` API to save the new trip record.
 -   **`ManageMembersModal.js`**: Modal dialog for managing trip members. Allows the trip owner to search for users by name and add/remove them from the trip.
+-   **`ActivityHeatmap.js`**: Calendar-style heatmap component that consumes normalized `{ date, value, metadata[] }` entries. Supports highlighting and `onCellClick` callbacks so parent components can jump to related content.
+-   **`TripTimeline.js`** & **`TripTimelineCard.js`**: Compact timeline used on the profile page to summarize recent trips. Accepts hover callbacks for cross-highlighting with the heatmap and exposes `registerRef` hooks so parents can scroll to individual cards.
+-   **`BadgeIcon.js`**: Renders earned achievement icons and tooltips based on `badgeInfoMap`; used on the profile page and ready for reuse elsewhere.
 -   **`PhotoViewerOverlay.js`**: Full-screen overlay that appears when a user clicks on a photo thumbnail. Displays the image in a larger view with:
     -   Navigation controls (previous/next arrows)
     -   Image counter (e.g., "3 / 24")
