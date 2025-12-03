@@ -1,10 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback, memo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import userService from '../services/userService';
 import { getImageUrl, getTrips } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/ProfilePage.css';
 import ActivityHeatmap from '../components/common/ActivityHeatmap';
+import TripTimeline from '../components/common/TripTimeline';
+import BadgeIcon, { badgeInfoMap } from '../components/common/BadgeIcon';
+import { format, isSameDay, isBefore } from 'date-fns';
+
+const MemoizedActivityHeatmap = memo(ActivityHeatmap);
 
 const ProfilePage = () => {
   const { username } = useParams();
@@ -13,11 +18,21 @@ const ProfilePage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [memberTrips, setMemberTrips] = useState([]);
-  const [memberTripsLoading, setMemberTripsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('pinned');
   const [statsOverride, setStatsOverride] = useState(null);
+  const [highlightedDates, setHighlightedDates] = useState([]); // For heatmap highlighting
+
+  const itemsRef = useRef(new Map()); // Map to store refs for timeline cards
 
   const isOwnProfile = !username || (currentUser && profile && currentUser.username === profile.username);
+
+  // Callback to register refs for timeline cards
+  const registerRef = useCallback((id, node) => {
+    if (node) {
+      itemsRef.current.set(id, node);
+    } else {
+      itemsRef.current.delete(id);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -48,14 +63,11 @@ const ProfilePage = () => {
         return;
       }
       try {
-        setMemberTripsLoading(true);
         const trips = await getTrips({ user_id: profile.id });
         setMemberTrips(trips || []);
       } catch (err) {
         console.error('Failed to fetch member trips', err);
         setMemberTrips([]);
-      } finally {
-        setMemberTripsLoading(false);
       }
     };
 
@@ -133,6 +145,58 @@ const ProfilePage = () => {
     return entries;
   }, [memberTrips, profile?.pinned_trips]);
 
+  const recentTrips = useMemo(() => {
+    return (memberTrips || [])
+      .sort((a, b) => new Date(b.start_date || b.created_at) - new Date(a.start_date || a.created_at))
+      .slice(0, 5); // Limit to 5 recent trips
+  }, [memberTrips]);
+
+  const handleHeatmapCellClick = useCallback((dateKey, metadata) => {
+    if (metadata && metadata.length > 0) {
+      const firstTripId = metadata[0].tripId;
+      const node = itemsRef.current.get(firstTripId);
+      if (node) {
+        node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, []);
+
+  const handleTripCardHover = useCallback((tripId, startDate, endDate) => {
+    const dates = [];
+    let current = startDate;
+    while (isBefore(current, endDate) || isSameDay(current, endDate)) {
+      dates.push(format(current, 'yyyy-MM-dd'));
+      current = new Date(current.setDate(current.getDate() + 1));
+    }
+    setHighlightedDates(dates);
+  }, []);
+
+  const handleTripCardLeave = useCallback(() => {
+    setHighlightedDates([]);
+  }, []);
+
+  // Determine latest trip cover image for header background
+  const latestTripCoverImage = useMemo(() => {
+    if (recentTrips.length > 0 && recentTrips[0].cover_image_url) {
+      return recentTrips[0].cover_image_url.startsWith('http')
+        ? recentTrips[0].cover_image_url
+        : getImageUrl(recentTrips[0].cover_image_url);
+    }
+    return null;
+  }, [recentTrips]);
+
+  useEffect(() => {
+    if (latestTripCoverImage) {
+      document.documentElement.style.setProperty(
+        '--profile-header-bg-image',
+        `url(${latestTripCoverImage})`
+      );
+    } else {
+      document.documentElement.style.removeProperty('--profile-header-bg-image');
+    }
+  }, [latestTripCoverImage]);
+
+
   if (loading) return <div className="profile-loading">Loading profile...</div>;
   if (error) return <div className="profile-error">{error}</div>;
   if (!profile) return <div className="profile-not-found">User not found.</div>;
@@ -180,7 +244,24 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      <ActivityHeatmap data={activityData} />
+      <MemoizedActivityHeatmap 
+        data={activityData} 
+        onCellClick={handleHeatmapCellClick} 
+        highlightedDates={highlightedDates} 
+      />
+
+      <div className="profile-section">
+        <div className="section-header">
+          <h3>Recent Activity</h3>
+          <Link to="/trips" className="view-all-link">View Full Log &rarr;</Link>
+        </div>
+        <TripTimeline
+          trips={recentTrips}
+          onCardHover={handleTripCardHover}
+          onCardLeave={handleTripCardLeave}
+          registerRef={registerRef}
+        />
+      </div>
 
       {/* Placeholder for Badges/Achievements */}
       <div className="profile-section">
@@ -188,7 +269,10 @@ const ProfilePage = () => {
         <div className="badges-grid">
           {statsSource?.earned_badges && statsSource.earned_badges.length > 0 ? (
             statsSource.earned_badges.map(badge => (
-              <div key={badge} className="badge-item">{badge}</div>
+              <div key={badge} className="badge-item">
+                <BadgeIcon badgeId={badge} size="1.2em" />
+                <span className="badge-name">{badgeInfoMap[badge]?.name || badge}</span>
+              </div>
             ))
           ) : (
             <p className="no-data">No badges earned yet.</p>
@@ -196,77 +280,6 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      <div className="profile-section">
-        <div className="profile-tabs">
-          <button
-            type="button"
-            className={`profile-tab ${activeTab === 'pinned' ? 'active' : ''}`}
-            onClick={() => setActiveTab('pinned')}
-          >
-            Featured Trips
-          </button>
-          <button
-            type="button"
-            className={`profile-tab ${activeTab === 'all' ? 'active' : ''}`}
-            onClick={() => setActiveTab('all')}
-          >
-            All Trips ({memberTrips.length})
-          </button>
-        </div>
-
-        {activeTab === 'pinned' ? (
-          <div className="pinned-trips-grid">
-            {profile.pinned_trips && profile.pinned_trips.length > 0 ? (
-              profile.pinned_trips.map(trip => (
-                <Link to={`/trips/${trip.id}`} key={trip.id} className="pinned-trip-card">
-                  <div className="trip-card-content">
-                    <h4 className="trip-title">{trip.name}</h4>
-                    <div className="trip-meta">
-                      <span className="trip-date">
-                        {trip.start_date ? new Date(trip.start_date).toLocaleDateString() : 'No date'}
-                      </span>
-                      {trip.region && <span className="trip-region">{trip.region}</span>}
-                    </div>
-                    <div className="trip-stats-mini">
-                      <span>{(trip.stats?.distance_km || 0).toFixed(1)} km</span>
-                      <span>•</span>
-                      <span>{(trip.stats?.elevation_gain_m || 0).toFixed(0)} m</span>
-                    </div>
-                  </div>
-                </Link>
-              ))
-            ) : (
-              <p className="no-data">No pinned trips.</p>
-            )}
-          </div>
-        ) : (
-          <div className="member-trips-list">
-            {memberTripsLoading ? (
-              <p className="no-data">Loading trips...</p>
-            ) : memberTrips.length > 0 ? (
-              memberTrips.map(trip => (
-                <Link to={`/trips/${trip.id}`} key={trip.id} className="member-trip-row">
-                  <div>
-                    <h4 className="trip-title">{trip.name}</h4>
-                    <div className="trip-meta">
-                      <span className="trip-date">
-                        {trip.start_date ? new Date(trip.start_date).toLocaleDateString() : 'No date'}
-                      </span>
-                      {trip.region && <span className="trip-region">{trip.region}</span>}
-                    </div>
-                  </div>
-                  <div className="member-trip-stats">
-                    <span>{(trip.stats?.distance_km || 0).toFixed(1)} km</span>
-                    <span>{(trip.stats?.elevation_gain_m || 0).toFixed(0)} m</span>
-                  </div>
-                </Link>
-              ))
-            ) : (
-              <p className="no-data">No trips to display.</p>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 };

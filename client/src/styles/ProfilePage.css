@@ -7,6 +7,7 @@
 }
 
 .profile-header {
+  position: relative; /* Needed for pseudo-element positioning */
   display: flex;
   align-items: center;
   gap: 2.5rem;
@@ -16,11 +17,31 @@
   border-radius: 16px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
   border: 1px solid var(--border-color);
+  overflow: hidden; /* Ensures blurred background doesn't overflow */
+  z-index: 0; /* Ensures content is above pseudo-element */
+}
+
+/* Blurred background image for profile header */
+.profile-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: var(--profile-header-bg-image, none); /* Custom CSS property */
+  background-size: cover;
+  background-position: center;
+  filter: blur(8px); /* Apply blur effect */
+  transform: scale(1.05); /* Slightly scale to cover edges from blur */
+  opacity: 0.3; /* Subtle overlay */
+  z-index: -1; /* Position behind content */
 }
 
 .profile-avatar-container {
   flex-shrink: 0;
   position: relative;
+  z-index: 1; /* Ensure avatar is above blurred background */
 }
 
 .profile-avatar {
@@ -38,6 +59,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  z-index: 1; /* Ensure info is above blurred background */
 }
 
 .profile-username {
@@ -444,14 +466,35 @@
 .heatmap-level-3 { background: #68d391; }
 .heatmap-level-4 { background: #38b2ac; }
 
+/* Highlighted heatmap cells */
+.heatmap-cell.highlighted {
+  background-color: var(--highlight-color, #fcd34d) !important; /* A yellow/amber highlight */
+  box-shadow: 0 0 0 2px var(--highlight-ring-color, rgba(252, 211, 77, 0.5));
+  transform: scale(1.1);
+  z-index: 1; /* Bring to front */
+}
+
+
 @media (max-width: 768px) {
-  .heatmap-grid {
-    grid-template-columns: 1fr;
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+    padding: 2rem 1.5rem;
   }
 
-  .heatmap-day-labels {
-    flex-direction: row;
-    justify-content: space-between;
-    order: -1;
+  .profile-info {
+    align-items: center;
+  }
+
+  .edit-profile-btn {
+    align-self: center;
+  }
+
+  .profile-stats-grid {
+    gap: 1rem;
+  }
+  
+  .stat-value {
+    font-size: 1.5rem;
   }
 }

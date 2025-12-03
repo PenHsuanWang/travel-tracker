@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   addDays,
   endOfWeek,
@@ -13,7 +13,7 @@ import '../../styles/ProfilePage.css';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const ActivityHeatmap = ({ data = [] }) => {
+const ActivityHeatmap = ({ data = [], onCellClick, highlightedDates = [] }) => {
   const normalizedData = useMemo(() => {
     const map = new Map();
     data.forEach((entry) => {
@@ -45,7 +45,7 @@ const ActivityHeatmap = ({ data = [] }) => {
     }
   }, [availableYears, selectedYear]);
 
-  const handleYearStep = (direction) => {
+  const handleYearStep = useCallback((direction) => {
     if (!availableYears.length) return;
     const currentIndex = availableYears.indexOf(selectedYear);
     const safeIndex = currentIndex === -1 ? 0 : currentIndex;
@@ -57,7 +57,7 @@ const ActivityHeatmap = ({ data = [] }) => {
     if (nextIndex !== safeIndex || currentIndex === -1) {
       setSelectedYear(availableYears[nextIndex]);
     }
-  };
+  }, [availableYears, selectedYear]);
 
   const { weeks, monthMarkers, maxValue } = useMemo(() => {
     const year = selectedYear || new Date().getFullYear();
@@ -93,7 +93,7 @@ const ActivityHeatmap = ({ data = [] }) => {
     return { weeks: resultWeeks, monthMarkers: markers, maxValue: localMax };
   }, [normalizedData, selectedYear]);
 
-  const getIntensityLevel = (value) => {
+  const getIntensityLevel = useCallback((value) => {
     if (!value || maxValue === 0) return 0;
     const buckets = 4;
     const step = maxValue / buckets;
@@ -103,9 +103,9 @@ const ActivityHeatmap = ({ data = [] }) => {
       }
     }
     return 1;
-  };
+  }, [maxValue]);
 
-  const buildTooltip = (dateObj, valueEntry) => {
+  const buildTooltip = useCallback((dateObj, valueEntry) => {
     const dateLabel = format(dateObj, 'MMM d, yyyy');
     if (!valueEntry || !valueEntry.value) {
       return `${dateLabel}: No activity`;
@@ -115,7 +115,7 @@ const ActivityHeatmap = ({ data = [] }) => {
     );
     const tripsSuffix = names.length ? ` – ${names.join(', ')}` : '';
     return `${dateLabel}: ${valueEntry.value.toFixed(1)} km logged${tripsSuffix}`;
-  };
+  }, []);
 
   const currentYearIndex = availableYears.indexOf(selectedYear);
   const safeYearIndex = currentYearIndex === -1 ? 0 : currentYearIndex;
@@ -189,11 +189,20 @@ const ActivityHeatmap = ({ data = [] }) => {
                   const dateKey = format(day, 'yyyy-MM-dd');
                   const entry = normalizedData.get(dateKey);
                   const level = getIntensityLevel(entry?.value);
+                  const isHighlighted = highlightedDates.includes(dateKey); // Check for highlighting
+
+                  const handleClick = () => {
+                    if (onCellClick) {
+                      onCellClick(dateKey, entry?.metadata);
+                    }
+                  };
+
                   return (
                     <div
                       key={dateKey}
-                      className={`heatmap-cell heatmap-level-${level}`}
+                      className={`heatmap-cell heatmap-level-${level} ${isHighlighted ? 'highlighted' : ''}`}
                       title={buildTooltip(day, entry)}
+                      onClick={handleClick}
                     />
                   );
                 })}
