@@ -1,7 +1,10 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
-from datetime import datetime
+"""Trip domain models."""
+
+from datetime import datetime, timezone
+from typing import List, Optional
 import uuid
+
+from pydantic import BaseModel, Field
 # We use a forward reference or conditional import to avoid circular dependency if user.py ever imports trip.py
 # But for now it seems safe.
 # Actually, to be safe, let's define UserSummary here or use a generic dict, 
@@ -17,12 +20,16 @@ except ImportError:
         avatar_url: Optional[str] = None
 
 class TripStats(BaseModel):
+    """Aggregated statistics derived from GPX analysis."""
+
     distance_km: float = 0.0
     elevation_gain_m: float = 0.0
     moving_time_sec: float = 0.0
     max_altitude_m: float = 0.0
 
 class Trip(BaseModel):
+    """Primary trip model backing CRUD APIs."""
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     start_date: Optional[datetime] = None
@@ -30,11 +37,10 @@ class Trip(BaseModel):
     region: Optional[str] = None
     notes: Optional[str] = None
     cover_photo_id: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    # New Fields
     owner_id: Optional[str] = Field(default=None, index=True)
-    member_ids: List[str] = Field(default=[], index=True)
+    member_ids: List[str] = Field(default_factory=list, index=True)
     is_public: bool = Field(default=True)
     stats: TripStats = Field(default_factory=TripStats)
     activity_start_date: Optional[datetime] = None
@@ -55,9 +61,13 @@ class Trip(BaseModel):
         }
 
 class TripResponse(Trip):
+    """Trip enriched with owner/member projections for API responses."""
+
     owner: Optional[UserSummary] = None
-    members: List[UserSummary] = []
+    members: List[UserSummary] = Field(default_factory=list)
 
 class TripMembersUpdate(BaseModel):
+    """Update payload for adding or removing trip members."""
+
     member_ids: List[str]
 

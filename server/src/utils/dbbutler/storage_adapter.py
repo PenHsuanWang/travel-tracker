@@ -1,88 +1,102 @@
-# utils/storage_adapter.py
+"""Shared abstract interface for every storage backend."""
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Dict, List
 
 
 class StorageAdapter(ABC):
-    """
-    Abstract base class for storage adapters.
-    """
+    """Defines the CRUD surface that every storage backend must implement."""
 
     @abstractmethod
     def save_data(self, key: str, value: Any, **kwargs) -> None:
         """
-        Save data to the storage.
+        Persist a single item in the storage backend.
 
-        :param key: The key under which the data is to be saved.
-        :param value: The data to be saved.
+        :param key: Unique identifier used by the backend.
+        :param value: The payload to store.
+        :raises NotImplementedError: Must be implemented by subclasses.
         """
-        pass
+
+        raise NotImplementedError
 
     @abstractmethod
     def load_data(self, key: str, **kwargs) -> Any:
         """
-        Load data from the storage.
+        Retrieve a single item from the backend.
 
-        :param key: The key for the data to be loaded.
-        :return: The loaded data.
+        :param key: Unique identifier of the stored object.
+        :return: The stored payload.
+        :raises NotImplementedError: Must be implemented by subclasses.
         """
-        pass
+
+        raise NotImplementedError
 
     @abstractmethod
     def delete_data(self, key: str, **kwargs) -> None:
         """
-        Delete data from the storage.
+        Remove an item from the backend.
 
-        :param key: The key for the data to be deleted.
+        :param key: Unique identifier of the stored object.
+        :raises NotImplementedError: Must be implemented by subclasses.
         """
-        pass
 
-    @abstractmethod
-    def save_batch_data(self, data: dict, **kwargs) -> None:
-        """
-        Save multiple data items to the storage.
-
-        :param data: Dictionary of key-value pairs to be saved.
-        """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
-    def load_batch_data(self, keys: list, **kwargs) -> dict:
+    def save_batch_data(self, data: Dict[str, Any], **kwargs) -> None:
         """
-        Load multiple data items from the storage.
+        Persist a batch of key/value pairs.
 
-        :param keys: List of keys for the data to be loaded.
-        :return: Dictionary of key-value pairs.
+        :param data: Mapping of object identifiers to payloads.
+        :raises NotImplementedError: Must be implemented by subclasses.
         """
-        pass
+
+        raise NotImplementedError
 
     @abstractmethod
-    def delete_batch_data(self, keys: list, **kwargs) -> None:
+    def load_batch_data(self, keys: List[str], **kwargs) -> Dict[str, Any]:
         """
-        Delete multiple data items from the storage.
+        Retrieve multiple objects in a single call.
 
-        :param keys: List of keys for the data to be deleted.
+        :param keys: Identifiers to fetch.
+        :return: Mapping of key to payload.
+        :raises NotImplementedError: Must be implemented by subclasses.
         """
-        pass
+
+        raise NotImplementedError
+
+    @abstractmethod
+    def delete_batch_data(self, keys: List[str], **kwargs) -> None:
+        """
+        Delete several objects at once.
+
+        :param keys: Identifiers slated for deletion.
+        :raises NotImplementedError: Must be implemented by subclasses.
+        """
+
+        raise NotImplementedError
 
     @abstractmethod
     def exists(self, key: str, **kwargs) -> bool:
         """
-        Check if a key exists in the storage.
+        Determine whether an object exists in the backend.
 
-        :param key: The key to check for existence.
-        :return: True if the key exists, False otherwise.
+        :param key: Identifier to search for.
+        :return: ``True`` when the object exists, otherwise ``False``.
+        :raises NotImplementedError: Must be implemented by subclasses.
         """
-        pass
+
+        raise NotImplementedError
 
     @abstractmethod
-    def list_keys(self, prefix: str = "", **kwargs) -> list:
+    def list_keys(self, prefix: str = "", **kwargs) -> List[str]:
         """
-        List keys in the storage matching a prefix.
+        Enumerate keys that begin with a prefix.
 
-        :param prefix: The prefix to match keys.
-        :return: List of keys.
+        :param prefix: Optional prefix filter.
+        :return: Collection of key strings.
+        :raises NotImplementedError: Must be implemented by subclasses.
         """
-        pass
+
+        raise NotImplementedError
 

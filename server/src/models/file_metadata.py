@@ -1,8 +1,9 @@
-# src/models/file_metadata.py
+"""File metadata models used by upload and retrieval services."""
+
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
-from datetime import datetime, timezone
 
 
 class GPSData(BaseModel):

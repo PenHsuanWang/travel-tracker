@@ -1,13 +1,14 @@
 # server/src/app.py
 
 from dotenv import load_dotenv
-import os
+
 load_dotenv()  # Load environment variables from .env file
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
+from src.config import configure_logging, get_settings
 from src.routes.map_routes import router as map_router
 from src.routes.gis_routes import router as gis_router
 from src.routes.file_upload_routes import router as file_upload_router
@@ -18,15 +19,18 @@ from src.routes.user_routes import router as user_router
 from src.events.event_bus import EventBus
 from src.services.achievement_engine import achievement_engine
 
+configure_logging()
+settings = get_settings()
+
 # Subscribe to events
 EventBus.subscribe("GPX_PROCESSED", achievement_engine.handle_gpx_processed)
 EventBus.subscribe("MEMBER_ADDED", achievement_engine.handle_member_added)
 
-app = FastAPI()
+app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG)
 
 # Enable CORS
 # In production, ALLOWED_ORIGINS should be set to the specific frontend domain
-origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+origins = settings.cors_origins()
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,4 +60,5 @@ app.include_router(user_router, prefix="/api/users")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5002)
+
+    uvicorn.run(app, host="0.0.0.0", port=settings.PORT)

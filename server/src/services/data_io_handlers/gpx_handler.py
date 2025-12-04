@@ -36,7 +36,7 @@ class GPXHandler(BaseHandler):
         file_extension = file_name.split('.')[-1].lower()
         bucket_name = 'gps-data'
 
-        print("gpx handler been invoked")
+        logger.info("Processing GPX upload for trip %s", trip_id)
 
         safe_name = (file_name or "track.gpx").replace("/", "_")
         object_key = f"{trip_id}/{safe_name}"

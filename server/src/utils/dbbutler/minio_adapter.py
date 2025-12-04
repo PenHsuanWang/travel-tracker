@@ -1,9 +1,14 @@
-# utils/minio_adapter.py
+"""MinIO storage adapter implementation."""
+
+from io import BytesIO
+import logging
 
 from minio import Minio
 from minio.error import S3Error
-from io import BytesIO
+
 from src.utils.dbbutler.storage_adapter import StorageAdapter
+
+logger = logging.getLogger(__name__)
 
 
 class MinIOAdapter(StorageAdapter):
@@ -35,15 +40,15 @@ class MinIOAdapter(StorageAdapter):
 
         try:
             value_stream = BytesIO(value)
-            print("Trying to upload data to minio")
+            logger.debug("Uploading object %s to bucket %s", key, bucket)
             self.client.put_object(bucket, key, value_stream, length=len(value))
         except S3Error as e:
             if e.code == 'NoSuchBucket':
                 raise ValueError(f"Bucket '{bucket}' does not exist")
             raise
-        except Exception as e:
-            print(e)
-            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to upload object %s to bucket %s", key, bucket)
+            raise exc
 
     def load_data(self, key: str, **kwargs) -> bytes:
         """

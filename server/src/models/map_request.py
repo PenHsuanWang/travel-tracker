@@ -1,7 +1,12 @@
-# server/src/models/map_request.py
+"""Legacy map rendering request payloads."""
+
+from typing import Optional, Tuple
+
 from pydantic import BaseModel
-from typing import Optional
+
 
 class MapRequest(BaseModel):
+    """Parameters accepted by old map-rendering endpoints."""
+
     layer: str
-    center: Optional[tuple[float, float]] = None  # (latitude, longitude)
+    center: Optional[Tuple[float, float]] = None

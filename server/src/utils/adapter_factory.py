@@ -1,31 +1,26 @@
-# server/src/utils/adapter_factory.py
+"""Factory helpers for storage adapters."""
 
-import os
+from src.config import get_settings
 from src.utils.dbbutler.minio_adapter import MinIOAdapter
 from src.utils.dbbutler.mongodb_adapter import MongoDBAdapter
-from dotenv import load_dotenv
-
-load_dotenv()
 
 
 class AdapterFactory:
-    """
-    Factory class for creating storage adapters with proper configuration.
-    Centralizes adapter initialization to avoid code duplication.
-    """
+    """Factory helpers for configuring storage adapters from environment settings."""
 
     @staticmethod
     def create_minio_adapter() -> MinIOAdapter:
         """
         Create and configure a MinIO adapter using environment variables.
 
-        :return: Configured MinIOAdapter instance.
-        :raises ValueError: If required environment variables are not set.
+        :return: Configured :class:`MinIOAdapter` instance.
+        :raises ValueError: If required credentials are not provided.
         """
-        endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9000")
-        access_key = os.getenv("MINIO_ACCESS_KEY")
-        secret_key = os.getenv("MINIO_SECRET_KEY")
-        secure = os.getenv("MINIO_SECURE", "False").lower() == "true"
+        settings = get_settings()
+        endpoint = settings.MINIO_ENDPOINT
+        access_key = settings.MINIO_ACCESS_KEY
+        secret_key = settings.MINIO_SECRET_KEY
+        secure = settings.MINIO_SECURE
 
         if not access_key or not secret_key:
             raise ValueError(
@@ -44,13 +39,14 @@ class AdapterFactory:
         """
         Create and configure a MongoDB adapter using environment variables.
 
-        :return: Configured MongoDBAdapter instance.
+        :return: Configured :class:`MongoDBAdapter` instance.
         """
-        host = os.getenv("MONGODB_HOST", "localhost")
-        port = int(os.getenv("MONGODB_PORT", "27017"))
-        db_name = os.getenv("MONGODB_DATABASE", "travel_tracker")
-        username = os.getenv("MONGODB_USERNAME")
-        password = os.getenv("MONGODB_PASSWORD")
+        settings = get_settings()
+        host = settings.MONGODB_HOST
+        port = settings.MONGODB_PORT
+        db_name = settings.MONGODB_DATABASE
+        username = settings.MONGODB_USERNAME
+        password = settings.MONGODB_PASSWORD
 
         return MongoDBAdapter(
             host=host,

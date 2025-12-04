@@ -1,35 +1,41 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, List
-from datetime import datetime
+"""User domain models consumed by authentication and community features."""
+
+from datetime import datetime, timezone
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 class User(BaseModel):
+    """Represents an authenticated Travel Tracker account."""
+
     model_config = ConfigDict(populate_by_name=True)
 
-    # Use plain `id` field (string) for API compatibility. Database layer will
-    # convert ObjectId to string before constructing models.
-    id: Optional[str] = Field(default=None)
+    id: Optional[str] = Field(
+        default=None,
+        description=(
+            "String identifier kept for API compatibility. The persistence "
+            "layer adapts ObjectIds before model construction."
+        ),
+    )
     username: str
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
-    
-    # New Fields
+
     bio: Optional[str] = Field(default=None, max_length=500)
     location: Optional[str] = Field(default=None, max_length=100)
     avatar_url: Optional[str] = None
-    
-    # Social / Display
-    pinned_trip_ids: List[str] = []
-    
-    # Gamification
+
+    pinned_trip_ids: List[str] = Field(default_factory=list)
+
     total_distance_km: float = 0.0
     total_elevation_gain_m: float = 0.0
     total_trips: int = 0
-    earned_badges: List[str] = []
-    
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    earned_badges: List[str] = Field(default_factory=list)
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserSummary(BaseModel):
-    """Lightweight model for the Community Grid"""
+    """Lightweight projection used by the community grid."""
     id: str
     username: str
     full_name: Optional[str] = None
@@ -40,7 +46,7 @@ class UserSummary(BaseModel):
     created_at: Optional[datetime] = None
 
 class PublicUserProfile(BaseModel):
-    """Detailed model for Public Profile View"""
+    """Publicly-visible profile served to other users."""
     id: str
     username: str
     full_name: Optional[str] = None
@@ -55,20 +61,29 @@ class PublicUserProfile(BaseModel):
     total_trips: int
     earned_badges: List[str]
     
-    # Content
-    # We use List[dict] or ForwardRef to avoid circular import with TripResponse
-    pinned_trips: List[dict] = []
+    pinned_trips: List[dict] = Field(
+        default_factory=list,
+        description="Pinned trip summaries (dict to avoid circular import).",
+    )
 
 class UserInDB(User):
+    """Extends :class:`User` with password storage details."""
+
     hashed_password: str
 
 class UserCreate(User):
+    """Data required to register a user."""
+
     password: str
     registration_key: str
 
 class Token(BaseModel):
+    """OAuth2 token issued after a successful login."""
+
     access_token: str
     token_type: str
 
 class TokenData(BaseModel):
+    """Normalized token claims extracted from the JWT."""
+
     username: Optional[str] = None

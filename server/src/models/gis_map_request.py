@@ -1,8 +1,13 @@
-# server/src/models/gis_map_request.py
+"""GIS map payloads for the legacy server-rendered flow."""
+
+from typing import List, Optional, Tuple
+
 from pydantic import BaseModel
-from typing import Optional, List, Tuple
+
 
 class GISMapRequest(BaseModel):
+    """Subset of controls needed by the GIS endpoints."""
+
     layer: str
-    center: Optional[Tuple[float, float]] = None  # e.g., (lat, lon)
+    center: Optional[Tuple[float, float]] = None
     selected_rivers: Optional[List[str]] = None

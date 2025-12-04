@@ -1,8 +1,13 @@
-# utils/mongodb_adapter.py
+"""MongoDB storage adapter implementation."""
+
+import logging
+from typing import Any, Dict, List, Mapping, Optional
 
 from pymongo import MongoClient
-from typing import Mapping, Any, Optional, Dict, List
+
 from src.utils.dbbutler.storage_adapter import StorageAdapter
+
+logger = logging.getLogger(__name__)
 
 
 class MongoDBAdapter(StorageAdapter):
@@ -97,8 +102,8 @@ class MongoDBAdapter(StorageAdapter):
             for key, value in data.items():
                 self.save_data(key, value, collection_name=collection_name)
             return True
-        except Exception as e:
-            print(f"Error saving batch data: {e}")
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Error saving batch data to collection %s", collection_name)
             return False
 
     def load_batch_data(self, keys: List[str], **kwargs) -> Dict[str, Optional[Mapping[str, Any]]]:
@@ -129,8 +134,8 @@ class MongoDBAdapter(StorageAdapter):
             for key in keys:
                 self.delete_data(key, collection_name=collection_name)
             return True
-        except Exception as e:
-            print(f"Error deleting batch data: {e}")
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Error deleting batch data from collection %s", collection_name)
             return False
 
     def exists(self, key: str, **kwargs) -> bool:
