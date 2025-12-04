@@ -6,9 +6,9 @@ import folium
 import pickle
 from shapely.geometry import mapping
 
-from src.services.service_dependencies import ensure_storage_manager
+from src.dependencies import get_storage_manager
 
-STORAGE_MANAGER = ensure_storage_manager(include_minio=True)
+STORAGE_MANAGER = get_storage_manager()
 
 MAP_LAYERS = {
     "openstreetmap": {

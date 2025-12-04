@@ -5,16 +5,15 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from src.services.service_dependencies import ensure_storage_manager
 from src.utils.dbbutler.storage_manager import StorageManager
 
 
 class PhotoNoteService:
     """Manage note/order fields for photo metadata documents."""
 
-    def __init__(self, storage_manager: StorageManager | None = None) -> None:
+    def __init__(self, storage_manager: StorageManager) -> None:
         self.logger = logging.getLogger(__name__)
-        self.storage_manager = ensure_storage_manager(storage_manager, include_mongodb=True)
+        self.storage_manager = storage_manager
 
     def _get_collection(self):
         adapter = self.storage_manager.adapters.get('mongodb')

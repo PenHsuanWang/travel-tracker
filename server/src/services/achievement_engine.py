@@ -5,14 +5,14 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from src.services.service_dependencies import ensure_storage_manager
+from src.dependencies import get_storage_manager
 from src.utils.dbbutler.storage_manager import StorageManager
 
 logger = logging.getLogger(__name__)
 
 class AchievementEngine:
-    def __init__(self, storage_manager: StorageManager | None = None) -> None:
-        self.storage_manager = ensure_storage_manager(storage_manager, include_mongodb=True)
+    def __init__(self, storage_manager: StorageManager) -> None:
+        self.storage_manager = storage_manager
         self.collection_name = 'users'
         
         # Define Badges
@@ -117,4 +117,4 @@ class AchievementEngine:
             # TODO: Create notification
 
 # Singleton instance
-achievement_engine = AchievementEngine()
+achievement_engine = AchievementEngine(storage_manager=get_storage_manager())

@@ -1,55 +1,17 @@
-"""Community and profile routes for the user experience."""
-
-from __future__ import annotations
-
-from functools import lru_cache
-from typing import List, Optional
-
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel
-
 from src.auth import get_current_user
+from src.dependencies import (
+    get_file_upload_service,
+    get_mongo_adapter,
+    get_user_stats_service,
+)
 from src.models.trip import TripResponse
 from src.models.user import PublicUserProfile, User, UserInDB, UserSummary
 from src.services.file_upload_service import FileUploadService
-from src.services.service_dependencies import ensure_storage_manager
-from src.services.user_stats_service import UserStatsService, user_stats_service
+from src.services.user_stats_service import UserStatsService
 from src.utils.dbbutler.mongodb_adapter import MongoDBAdapter
-from src.utils.dbbutler.storage_manager import StorageManager
 
 router = APIRouter()
 
-
-@lru_cache
-def _storage_manager() -> StorageManager:
-    return ensure_storage_manager(include_mongodb=True)
-
-
-@lru_cache
-def _file_upload_service() -> FileUploadService:
-    return FileUploadService()
-
-
-def get_mongo_adapter() -> MongoDBAdapter:
-    """Return a cached MongoDB adapter for dependency injection."""
-
-    manager = _storage_manager()
-    adapter = manager.adapters.get("mongodb")
-    if not adapter:
-        raise RuntimeError("MongoDB adapter not configured")
-    return adapter  # type: ignore[return-value]
-
-
-def get_file_upload_service() -> FileUploadService:
-    """Return the cached upload service."""
-
-    return _file_upload_service()
-
-
-def get_user_stats_service() -> UserStatsService:
-    """Expose the singleton stats service for DI."""
-
-    return user_stats_service
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
@@ -69,10 +31,9 @@ class UserStats(BaseModel):
 
 def _load_user_by_username(
     username: str,
-    mongo_adapter: MongoDBAdapter | None = None,
+    mongo_adapter: MongoDBAdapter,
 ) -> UserInDB:
-    adapter = mongo_adapter or get_mongo_adapter()
-    users_collection = adapter.get_collection("users")
+    users_collection = mongo_adapter.get_collection("users")
     user_data = users_collection.find_one({"username": username})
     if not user_data:
         raise HTTPException(status_code=404, detail="User not found")
@@ -83,13 +44,11 @@ def _load_user_by_username(
 
 def _build_profile_response(
     user_obj: UserInDB,
-    mongo_adapter: MongoDBAdapter | None = None,
+    mongo_adapter: MongoDBAdapter,
 ) -> dict:
     """Build a profile dict ensuring compatibility with frontend expectations.
     Construct the response from model attributes to guarantee `id` is present.
     """
-    adapter = mongo_adapter or get_mongo_adapter()
-
     user_response = {
         "id": str(user_obj.id) if getattr(user_obj, "id", None) else None,
         "username": getattr(user_obj, "username", None),
@@ -108,7 +67,7 @@ def _build_profile_response(
     }
 
     if user_response["pinned_trip_ids"]:
-        trips_collection = adapter.get_collection("trips")
+        trips_collection = mongo_adapter.get_collection("trips")
         cursor = trips_collection.find({"id": {"$in": user_response["pinned_trip_ids"]}})
         for trip_doc in cursor:
             trip_doc.pop("_id", None)
@@ -118,16 +77,14 @@ def _build_profile_response(
 
 def _build_public_profile_response(
     user_obj: UserInDB,
-    mongo_adapter: MongoDBAdapter | None = None,
+    mongo_adapter: MongoDBAdapter,
 ) -> PublicUserProfile:
     """Build a strict public profile response."""
-    adapter = mongo_adapter or get_mongo_adapter()
-    
     pinned_trips = []
     pinned_ids = list(getattr(user_obj, "pinned_trip_ids", []) or [])
     
     if pinned_ids:
-        trips_collection = adapter.get_collection("trips")
+        trips_collection = mongo_adapter.get_collection("trips")
         cursor = trips_collection.find({"id": {"$in": pinned_ids}})
         for trip_doc in cursor:
             trip_doc.pop("_id", None)
@@ -153,7 +110,6 @@ async def list_public_users(
     skip: int = 0, 
     limit: int = 20, 
     q: Optional[str] = None,
-    current_user: Optional[User] = Depends(get_current_user),  # Optional auth
     mongo_adapter: MongoDBAdapter = Depends(get_mongo_adapter),
 ):
     """
@@ -335,7 +291,6 @@ async def upload_avatar(
 @router.get("/search", response_model=List[User])
 async def search_users(
     q: str = Query(..., min_length=2),
-    current_user: User = Depends(get_current_user),
     mongo_adapter: MongoDBAdapter = Depends(get_mongo_adapter),
 ):
     """
@@ -356,7 +311,7 @@ async def search_users(
     users = []
     for user_data in cursor:
         if "_id" in user_data:
-            user_data["_id"] = str(user_data["_id"])
+            user_data["id"] = str(user_data["_id"])
         # Don't return sensitive info like hashed_password (User model excludes it by default)
         users.append(User(**user_data))
         

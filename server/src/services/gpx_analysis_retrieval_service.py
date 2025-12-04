@@ -8,20 +8,15 @@ from geo_objects.geo_tracks.analyzed_geo_tracks import AnalyzedTrackObject
 
 from src.models.file_metadata import FileMetadata
 from src.services.gpx_analysis_service import GpxAnalysisService
-from src.services.service_dependencies import ensure_storage_manager
 from src.utils.dbbutler.storage_manager import StorageManager
 
 
 class GpxAnalysisRetrievalService:
     """Load persisted GPX analysis artifacts and summaries."""
 
-    def __init__(self, storage_manager: StorageManager | None = None) -> None:
+    def __init__(self, storage_manager: StorageManager) -> None:
         self.logger = logging.getLogger(__name__)
-        self.storage_manager = ensure_storage_manager(
-            storage_manager,
-            include_minio=True,
-            include_mongodb=True,
-        )
+        self.storage_manager = storage_manager
 
     def get_analyzed_track(
         self,

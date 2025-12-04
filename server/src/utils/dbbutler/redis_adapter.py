@@ -1,6 +1,6 @@
 # utils/redis_adapter.py
 
-import aioredis
+from redis import asyncio as aioredis
 from typing import Any
 from src.utils.dbbutler.storage_adapter import StorageAdapter
 

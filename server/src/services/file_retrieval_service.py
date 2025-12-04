@@ -6,23 +6,15 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from src.models.file_metadata import FileMetadata
-from src.services.service_dependencies import ensure_storage_manager
 from src.utils.dbbutler.storage_manager import StorageManager
 
 
 class FileRetrievalService:
     """List objects and metadata stored in MinIO + MongoDB."""
 
-    def __init__(
-        self,
-        storage_manager: StorageManager | None = None,
-    ) -> None:
+    def __init__(self, storage_manager: StorageManager) -> None:
         self.logger = logging.getLogger(__name__)
-        self.storage_manager = ensure_storage_manager(
-            storage_manager,
-            include_minio=True,
-            include_mongodb=True,
-        )
+        self.storage_manager = storage_manager
 
     def list_files(self, bucket_name: str, trip_id: Optional[str] = None) -> List[str]:
         """

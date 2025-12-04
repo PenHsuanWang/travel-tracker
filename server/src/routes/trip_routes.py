@@ -1,43 +1,11 @@
-"""Trip CRUD routes plus helpers for GPX-ingestion driven workflows."""
-
-from __future__ import annotations
-
-from datetime import datetime
-from functools import lru_cache
-from typing import Any, Dict, List, Optional
-
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel
-
 from src.auth import get_current_user
+from src.dependencies import get_file_upload_service, get_trip_service
 from src.models.trip import Trip, TripMembersUpdate, TripResponse
 from src.models.user import User
 from src.services.file_upload_service import FileUploadService
 from src.services.trip_service import TripService
 
 router = APIRouter()
-
-
-@lru_cache
-def _trip_service() -> TripService:
-    return TripService()
-
-
-@lru_cache
-def _file_upload_service() -> FileUploadService:
-    return FileUploadService(trip_service=_trip_service())
-
-
-def get_trip_service() -> TripService:
-    """Expose the shared trip service instance for FastAPI DI."""
-
-    return _trip_service()
-
-
-def get_file_upload_service() -> FileUploadService:
-    """Provide the upload service configured with the shared trip service."""
-
-    return _file_upload_service()
 
 
 class TripCreateWithGpxResponse(BaseModel):
@@ -59,14 +27,11 @@ async def create_trip(
     """
     Create a new trip.
     """
-    try:
-        if current_user.id:
-            trip.owner_id = current_user.id
-            if not trip.member_ids:
-                trip.member_ids = [current_user.id]
-        return trip_service.create_trip(trip)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    if current_user.id:
+        trip.owner_id = current_user.id
+        if not trip.member_ids:
+            trip.member_ids = [current_user.id]
+    return trip_service.create_trip(trip)
 
 
 def _parse_date_field(value: Optional[str]) -> Optional[datetime]:
@@ -95,62 +60,56 @@ async def create_trip_with_gpx(
     Create a new trip, optionally ingesting a GPX file to auto-fill dates.
     Dates provided by the user are never overridden in v1.
     """
-    try:
-        parsed_start = _parse_date_field(start_date)
-        parsed_end = _parse_date_field(end_date)
-        trip = Trip(
-            name=name,
-            start_date=parsed_start,
-            end_date=parsed_end,
-            region=region,
-            notes=notes,
-        )
-        
-        if current_user.id:
-            trip.owner_id = current_user.id
-            trip.member_ids = [current_user.id]
+    parsed_start = _parse_date_field(start_date)
+    parsed_end = _parse_date_field(end_date)
+    trip = Trip(
+        name=name,
+        start_date=parsed_start,
+        end_date=parsed_end,
+        region=region,
+        notes=notes,
+    )
+    
+    if current_user.id:
+        trip.owner_id = current_user.id
+        trip.member_ids = [current_user.id]
 
-        created_trip = trip_service.create_trip(trip)
+    created_trip = trip_service.create_trip(trip)
 
-        gpx_metadata_extracted = None
-        gpx_start_datetime = None
-        gpx_end_datetime = None
-        trip_dates_auto_filled = None
-        auto_fill_reason = None
-        upload_metadata: Optional[Dict[str, Any]] = None
-        gpx_error: Optional[str] = None
+    gpx_metadata_extracted = None
+    gpx_start_datetime = None
+    gpx_end_datetime = None
+    trip_dates_auto_filled = None
+    auto_fill_reason = None
+    upload_metadata: Optional[Dict[str, Any]] = None
+    gpx_error: Optional[str] = None
 
-        if gpx_file:
-            try:
-                result = file_upload_service.upload_file(gpx_file, trip_id=created_trip.id)
-                upload_metadata = result
-                gpx_metadata_extracted = result.get("gpx_metadata_extracted")
-                gpx_start_datetime = result.get("gpx_start_datetime")
-                gpx_end_datetime = result.get("gpx_end_datetime")
-                trip_dates_auto_filled = result.get("trip_dates_auto_filled")
-                auto_fill_reason = result.get("auto_fill_reason")
+    if gpx_file:
+        try:
+            result = file_upload_service.upload_file(gpx_file, uploader_id=current_user.id, trip_id=created_trip.id)
+            upload_metadata = result
+            gpx_metadata_extracted = result.get("gpx_metadata_extracted")
+            gpx_start_datetime = result.get("gpx_start_datetime")
+            gpx_end_datetime = result.get("gpx_end_datetime")
+            trip_dates_auto_filled = result.get("trip_dates_auto_filled")
+            auto_fill_reason = result.get("auto_fill_reason")
 
-                # If auto-fill updated the trip, refresh it
-                if result.get("trip"):
-                    created_trip = Trip(**result["trip"])
-            except Exception as exc:
-                gpx_error = f"GPX upload or parse failed: {exc}"
+            # If auto-fill updated the trip, refresh it
+            if result.get("trip"):
+                created_trip = Trip(**result["trip"])
+        except Exception as exc:
+            gpx_error = f"GPX upload or parse failed: {exc}"
 
-        return TripCreateWithGpxResponse(
-            trip=created_trip,
-            gpx_metadata_extracted=gpx_metadata_extracted,
-            gpx_start_datetime=gpx_start_datetime,
-            gpx_end_datetime=gpx_end_datetime,
-            trip_dates_auto_filled=trip_dates_auto_filled,
-            auto_fill_reason=auto_fill_reason,
-            gpx_error=gpx_error,
-            upload_metadata=upload_metadata,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+    return TripCreateWithGpxResponse(
+        trip=created_trip,
+        gpx_metadata_extracted=gpx_metadata_extracted,
+        gpx_start_datetime=gpx_start_datetime,
+        gpx_end_datetime=gpx_end_datetime,
+        trip_dates_auto_filled=trip_dates_auto_filled,
+        auto_fill_reason=auto_fill_reason,
+        gpx_error=gpx_error,
+        upload_metadata=upload_metadata,
+    )
 @router.get("/", response_model=List[TripResponse])
 async def list_trips(
     user_id: Optional[str] = None,
@@ -159,11 +118,7 @@ async def list_trips(
     """
     List all trips. Optionally filter by user_id (membership).
     """
-    try:
-        return trip_service.get_trips(user_id=user_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+    return trip_service.get_trips(user_id=user_id)
 @router.get("/{trip_id}", response_model=TripResponse)
 async def get_trip(
     trip_id: str,
@@ -210,15 +165,10 @@ async def update_trip_members(
     """
     Update trip members.
     """
-    try:
-        trip = trip_service.update_members(trip_id, members_update.member_ids, current_user.id)
-        if not trip:
-            raise HTTPException(status_code=404, detail="Trip not found")
-        return trip
-    except PermissionError:
-        raise HTTPException(status_code=403, detail="Only the owner can manage members")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    trip = trip_service.update_members(trip_id, members_update.member_ids, current_user.id)
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    return trip
 
 @router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_trip(

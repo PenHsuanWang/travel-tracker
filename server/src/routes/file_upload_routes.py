@@ -1,42 +1,11 @@
-"""Routes handling uploads of GPX tracks, photos, and avatar images."""
-
-from __future__ import annotations
-
-from functools import lru_cache
-from typing import Any, Dict, Optional
-
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from pydantic import BaseModel
-
 from src.auth import get_current_user
+from src.dependencies import get_file_upload_service, get_trip_service
 from src.models.trip import Trip
 from src.models.user import User
 from src.services.file_upload_service import FileUploadService
 from src.services.trip_service import TripService
 
 router = APIRouter()
-
-
-@lru_cache
-def _trip_service() -> TripService:
-    return TripService()
-
-
-@lru_cache
-def _file_upload_service() -> FileUploadService:
-    return FileUploadService(trip_service=_trip_service())
-
-
-def get_trip_service() -> TripService:
-    """Provide a cached trip service instance for dependency injection."""
-
-    return _trip_service()
-
-
-def get_file_upload_service() -> FileUploadService:
-    """Provide a cached file upload service."""
-
-    return _file_upload_service()
 
 
 class UploadResponse(BaseModel):
@@ -69,7 +38,6 @@ class UploadResponse(BaseModel):
 @router.post("/upload", response_model=UploadResponse)
 async def upload_file(
     file: UploadFile = File(...),
-    uploader_id: Optional[str] = Query(None),
     trip_id: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     trip_service: TripService = Depends(get_trip_service),
@@ -79,7 +47,6 @@ async def upload_file(
     Upload a file and return metadata including EXIF data for images.
 
     :param file: The uploaded file.
-    :param uploader_id: Optional user ID.
     :param trip_id: Optional trip ID.
     :return: Upload response with file info and metadata.
     :raises HTTPException: If the file upload fails.
@@ -94,45 +61,42 @@ async def upload_file(
         if trip.owner_id and trip.owner_id != current_user.id:
              raise HTTPException(status_code=403, detail="Not authorized to upload to this trip")
 
-    try:
-        result = upload_service.upload_file(file, uploader_id, trip_id)
-        
-        # Handle legacy response format
-        if "file_path" in result and "metadata_id" not in result:
-            return {
-                "filename": result.get("filename", file.filename),
-                "file_url": result.get("file_path", "")
-            }
-        
-        # Return enhanced response with metadata
+    result = upload_service.upload_file(file, uploader_id, trip_id)
+    
+    # Handle legacy response format
+    if "file_path" in result and "metadata_id" not in result:
         return {
             "filename": result.get("filename", file.filename),
-            "file_url": result.get("file_path", ""),
-            "metadata_id": result.get("metadata_id"),
-            "size": result.get("size"),
-            "mime_type": result.get("mime_type"),
-            "has_gps": result.get("has_gps"),
-            "gps": result.get("gps"),
-            "date_taken": result.get("date_taken"),
-            "captured_at": result.get("captured_at"),
-            "captured_source": result.get("captured_source"),
-            "camera_make": result.get("camera_make"),
-            "camera_model": result.get("camera_model"),
-            "has_gpx_analysis": result.get("has_gpx_analysis"),
-            "analysis_status": result.get("analysis_status"),
-            "analysis_bucket": result.get("analysis_bucket"),
-            "analysis_object_key": result.get("analysis_object_key"),
-            "analysis_error": result.get("analysis_error"),
-            "track_summary": result.get("track_summary"),
-            "trip": result.get("trip"),
-            "gpx_metadata_extracted": result.get("gpx_metadata_extracted"),
-            "gpx_start_datetime": result.get("gpx_start_datetime"),
-            "gpx_end_datetime": result.get("gpx_end_datetime"),
-            "trip_dates_auto_filled": result.get("trip_dates_auto_filled"),
-            "auto_fill_reason": result.get("auto_fill_reason"),
+            "file_url": result.get("file_path", "")
         }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    
+    # Return enhanced response with metadata
+    return {
+        "filename": result.get("filename", file.filename),
+        "file_url": result.get("file_path", ""),
+        "metadata_id": result.get("metadata_id"),
+        "size": result.get("size"),
+        "mime_type": result.get("mime_type"),
+        "has_gps": result.get("has_gps"),
+        "gps": result.get("gps"),
+        "date_taken": result.get("date_taken"),
+        "captured_at": result.get("captured_at"),
+        "captured_source": result.get("captured_source"),
+        "camera_make": result.get("camera_make"),
+        "camera_model": result.get("camera_model"),
+        "has_gpx_analysis": result.get("has_gpx_analysis"),
+        "analysis_status": result.get("analysis_status"),
+        "analysis_bucket": result.get("analysis_bucket"),
+        "analysis_object_key": result.get("analysis_object_key"),
+        "analysis_error": result.get("analysis_error"),
+        "track_summary": result.get("track_summary"),
+        "trip": result.get("trip"),
+        "gpx_metadata_extracted": result.get("gpx_metadata_extracted"),
+        "gpx_start_datetime": result.get("gpx_start_datetime"),
+        "gpx_end_datetime": result.get("gpx_end_datetime"),
+        "trip_dates_auto_filled": result.get("trip_dates_auto_filled"),
+        "auto_fill_reason": result.get("auto_fill_reason"),
+    }
 
 
 @router.get("/metadata/{metadata_id:path}")
@@ -147,15 +111,10 @@ async def get_file_metadata(
     :return: File metadata.
     :raises HTTPException: If metadata not found.
     """
-    try:
-        metadata = upload_service.get_metadata(metadata_id)
-        if not metadata:
-            raise HTTPException(status_code=404, detail="Metadata not found")
-        return metadata
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    metadata = upload_service.get_metadata(metadata_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Metadata not found")
+    return metadata
 
 
 @router.delete("/delete/{filename:path}")
@@ -163,7 +122,6 @@ async def delete_file(
     filename: str,
     bucket: str = Query(default="images"),
     current_user: User = Depends(get_current_user),
-    trip_service: TripService = Depends(get_trip_service),
     upload_service: FileUploadService = Depends(get_file_upload_service),
 ):
     """
@@ -174,28 +132,5 @@ async def delete_file(
     :return: Success message.
     :raises HTTPException: If deletion fails.
     """
-    # Check ownership before deletion
-    metadata = upload_service.get_metadata(filename)
-    if metadata:
-        # Check uploader
-        if metadata.get("uploader_id") and metadata.get("uploader_id") != current_user.id:
-             # If not uploader, check if owner of the trip
-             trip_id = metadata.get("trip_id")
-             if trip_id:
-                 trip = trip_service.get_trip(trip_id)
-                 if trip and trip.owner_id != current_user.id:
-                      raise HTTPException(status_code=403, detail="Not authorized to delete this file")
-                 elif not trip:
-                      # Trip not found, but file exists. Only uploader can delete.
-                      raise HTTPException(status_code=403, detail="Not authorized to delete this file")
-             else:
-                 # No trip associated, and not uploader
-                 raise HTTPException(status_code=403, detail="Not authorized to delete this file")
-
-    try:
-        result = upload_service.remove_file(filename, bucket)
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # The ownership check is now handled within the service layer
+    return upload_service.remove_file(filename, bucket, current_user.id)

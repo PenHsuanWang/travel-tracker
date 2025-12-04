@@ -4,9 +4,10 @@ from dotenv import load_dotenv
 
 load_dotenv()  # Load environment variables from .env file
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 
 from src.config import configure_logging, get_settings
 from src.routes.map_routes import router as map_router
@@ -27,6 +28,31 @@ EventBus.subscribe("GPX_PROCESSED", achievement_engine.handle_gpx_processed)
 EventBus.subscribe("MEMBER_ADDED", achievement_engine.handle_member_added)
 
 app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG)
+
+# -- Exception Handlers --
+
+@app.exception_handler(ValueError)
+async def value_error_exception_handler(request: Request, exc: ValueError):
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"detail": str(exc)},
+    )
+
+@app.exception_handler(PermissionError)
+async def permission_error_exception_handler(request: Request, exc: PermissionError):
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={"detail": str(exc)},
+    )
+
+@app.exception_handler(FileNotFoundError)
+async def file_not_found_error_handler(request: Request, exc: FileNotFoundError):
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"detail": str(exc)},
+    )
+
+# -- Middleware --
 
 # Enable CORS
 # In production, ALLOWED_ORIGINS should be set to the specific frontend domain

@@ -21,19 +21,21 @@ class FileUploadService:
 
     def __init__(
         self,
-        storage_manager: StorageManager | None = None,
-        *,
-        trip_service: TripService | None = None,
+        storage_manager: StorageManager,
+        trip_service: TripService,
         handler_factory: type[HandlerFactory] = HandlerFactory,
         event_bus: type[EventBus] = EventBus,
     ) -> None:
+        """Initializes the FileUploadService with its dependencies.
+
+        :param storage_manager: A configured StorageManager instance.
+        :param trip_service: An instance of the TripService.
+        :param handler_factory: A factory for creating file handlers.
+        :param event_bus: The application's event bus class.
+        """
         self.logger = logging.getLogger(__name__)
-        self.storage_manager = ensure_storage_manager(
-            storage_manager,
-            include_mongodb=True,
-            include_minio=True,
-        )
-        self.trip_service = trip_service or TripService()
+        self.storage_manager = storage_manager
+        self.trip_service = trip_service
         self.handler_factory = handler_factory
         self.event_bus = event_bus
 
@@ -151,6 +153,101 @@ class FileUploadService:
             result["reason"] = "trip_update_failed"
         return result
     
+    def _delete_existing_gpx_if_any(self, trip_id: str) -> None:
+        """If a GPX file already exists for the trip, delete it."""
+        try:
+            mongodb_adapter = self.storage_manager.adapters.get('mongodb')
+            if mongodb_adapter:
+                collection = mongodb_adapter.get_collection('file_metadata')
+                cursor = collection.find({"trip_id": trip_id, "file_extension": "gpx"})
+                for doc in cursor:
+                    try:
+                        self._delete_file(doc['_id'], bucket=doc.get('bucket', 'gps-data'))
+                        self.logger.info("Deleted existing GPX file %s for trip %s", doc['_id'], trip_id)
+                    except Exception as exc:
+                        self.logger.warning("Failed to delete existing GPX %s: %s", doc['_id'], exc)
+        except Exception as exc:
+            self.logger.warning("Error checking/deleting existing GPX files: %s", exc)
+
+    def _persist_metadata(self, result: HandlerResult, uploader_id: str | None, trip_id: str | None) -> FileMetadata:
+        """Create and save the FileMetadata document to MongoDB."""
+        metadata = FileMetadata(
+            id=result.object_key,
+            object_key=result.object_key,
+            bucket=result.bucket,
+            filename=result.filename,
+            original_filename=result.original_filename,
+            size=result.size,
+            mime_type=result.mime_type,
+            file_extension=result.file_extension,
+            exif=result.exif,
+            gps=result.gps,
+            date_taken=result.date_taken,
+            captured_at=result.captured_at,
+            captured_source=result.captured_source,
+            camera_make=result.camera_make,
+            camera_model=result.camera_model,
+            created_at=datetime.now(timezone.utc),
+            uploader_id=uploader_id,
+            trip_id=trip_id,
+            has_gpx_analysis=result.has_gpx_analysis,
+            analysis_object_key=result.analysis_object_key,
+            analysis_bucket=result.analysis_bucket,
+            analysis_status=result.analysis_status,
+            analysis_error=result.analysis_error,
+            track_summary=result.track_summary,
+            status=result.status
+        )
+        self.storage_manager.save_data(
+            result.object_key,
+            metadata.model_dump(by_alias=True),
+            adapter_name='mongodb',
+            collection_name='file_metadata'
+        )
+        return metadata
+
+    def _handle_gpx_side_effects(self, result: HandlerResult, trip_id: str, metadata_id: str) -> dict:
+        """Auto-fill trip dates and publish events for GPX files."""
+        response_updates = {}
+        auto_fill_details = self._maybe_autofill_trip_dates(trip_id, result.track_summary, metadata_id)
+        response_updates["trip_dates_auto_filled"] = auto_fill_details.get("applied")
+        response_updates["auto_fill_reason"] = auto_fill_details.get("reason")
+        response_updates["gpx_metadata_extracted"] = auto_fill_details.get("metadata_extracted")
+        response_updates["gpx_start_datetime"] = auto_fill_details.get("start_datetime")
+        response_updates["gpx_end_datetime"] = auto_fill_details.get("end_datetime")
+        response_updates["activity_start_datetime"] = auto_fill_details.get("activity_start_datetime")
+        response_updates["activity_end_datetime"] = auto_fill_details.get("activity_end_datetime")
+        if auto_fill_details.get("trip"):
+            response_updates["trip"] = auto_fill_details["trip"]
+
+        if not result.track_summary:
+            return response_updates
+
+        # Update trip stats and publish event for gamification
+        try:
+            stats_payload = {
+                "distance_km": result.track_summary.get("total_distance_km") or (result.track_summary.get("total_distance_m") or 0) / 1000,
+                "elevation_gain_m": result.track_summary.get("elevation_gain_m", 0),
+                "moving_time_sec": result.track_summary.get("duration_seconds", 0),
+                "max_altitude_m": result.track_summary.get("max_elevation_m") or result.track_summary.get("max_altitude_m") or 0,
+            }
+            self.trip_service.update_trip_stats(trip_id, stats_payload)
+
+            trip = self.trip_service.get_trip(trip_id)
+            if trip:
+                stats = {
+                    "distance_km": result.track_summary.get("total_distance_km", 0),
+                    "elevation_gain_m": result.track_summary.get("elevation_gain_m", 0),
+                }
+                self.event_bus.publish(
+                    "GPX_PROCESSED",
+                    {"trip_id": trip_id, "stats": stats, "member_ids": trip.member_ids},
+                )
+        except Exception as exc:
+            self.logger.error("Failed to publish GPX_PROCESSED event: %s", exc)
+
+        return response_updates
+
     def _save_file(
         self,
         file: UploadFile,
@@ -158,159 +255,55 @@ class FileUploadService:
         trip_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Persist file bytes, analysis artifacts, and Mongo-backed metadata."""
-
         file_extension = (file.filename or "").split('.')[-1].lower()
+        
+        # Enforce trip scoping for GPX and image uploads
+        if file_extension == "gpx" and not trip_id:
+            raise ValueError("trip_id is required when uploading GPX tracks")
+        
+        # Enforce single GPX file per trip
+        if file_extension == "gpx" and trip_id:
+            self._delete_existing_gpx_if_any(trip_id)
+
         handler = self.handler_factory.get_handler(
             file_extension,
             storage_manager=self.storage_manager,
         )
-
-        # Enforce trip scoping for GPX and image uploads to avoid cross-trip leakage
-        # Exception: Avatars (images without trip_id) are allowed
-        if file_extension == "gpx" and not trip_id:
-            raise ValueError("trip_id is required when uploading GPX tracks")
-        
-        # Enforce single GPX file per trip: delete existing GPX files before uploading new one
-        if file_extension == "gpx" and trip_id:
-            try:
-                mongodb_adapter = self.storage_manager.adapters.get('mongodb')
-                if mongodb_adapter:
-                    collection = mongodb_adapter.get_collection('file_metadata')
-                    # Find all GPX files for this trip
-                    cursor = collection.find({"trip_id": trip_id, "file_extension": "gpx"})
-                    for doc in cursor:
-                        try:
-                            # Use object_key (which is _id) and bucket to delete
-                            self._delete_file(doc['_id'], bucket=doc.get('bucket', 'gps-data'))
-                            self.logger.info("Deleted existing GPX file %s for trip %s", doc['_id'], trip_id)
-                        except Exception as exc:
-                            self.logger.warning("Failed to delete existing GPX %s: %s", doc['_id'], exc)
-            except Exception as exc:
-                self.logger.warning("Error checking/deleting existing GPX files: %s", exc)
-        
         result = handler.handle(file, trip_id=trip_id)
         
-        # Handle legacy handlers that return strings
-        if isinstance(result, str):
-            return {
-                "file_path": result,
-                "filename": file.filename,
-                "status": "success"
-            }
+        if not isinstance(result, HandlerResult):
+             return {"filename": file.filename, "status": "unknown", "error": "Unexpected handler result type"}
+
+        metadata = self._persist_metadata(result, uploader_id, trip_id)
         
-        # Handle new HandlerResult with metadata
-        if isinstance(result, HandlerResult):
-            # Save metadata to MongoDB
-            metadata_id = result.object_key
-            metadata = FileMetadata(
-                id=metadata_id,
-                object_key=result.object_key,
-                bucket=result.bucket,
-                filename=result.filename,
-                original_filename=result.original_filename,
-                size=result.size,
-                mime_type=result.mime_type,
-                file_extension=result.file_extension,
-                exif=result.exif,
-                gps=result.gps,
-                date_taken=result.date_taken,
-                captured_at=result.captured_at,
-                captured_source=result.captured_source,
-                camera_make=result.camera_make,
-                camera_model=result.camera_model,
-                created_at=datetime.now(timezone.utc),
-                uploader_id=uploader_id,
-                trip_id=trip_id,
-                has_gpx_analysis=result.has_gpx_analysis,
-                analysis_object_key=result.analysis_object_key,
-                analysis_bucket=result.analysis_bucket,
-                analysis_status=result.analysis_status,
-                analysis_error=result.analysis_error,
-                track_summary=result.track_summary,
-                status=result.status
-            )
-            
-            # Save to MongoDB
-            self.storage_manager.save_data(
-                metadata_id,
-                metadata.model_dump(by_alias=True),
-                adapter_name='mongodb',
-                collection_name='file_metadata'
-            )
-            
-            response_payload: Dict[str, Any] = {
-                "metadata_id": metadata_id,
-                "object_key": result.object_key,
-                "filename": result.original_filename,
-                "file_path": f"{result.bucket}/{result.filename}",
-                "size": result.size,
-                "mime_type": result.mime_type,
-                "has_gps": result.gps is not None,
-                "gps": result.gps.model_dump() if result.gps else None,
-                "date_taken": result.date_taken,
-                "captured_at": result.captured_at.isoformat() if result.captured_at else None,
-                "captured_source": result.captured_source,
-                "camera_make": result.camera_make,
-                "camera_model": result.camera_model,
-                "status": result.status,
-                "has_gpx_analysis": result.has_gpx_analysis,
-                "analysis_status": result.analysis_status,
-                "analysis_bucket": result.analysis_bucket,
-                "analysis_object_key": result.analysis_object_key,
-                "analysis_error": result.analysis_error,
-                "track_summary": result.track_summary,
-            }
-
-            if getattr(result, "file_extension", "") and result.file_extension.lower() == "gpx" and trip_id:
-                auto_fill_details = self._maybe_autofill_trip_dates(trip_id, result.track_summary, metadata_id)
-                response_payload["trip_dates_auto_filled"] = auto_fill_details.get("applied")
-                response_payload["auto_fill_reason"] = auto_fill_details.get("reason")
-                response_payload["gpx_metadata_extracted"] = auto_fill_details.get("metadata_extracted")
-                response_payload["gpx_start_datetime"] = auto_fill_details.get("start_datetime")
-                response_payload["gpx_end_datetime"] = auto_fill_details.get("end_datetime")
-                response_payload["activity_start_datetime"] = auto_fill_details.get("activity_start_datetime")
-                response_payload["activity_end_datetime"] = auto_fill_details.get("activity_end_datetime")
-                if auto_fill_details.get("trip"):
-                    response_payload["trip"] = auto_fill_details["trip"]
-
-                # Publish GPX_PROCESSED event for gamification
-                if result.track_summary:
-                    try:
-                        stats_payload = {
-                            "distance_km": result.track_summary.get("total_distance_km")
-                            or (result.track_summary.get("total_distance_m") or 0) / 1000,
-                            "elevation_gain_m": result.track_summary.get("elevation_gain_m", 0),
-                            "moving_time_sec": result.track_summary.get("duration_seconds", 0),
-                            "max_altitude_m": result.track_summary.get("max_elevation_m")
-                            or result.track_summary.get("max_altitude_m")
-                            or 0,
-                        }
-                        self.trip_service.update_trip_stats(trip_id, stats_payload)
-
-                        trip = self.trip_service.get_trip(trip_id)
-                        if trip:
-                            stats = {
-                                "distance_km": result.track_summary.get("total_distance_km", 0),
-                                "elevation_gain_m": result.track_summary.get("elevation_gain_m", 0),
-                            }
-                            self.event_bus.publish(
-                                "GPX_PROCESSED",
-                                {
-                                    "trip_id": trip_id,
-                                    "stats": stats,
-                                    "member_ids": trip.member_ids,
-                                },
-                            )
-                    except Exception as exc:
-                        self.logger.error("Failed to publish GPX_PROCESSED event: %s", exc)
-
-            return response_payload
-        
-        return {
-            "filename": file.filename,
-            "status": "unknown",
-            "error": "Unexpected handler result type"
+        response_payload: Dict[str, Any] = {
+            "metadata_id": metadata.id,
+            "object_key": result.object_key,
+            "filename": result.original_filename,
+            "file_path": f"{result.bucket}/{result.filename}",
+            "size": result.size,
+            "mime_type": result.mime_type,
+            "has_gps": result.gps is not None,
+            "gps": result.gps.model_dump() if result.gps else None,
+            "date_taken": result.date_taken,
+            "captured_at": result.captured_at.isoformat() if result.captured_at else None,
+            "captured_source": result.captured_source,
+            "camera_make": result.camera_make,
+            "camera_model": result.camera_model,
+            "status": result.status,
+            "has_gpx_analysis": result.has_gpx_analysis,
+            "analysis_status": result.analysis_status,
+            "analysis_bucket": result.analysis_bucket,
+            "analysis_object_key": result.analysis_object_key,
+            "analysis_error": result.analysis_error,
+            "track_summary": result.track_summary,
         }
+
+        if file_extension == "gpx" and trip_id:
+            gpx_updates = self._handle_gpx_side_effects(result, trip_id, metadata.id)
+            response_payload.update(gpx_updates)
+
+        return response_payload
 
     def upload_file(
         self,
@@ -322,36 +315,23 @@ class FileUploadService:
 
         return self._save_file(file, uploader_id, trip_id)
 
-    @classmethod
     def save_file(
-        cls,
+        self,
         file: UploadFile,
         uploader_id: Optional[str] = None,
         trip_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Backward-compatible entry point that builds a default service."""
-
-        return cls().upload_file(file, uploader_id, trip_id)
-    
-    def _get_file_metadata(self, metadata_id: str) -> Optional[Dict[str, Any]]:
-        """Load persisted metadata for a specific object key."""
-
-        return self.storage_manager.load_data(
-            'mongodb',
-            metadata_id,
-            collection_name='file_metadata'
-        )
+        """Alias for upload_file for backward compatibility."""
+        return self.upload_file(file, uploader_id, trip_id)
 
     def get_metadata(self, metadata_id: str) -> Optional[Dict[str, Any]]:
         """Return metadata for a stored object using cached adapters."""
 
         return self._get_file_metadata(metadata_id)
 
-    @classmethod
-    def get_file_metadata(cls, metadata_id: str) -> Optional[Dict[str, Any]]:
-        """Backward-compatible wrapper that instantiates a default service."""
-
-        return cls().get_metadata(metadata_id)
+    def get_file_metadata(self, metadata_id: str) -> Optional[Dict[str, Any]]:
+        """Alias for get_metadata for backward compatibility."""
+        return self.get_metadata(metadata_id)
     
     def _delete_file(self, filename: str, bucket: str = "images") -> Dict[str, Any]:
         """Remove the object from MinIO and prune its MongoDB metadata."""
@@ -433,13 +413,43 @@ class FileUploadService:
             }
         )
 
-    def remove_file(self, filename: str, bucket: str = "images") -> Dict[str, Any]:
-        """Remove objects and metadata using already-initialized adapters."""
+    def remove_file(self, filename: str, bucket: str, current_user_id: str) -> Dict[str, Any]:
+        """Check ownership and then remove objects and metadata."""
+        metadata = self.get_metadata(filename)
+
+        if not metadata:
+            # If there is no metadata, we cannot verify ownership.
+            # We also can't know if there's a corresponding file in MinIO without listing,
+            # but we can try to delete and see. A safer default is to deny.
+            # However, the original logic implies we might have orphan files.
+            # The most robust action is to check MinIO directly.
+            if not self.storage_manager.exists("minio", filename, bucket=bucket):
+                 raise FileNotFoundError(f"File '{filename}' not found.")
+            # If it exists but has no metadata, it's an orphan. Only an admin should delete it.
+            # For now, we deny deletion for non-admin users.
+            raise PermissionError("Cannot delete file without metadata to verify ownership.")
+
+        is_uploader = metadata.get("uploader_id") == current_user_id
+        is_trip_owner = False
+        
+        trip_id = metadata.get("trip_id")
+        if trip_id:
+            try:
+                trip = self.trip_service.get_trip(trip_id)
+                if trip and trip.owner_id == current_user_id:
+                    is_trip_owner = True
+            except Exception as e:
+                self.logger.warning("Error checking trip ownership for deletion: %s", e)
+
+        if not is_uploader and not is_trip_owner:
+            raise PermissionError("Not authorized to delete this file.")
 
         return self._delete_file(filename, bucket)
 
     @classmethod
     def delete_file(cls, filename: str, bucket: str = "images") -> Dict[str, Any]:
-        """Backward-compatible wrapper that instantiates a default service."""
-
-        return cls().remove_file(filename, bucket)
+        """Backward-compatible wrapper. This can't be used for authorized requests."""
+        # This method is now problematic as it doesn't have user context.
+        # It's better to use an instance with dependencies injected.
+        # For now, we will assume it's for internal system use if called.
+        return cls().remove_file(filename, bucket, current_user_id="<system>")

@@ -1,16 +1,9 @@
-"""Routes exposing file listings, GPX analysis, and photo note management."""
-
-from __future__ import annotations
-
-import logging
-import xml.etree.ElementTree as ET
-from functools import lru_cache
-from typing import Any, Dict, List, Optional, Tuple
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Response  # type: ignore[import-not-found]
-from pydantic import BaseModel  # type: ignore[import-not-found]
-
 from src.auth import get_current_user
+from src.dependencies import (
+    get_analysis_retrieval_service,
+    get_file_retrieval_service,
+    get_photo_note_service,
+)
 from src.models.file_metadata import FileMetadata
 from src.models.user import User
 from src.services.file_retrieval_service import FileRetrievalService
@@ -21,39 +14,6 @@ from src.services.photo_note_service import PhotoNoteService
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
-
-
-@lru_cache
-def _file_retrieval_service() -> FileRetrievalService:
-    return FileRetrievalService()
-
-
-@lru_cache
-def _analysis_retrieval_service() -> GpxAnalysisRetrievalService:
-    return GpxAnalysisRetrievalService()
-
-
-@lru_cache
-def _photo_note_service() -> PhotoNoteService:
-    return PhotoNoteService()
-
-
-def get_file_retrieval_service() -> FileRetrievalService:
-    """Provide a cached file retrieval service for dependency injection."""
-
-    return _file_retrieval_service()
-
-
-def get_analysis_retrieval_service() -> GpxAnalysisRetrievalService:
-    """Provide a cached GPX analysis retrieval service."""
-
-    return _analysis_retrieval_service()
-
-
-def get_photo_note_service() -> PhotoNoteService:
-    """Provide a cached photo note service."""
-
-    return _photo_note_service()
 
 
 class FileListItem(BaseModel):
@@ -112,11 +72,7 @@ async def list_files(
     service: FileRetrievalService = Depends(get_file_retrieval_service),
 ):
     """Return object keys for a given bucket/trip combination."""
-
-    try:
-        return service.list_files(bucket, trip_id=trip_id)
-    except Exception as exc:  # pragma: no cover - FastAPI converts to JSON
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return service.list_files(bucket, trip_id=trip_id)
 
 
 @router.get("/list-files/detail", response_model=List[FileListItem])
@@ -126,11 +82,7 @@ async def list_files_with_metadata(
     service: FileRetrievalService = Depends(get_file_retrieval_service),
 ):
     """Return storage/metadata rows for the requested bucket/trip scope."""
-
-    try:
-        return service.list_files_with_metadata(bucket, trip_id)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return service.list_files_with_metadata(bucket, trip_id)
 
 
 def _parse_raw_gpx_bytes(gpx_bytes: bytes) -> Tuple[List[List[float]], List[Dict[str, Any]], Optional[str]]:
@@ -210,20 +162,16 @@ async def get_geotagged_images(
     service: FileRetrievalService = Depends(get_file_retrieval_service),
 ):
     """Return images that contain latitude/longitude metadata."""
+    bbox = None
+    if all(v is not None for v in [minLon, minLat, maxLon, maxLat]):
+        bbox = {
+            'minLon': minLon,
+            'minLat': minLat,
+            'maxLon': maxLon,
+            'maxLat': maxLat,
+        }
 
-    try:
-        bbox = None
-        if all(v is not None for v in [minLon, minLat, maxLon, maxLat]):
-            bbox = {
-                'minLon': minLon,
-                'minLat': minLat,
-                'maxLon': maxLon,
-                'maxLat': maxLat,
-            }
-
-        return service.list_geotagged_images(bucket, bbox, trip_id)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return service.list_geotagged_images(bucket, bbox, trip_id)
 
 
 @router.get("/gpx/{filename:path}/analysis", response_model=GpxAnalysisResponse)
@@ -376,32 +324,30 @@ async def get_file(
 
 
 @router.patch("/photos/{metadata_id:path}/note")
-async def update_photo_note(metadata_id: str, payload: PhotoNotePayload, current_user: User = Depends(get_current_user)):
+async def update_photo_note(
+    metadata_id: str,
+    payload: PhotoNotePayload,
+    current_user: User = Depends(get_current_user),
+    photo_note_service: PhotoNoteService = Depends(get_photo_note_service),
+):
     """
     Update the note/note_title for a photo metadata entry.
     """
-    try:
-        updated = photo_note_service.update_note(
-            metadata_id,
-            note=payload.note,
-            note_title=payload.note_title,
-        )
-        return updated
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    return photo_note_service.update_note(
+        metadata_id,
+        note=payload.note,
+        note_title=payload.note_title,
+    )
 
 
 @router.patch("/photos/{metadata_id:path}/order")
-async def update_photo_order(metadata_id: str, payload: PhotoOrderPayload, current_user: User = Depends(get_current_user)):
+async def update_photo_order(
+    metadata_id: str,
+    payload: PhotoOrderPayload,
+    current_user: User = Depends(get_current_user),
+    photo_note_service: PhotoNoteService = Depends(get_photo_note_service),
+):
     """
     Update the order index for a photo metadata entry.
     """
-    try:
-        updated = photo_note_service.update_order(metadata_id, order_index=payload.order_index)
-        return updated
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    return photo_note_service.update_order(metadata_id, order_index=payload.order_index)

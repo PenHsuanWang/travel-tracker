@@ -19,19 +19,20 @@ class TripService:
 
     def __init__(
         self,
-        storage_manager: StorageManager | None = None,
-        *,
-        stats_service: UserStatsService | None = None,
+        storage_manager: StorageManager,
+        stats_service: UserStatsService,
         event_bus: type[EventBus] = EventBus,
     ) -> None:
+        """Initializes the TripService with its dependencies.
+
+        :param storage_manager: A configured StorageManager instance.
+        :param stats_service: An instance of the UserStatsService.
+        :param event_bus: The application's event bus class.
+        """
         self.logger = logging.getLogger(__name__)
-        self.storage_manager = ensure_storage_manager(
-            storage_manager,
-            include_mongodb=True,
-            include_minio=True,
-        )
+        self.storage_manager = storage_manager
         self.collection_name = 'trips'
-        self.stats_service = stats_service or user_stats_service
+        self.stats_service = stats_service
         self.event_bus = event_bus
 
     def create_trip(self, trip_data: Trip) -> Trip:

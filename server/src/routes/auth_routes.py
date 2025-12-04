@@ -1,39 +1,15 @@
-"""Authentication endpoints for login and controlled registration."""
-
-from __future__ import annotations
-
-import os
-from datetime import timedelta
-from functools import lru_cache
-
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
-
 from src.auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_password_hash, verify_password
+from src.config import get_settings
+from src.dependencies import get_mongo_adapter
 from src.models.user import Token, User, UserCreate
-from src.services.service_dependencies import ensure_storage_manager
 from src.utils.dbbutler.mongodb_adapter import MongoDBAdapter
-from src.utils.dbbutler.storage_manager import StorageManager
 
 router = APIRouter()
 
 
-@lru_cache
-def _storage_manager() -> StorageManager:
-    return ensure_storage_manager(include_mongodb=True)
-
-
-def get_mongo_adapter() -> MongoDBAdapter:
-    """Provide a cached Mongo adapter."""
-
-    manager = _storage_manager()
-    adapter = manager.adapters.get("mongodb")
-    if not adapter:
-        raise RuntimeError("MongoDB adapter not configured")
-    return adapter  # type: ignore[return-value]
-
-# Get registration key from env
-REGISTRATION_KEY = os.getenv("REGISTRATION_KEY", "admin_secret_key")
+# Get registration key from settings
+settings = get_settings()
+REGISTRATION_KEY = settings.REGISTRATION_KEY
 
 @router.post("/login", response_model=Token)
 async def login_for_access_token(
