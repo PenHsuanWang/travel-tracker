@@ -60,8 +60,14 @@ const TripCard = ({
     onDelete,
     readOnly,
     isPinned,
-    onTogglePin
+    onTogglePin,
+    currentUserId,
 }) => {
+    const owner = trip.owner;
+    const isOwner = currentUserId && (trip.owner_id === currentUserId || (owner && owner.id === currentUserId));
+    const canEdit = !readOnly && isOwner;
+    const canPin = !readOnly;
+
     const coverUrl =
         trip.cover_image_url ||
         (trip.cover_photo_id ? getImageUrl(trip.cover_photo_id) : null);
@@ -74,7 +80,6 @@ const TripCard = ({
     const gpxLabel = trip.has_gpx ? '✓' : '–';
     const photosLabel =
         typeof trip.photo_count === 'number' ? trip.photo_count : '—';
-    const owner = trip.owner;
 
     const handleCardClick = () => {
         if (selectMode) {
@@ -129,17 +134,19 @@ const TripCard = ({
                             </span>
                         )}
                         <div className="cover-actions">
-                            <button
-                                type="button"
-                                className="ghost-button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onOpenCover(trip);
-                                }}
-                            >
-                                {hasCover ? 'Change cover' : 'Add cover image'}
-                            </button>
-                            {hasCover && (
+                            {canEdit && (
+                                <button
+                                    type="button"
+                                    className="ghost-button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenCover(trip);
+                                    }}
+                                >
+                                    {hasCover ? 'Change cover' : 'Add cover image'}
+                                </button>
+                            )}
+                            {canEdit && hasCover && (
                                 <button
                                     type="button"
                                     className="ghost-button"
@@ -151,17 +158,19 @@ const TripCard = ({
                                     Choose from photos
                                 </button>
                             )}
-                            <button
-                                type="button"
-                                className={`ghost-button ghost-icon ${isPinned ? 'pinned' : ''}`}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onTogglePin(trip.id);
-                                }}
-                                title={isPinned ? "Unpin from profile" : "Pin to profile"}
-                            >
-                                {isPinned ? '★' : '☆'}
-                            </button>
+                            {canPin && (
+                                <button
+                                    type="button"
+                                    className={`ghost-button ghost-icon ${isPinned ? 'pinned' : ''}`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onTogglePin(trip.id);
+                                    }}
+                                    title={isPinned ? "Unpin from profile" : "Pin to profile"}
+                                >
+                                    {isPinned ? '★' : '☆'}
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}
@@ -223,7 +232,7 @@ const TripCard = ({
                     >
                         Open Map
                     </Link>
-                    {!readOnly && (
+                    {canEdit && (
                         <button
                             type="button"
                             className="ghost-button danger"
@@ -235,7 +244,7 @@ const TripCard = ({
                             Delete
                         </button>
                     )}
-                    {!readOnly && (
+                    {canEdit && (
                         <button
                             type="button"
                             className="ghost-button ghost-icon"
@@ -973,6 +982,7 @@ const TripsPage = () => {
                             readOnly={readOnly}
                             isPinned={user?.pinned_trip_ids?.includes(trip.id)}
                             onTogglePin={handleTogglePin}
+                            currentUserId={user?.id}
                         />
                     ))}
                 </div>

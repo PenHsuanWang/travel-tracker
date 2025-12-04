@@ -62,17 +62,20 @@ const ProfilePage = () => {
         setMemberTrips([]);
         return;
       }
+      
       try {
+        // Always fetch trips for the viewed user to populate heatmap/timeline correctly
         const trips = await getTrips({ user_id: profile.id });
         setMemberTrips(trips || []);
       } catch (err) {
         console.error('Failed to fetch member trips', err);
-        setMemberTrips([]);
+        // Fallback to pinned trips if fetch fails
+        setMemberTrips(profile.pinned_trips || []);
       }
     };
 
     loadMemberTrips();
-  }, [profile?.id]);
+  }, [profile?.id, profile?.pinned_trips]);
 
   useEffect(() => {
     let isActive = true;
@@ -209,6 +212,11 @@ const ProfilePage = () => {
 
   return (
     <div className="profile-page">
+      {!isOwnProfile && (
+        <div className="profile-breadcrumbs">
+          <Link to="/community">Community</Link> &gt; <span>{profile.username}</span>
+        </div>
+      )}
       <div className="profile-header">
         <div className="profile-avatar-container">
           <img 

@@ -34,13 +34,21 @@ const getStats = async () => {
   return response.data;
 };
 
+const getPublicUsers = async (skip = 0, limit = 20, search = '') => {
+  const params = { skip, limit };
+  if (search) params.search = search;
+  const response = await apiClient.get('/users/public', { params });
+  return response.data;
+};
+
 const userService = {
   getProfile,
   updateProfile,
   uploadAvatar,
   getUserProfile,
   searchUsers,
-  getStats
+  getStats,
+  getPublicUsers
 };
 
 export default userService;

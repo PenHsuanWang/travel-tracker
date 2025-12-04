@@ -36,6 +36,12 @@ function Header() {
           >
             Trips
           </NavLink>
+          <NavLink
+            to="/community"
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          >
+            Community
+          </NavLink>
           <button type="button" className="nav-link muted" title="Map view coming soon">
             Map
           </button>

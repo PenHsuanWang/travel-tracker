@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from typing import List, Optional
 from src.auth import get_current_user
-from src.models.user import User, UserInDB
+from src.models.user import User, UserInDB, UserSummary, PublicUserProfile
 from src.models.trip import TripResponse
 from src.utils.adapter_factory import AdapterFactory
 from src.services.file_upload_service import FileUploadService
@@ -68,6 +68,69 @@ def _build_profile_response(user_obj: UserInDB) -> dict:
             user_response["pinned_trips"].append(trip_doc)
 
     return user_response
+
+def _build_public_profile_response(user_obj: UserInDB) -> PublicUserProfile:
+    """Build a strict public profile response."""
+    mongo_adapter = AdapterFactory.create_mongodb_adapter()
+    
+    pinned_trips = []
+    pinned_ids = list(getattr(user_obj, "pinned_trip_ids", []) or [])
+    
+    if pinned_ids:
+        trips_collection = mongo_adapter.get_collection("trips")
+        cursor = trips_collection.find({"id": {"$in": pinned_ids}})
+        for trip_doc in cursor:
+            trip_doc.pop("_id", None)
+            pinned_trips.append(trip_doc)
+
+    return PublicUserProfile(
+        id=str(user_obj.id) if getattr(user_obj, "id", None) else None,
+        username=user_obj.username,
+        full_name=getattr(user_obj, "full_name", None),
+        bio=getattr(user_obj, "bio", None),
+        location=getattr(user_obj, "location", None),
+        avatar_url=getattr(user_obj, "avatar_url", None),
+        created_at=user_obj.created_at,
+        total_distance_km=getattr(user_obj, "total_distance_km", 0.0),
+        total_elevation_gain_m=getattr(user_obj, "total_elevation_gain_m", 0.0),
+        total_trips=getattr(user_obj, "total_trips", 0),
+        earned_badges=list(getattr(user_obj, "earned_badges", []) or []),
+        pinned_trips=pinned_trips
+    )
+
+@router.get("/public", response_model=List[UserSummary])
+async def list_public_users(
+    skip: int = 0, 
+    limit: int = 20, 
+    q: Optional[str] = None,
+    current_user: Optional[User] = Depends(get_current_user) # Optional auth
+):
+    """
+    List public users for the community gallery.
+    """
+    mongo_adapter = AdapterFactory.create_mongodb_adapter()
+    users_collection = mongo_adapter.get_collection("users")
+    
+    query = {}
+    if q:
+        regex_query = {"$regex": q, "$options": "i"}
+        query = {
+            "$or": [
+                {"username": regex_query},
+                {"full_name": regex_query}
+            ]
+        }
+        
+    cursor = users_collection.find(query).skip(skip).limit(limit)
+    
+    users = []
+    for user_data in cursor:
+        if "_id" in user_data:
+            user_data["id"] = str(user_data.pop("_id"))
+        users.append(UserSummary(**user_data))
+        
+    return users
+
 
 
 @router.get("/me/stats", response_model=UserStats)
@@ -227,7 +290,7 @@ async def search_users(q: str = Query(..., min_length=2), current_user: User = D
         
     return users
 
-@router.get("/{username}", response_model=UserProfile)
+@router.get("/{username}", response_model=PublicUserProfile)
 async def get_user_profile(username: str):
     """
     Get public profile of another user with pinned trips.
@@ -237,4 +300,4 @@ async def get_user_profile(username: str):
     user_obj.total_distance_km = stats["total_distance_km"]
     user_obj.total_elevation_gain_m = stats["total_elevation_gain_m"]
     user_obj.total_trips = stats["total_trips"]
-    return _build_profile_response(user_obj)
+    return _build_public_profile_response(user_obj)

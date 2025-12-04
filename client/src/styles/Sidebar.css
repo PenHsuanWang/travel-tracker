@@ -140,3 +140,15 @@
   color: #64748b;
   font-style: italic;
 }
+
+.member-item-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.member-item-link:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}

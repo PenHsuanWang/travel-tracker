@@ -1,3 +1,23 @@
+.profile-breadcrumbs {
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #666);
+}
+
+.profile-breadcrumbs a {
+  color: var(--primary-color, #007bff);
+  text-decoration: none;
+}
+
+.profile-breadcrumbs a:hover {
+  text-decoration: underline;
+}
+
+.profile-breadcrumbs span {
+  color: var(--text-primary, #333);
+  font-weight: 500;
+}
+
 .profile-page {
   max-width: 900px;
   margin: 0 auto;

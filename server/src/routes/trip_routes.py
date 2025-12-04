@@ -142,6 +142,14 @@ async def update_trip(trip_id: str, update_data: Dict[str, Any], current_user: U
     """
     Update a trip.
     """
+    # Check ownership
+    existing_trip = trip_service.get_trip(trip_id)
+    if not existing_trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    
+    if existing_trip.owner_id and existing_trip.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this trip")
+
     trip = trip_service.update_trip(trip_id, update_data)
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")
@@ -167,6 +175,14 @@ async def delete_trip(trip_id: str, current_user: User = Depends(get_current_use
     """
     Delete a trip.
     """
+    # Check ownership
+    existing_trip = trip_service.get_trip(trip_id)
+    if not existing_trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+        
+    if existing_trip.owner_id and existing_trip.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this trip")
+
     success = trip_service.delete_trip(trip_id)
     if not success:
         raise HTTPException(status_code=404, detail="Trip not found or could not be deleted")

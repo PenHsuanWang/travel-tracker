@@ -10,6 +10,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
+import CommunityPage from './pages/CommunityPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import './styles/App.css';
 
@@ -26,6 +27,9 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             
+            {/* Community Route */}
+            <Route path="/community" element={<CommunityPage />} />
+
             {/* Profile Routes */}
             <Route 
               path="/profile/me" 

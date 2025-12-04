@@ -29,9 +29,35 @@ class User(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class UserSummary(BaseModel):
+    """Lightweight model for the Community Grid"""
     id: str
     username: str
+    full_name: Optional[str] = None
     avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+    total_distance_km: float = 0.0
+    total_trips: int = 0
+    created_at: Optional[datetime] = None
+
+class PublicUserProfile(BaseModel):
+    """Detailed model for Public Profile View"""
+    id: str
+    username: str
+    full_name: Optional[str] = None
+    bio: Optional[str] = None
+    location: Optional[str] = None
+    avatar_url: Optional[str] = None
+    created_at: datetime
+    
+    # Stats & Gamification
+    total_distance_km: float
+    total_elevation_gain_m: float
+    total_trips: int
+    earned_badges: List[str]
+    
+    # Content
+    # We use List[dict] or ForwardRef to avoid circular import with TripResponse
+    pinned_trips: List[dict] = []
 
 class UserInDB(User):
     hashed_password: str

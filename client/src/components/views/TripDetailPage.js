@@ -157,7 +157,6 @@ const TripDetailPage = () => {
     const [timelineWidth, setTimelineWidth] = useState(() => getStoredTimelineWidth());
     const [scrollToItemId, setScrollToItemId] = useState(null);
 
-    const readOnly = !isAuthenticated;
     // Robust check for user ID (handles id vs _id) and type coercion
     const userId = user ? (user.id || user._id) : null;
     const isOwner = useMemo(() => {
@@ -169,6 +168,8 @@ const TripDetailPage = () => {
         if (trip.owner && trip.owner.username && user?.username && trip.owner.username === user.username) return true;
         return false;
     }, [userId, trip, user?.username]);
+
+    const readOnly = !isOwner;
 
     // Lifted GPX State
     // Refactored: Single GPX file per trip

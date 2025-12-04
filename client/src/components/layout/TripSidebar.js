@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getImageUrl } from '../../services/api';
 import ImageGalleryPanel from '../panels/ImageGalleryPanel';
 import ManageMembersModal from '../common/ManageMembersModal';
@@ -47,14 +48,16 @@ const TripSummaryCard = ({ trip, stats, onManageMembers, isOwner }) => {
             {owner && (
                 <div className="trip-members-section">
                     <p className="section-label">Organizer</p>
-                    <div className="member-item" title={`Organizer: ${owner.username}`}>
-                        <img 
-                            src={owner.avatar_url ? (owner.avatar_url.startsWith('http') ? owner.avatar_url : getImageUrl(owner.avatar_url)) : '/default-avatar.svg'} 
-                            alt={owner.username} 
-                            className="member-avatar owner-avatar"
-                        />
-                        <span className="member-name">{owner.username}</span>
-                    </div>
+                    <Link to={`/profile/${owner.username}`} className="member-item-link">
+                        <div className="member-item" title={`Organizer: ${owner.username}`}>
+                            <img 
+                                src={owner.avatar_url ? (owner.avatar_url.startsWith('http') ? owner.avatar_url : getImageUrl(owner.avatar_url)) : '/default-avatar.svg'} 
+                                alt={owner.username} 
+                                className="member-avatar owner-avatar"
+                            />
+                            <span className="member-name">{owner.username}</span>
+                        </div>
+                    </Link>
                 </div>
             )}
 
