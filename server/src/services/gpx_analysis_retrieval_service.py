@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import pickle
 from typing import Any, Dict, List, Optional
@@ -5,29 +7,21 @@ from typing import Any, Dict, List, Optional
 from geo_objects.geo_tracks.analyzed_geo_tracks import AnalyzedTrackObject
 
 from src.models.file_metadata import FileMetadata
-from src.utils.adapter_factory import AdapterFactory
-from src.utils.dbbutler.storage_manager import StorageManager
 from src.services.gpx_analysis_service import GpxAnalysisService
+from src.services.service_dependencies import ensure_storage_manager
+from src.utils.dbbutler.storage_manager import StorageManager
 
 
 class GpxAnalysisRetrievalService:
     """Load persisted GPX analysis artifacts and summaries."""
 
-    def __init__(self) -> None:
+    def __init__(self, storage_manager: StorageManager | None = None) -> None:
         self.logger = logging.getLogger(__name__)
-        self.storage_manager = StorageManager()
-
-        try:
-            minio_adapter = AdapterFactory.create_minio_adapter()
-            self.storage_manager.add_adapter('minio', minio_adapter)
-        except Exception as exc:
-            self.logger.warning("MinIO adapter not initialized: %s", exc)
-
-        try:
-            mongodb_adapter = AdapterFactory.create_mongodb_adapter()
-            self.storage_manager.add_adapter('mongodb', mongodb_adapter)
-        except Exception as exc:
-            self.logger.warning("MongoDB adapter not initialized: %s", exc)
+        self.storage_manager = ensure_storage_manager(
+            storage_manager,
+            include_minio=True,
+            include_mongodb=True,
+        )
 
     def get_analyzed_track(
         self,

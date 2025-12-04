@@ -1,29 +1,38 @@
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-from src.models.trip import Trip, TripResponse, TripStats
-from src.utils.dbbutler.storage_manager import StorageManager
-from src.utils.adapter_factory import AdapterFactory
-from src.events.event_bus import EventBus
-from src.services.user_stats_service import user_stats_service
-from bson import ObjectId
+"""Trip CRUD helpers and membership orchestration."""
+
+from __future__ import annotations
+
 import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from bson import ObjectId
+
+from src.events.event_bus import EventBus
+from src.models.trip import Trip, TripResponse, TripStats
+from src.services.service_dependencies import ensure_storage_manager
+from src.services.user_stats_service import UserStatsService, user_stats_service
+from src.utils.dbbutler.storage_manager import StorageManager
 
 class TripService:
-    """
-    Service to handle trip operations.
-    """
-    
-    def __init__(self):
-        self.storage_manager = StorageManager()
-        # Initialize MongoDB adapter
-        mongodb_adapter = AdapterFactory.create_mongodb_adapter()
-        self.storage_manager.add_adapter('mongodb', mongodb_adapter)
-        try:
-            minio_adapter = AdapterFactory.create_minio_adapter()
-            self.storage_manager.add_adapter('minio', minio_adapter)
-        except Exception as exc:
-            logging.getLogger(__name__).warning("MinIO adapter not initialized for TripService: %s", exc)
+    """Service layer covering trip CRUD operations and stats updates."""
+
+    def __init__(
+        self,
+        storage_manager: StorageManager | None = None,
+        *,
+        stats_service: UserStatsService | None = None,
+        event_bus: type[EventBus] = EventBus,
+    ) -> None:
+        self.logger = logging.getLogger(__name__)
+        self.storage_manager = ensure_storage_manager(
+            storage_manager,
+            include_mongodb=True,
+            include_minio=True,
+        )
         self.collection_name = 'trips'
+        self.stats_service = stats_service or user_stats_service
+        self.event_bus = event_bus
 
     def create_trip(self, trip_data: Trip) -> Trip:
         """
@@ -35,7 +44,7 @@ class TripService:
             adapter_name='mongodb',
             collection_name=self.collection_name
         )
-        user_stats_service.sync_multiple_users(trip_data.member_ids or [])
+        self.stats_service.sync_multiple_users(trip_data.member_ids or [])
         return trip_data
 
     def get_trips(self, user_id: Optional[str] = None) -> List[TripResponse]:
@@ -206,10 +215,10 @@ class TripService:
             affected_users = set(existing_members) | set(member_ids)
             if trip.owner_id:
                 affected_users.add(trip.owner_id)
-            user_stats_service.sync_multiple_users(affected_users)
+            self.stats_service.sync_multiple_users(affected_users)
 
         if updated and new_members and getattr(trip, "stats", None):
-            EventBus.publish("MEMBER_ADDED", {
+            self.event_bus.publish("MEMBER_ADDED", {
                 "trip_id": trip_id,
                 "member_ids": new_members,
                 "stats": trip.stats.model_dump() if hasattr(trip, "stats") else {}
@@ -234,7 +243,7 @@ class TripService:
 
         updated_trip = self.update_trip(trip_id, {"stats": updated_stats})
         if updated_trip:
-            user_stats_service.sync_multiple_users(updated_trip.member_ids or [])
+            self.stats_service.sync_multiple_users(updated_trip.member_ids or [])
         return updated_trip
 
     def delete_trip(self, trip_id: str) -> bool:
@@ -308,5 +317,5 @@ class TripService:
                 errors,
             )
         if trip_deleted:
-            user_stats_service.sync_multiple_users(affected_users)
+            self.stats_service.sync_multiple_users(affected_users)
         return bool(trip_deleted)

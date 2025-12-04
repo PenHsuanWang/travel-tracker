@@ -1,14 +1,55 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+"""Community and profile routes for the user experience."""
+
+from __future__ import annotations
+
+from functools import lru_cache
 from typing import List, Optional
-from src.auth import get_current_user
-from src.models.user import User, UserInDB, UserSummary, PublicUserProfile
-from src.models.trip import TripResponse
-from src.utils.adapter_factory import AdapterFactory
-from src.services.file_upload_service import FileUploadService
-from src.services.user_stats_service import user_stats_service
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 
+from src.auth import get_current_user
+from src.models.trip import TripResponse
+from src.models.user import PublicUserProfile, User, UserInDB, UserSummary
+from src.services.file_upload_service import FileUploadService
+from src.services.service_dependencies import ensure_storage_manager
+from src.services.user_stats_service import UserStatsService, user_stats_service
+from src.utils.dbbutler.mongodb_adapter import MongoDBAdapter
+from src.utils.dbbutler.storage_manager import StorageManager
+
 router = APIRouter()
+
+
+@lru_cache
+def _storage_manager() -> StorageManager:
+    return ensure_storage_manager(include_mongodb=True)
+
+
+@lru_cache
+def _file_upload_service() -> FileUploadService:
+    return FileUploadService()
+
+
+def get_mongo_adapter() -> MongoDBAdapter:
+    """Return a cached MongoDB adapter for dependency injection."""
+
+    manager = _storage_manager()
+    adapter = manager.adapters.get("mongodb")
+    if not adapter:
+        raise RuntimeError("MongoDB adapter not configured")
+    return adapter  # type: ignore[return-value]
+
+
+def get_file_upload_service() -> FileUploadService:
+    """Return the cached upload service."""
+
+    return _file_upload_service()
+
+
+def get_user_stats_service() -> UserStatsService:
+    """Expose the singleton stats service for DI."""
+
+    return user_stats_service
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
@@ -26,9 +67,12 @@ class UserStats(BaseModel):
     earned_badges: List[str] = []
 
 
-def _load_user_by_username(username: str) -> UserInDB:
-    mongo_adapter = AdapterFactory.create_mongodb_adapter()
-    users_collection = mongo_adapter.get_collection("users")
+def _load_user_by_username(
+    username: str,
+    mongo_adapter: MongoDBAdapter | None = None,
+) -> UserInDB:
+    adapter = mongo_adapter or get_mongo_adapter()
+    users_collection = adapter.get_collection("users")
     user_data = users_collection.find_one({"username": username})
     if not user_data:
         raise HTTPException(status_code=404, detail="User not found")
@@ -37,11 +81,14 @@ def _load_user_by_username(username: str) -> UserInDB:
     return UserInDB(**user_data)
 
 
-def _build_profile_response(user_obj: UserInDB) -> dict:
+def _build_profile_response(
+    user_obj: UserInDB,
+    mongo_adapter: MongoDBAdapter | None = None,
+) -> dict:
     """Build a profile dict ensuring compatibility with frontend expectations.
     Construct the response from model attributes to guarantee `id` is present.
     """
-    mongo_adapter = AdapterFactory.create_mongodb_adapter()
+    adapter = mongo_adapter or get_mongo_adapter()
 
     user_response = {
         "id": str(user_obj.id) if getattr(user_obj, "id", None) else None,
@@ -61,7 +108,7 @@ def _build_profile_response(user_obj: UserInDB) -> dict:
     }
 
     if user_response["pinned_trip_ids"]:
-        trips_collection = mongo_adapter.get_collection("trips")
+        trips_collection = adapter.get_collection("trips")
         cursor = trips_collection.find({"id": {"$in": user_response["pinned_trip_ids"]}})
         for trip_doc in cursor:
             trip_doc.pop("_id", None)
@@ -69,15 +116,18 @@ def _build_profile_response(user_obj: UserInDB) -> dict:
 
     return user_response
 
-def _build_public_profile_response(user_obj: UserInDB) -> PublicUserProfile:
+def _build_public_profile_response(
+    user_obj: UserInDB,
+    mongo_adapter: MongoDBAdapter | None = None,
+) -> PublicUserProfile:
     """Build a strict public profile response."""
-    mongo_adapter = AdapterFactory.create_mongodb_adapter()
+    adapter = mongo_adapter or get_mongo_adapter()
     
     pinned_trips = []
     pinned_ids = list(getattr(user_obj, "pinned_trip_ids", []) or [])
     
     if pinned_ids:
-        trips_collection = mongo_adapter.get_collection("trips")
+        trips_collection = adapter.get_collection("trips")
         cursor = trips_collection.find({"id": {"$in": pinned_ids}})
         for trip_doc in cursor:
             trip_doc.pop("_id", None)
@@ -103,12 +153,12 @@ async def list_public_users(
     skip: int = 0, 
     limit: int = 20, 
     q: Optional[str] = None,
-    current_user: Optional[User] = Depends(get_current_user) # Optional auth
+    current_user: Optional[User] = Depends(get_current_user),  # Optional auth
+    mongo_adapter: MongoDBAdapter = Depends(get_mongo_adapter),
 ):
     """
     List public users for the community gallery.
     """
-    mongo_adapter = AdapterFactory.create_mongodb_adapter()
     users_collection = mongo_adapter.get_collection("users")
     
     query = {}
@@ -134,10 +184,14 @@ async def list_public_users(
 
 
 @router.get("/me/stats", response_model=UserStats)
-async def read_user_stats(current_user: User = Depends(get_current_user)):
+async def read_user_stats(
+    current_user: User = Depends(get_current_user),
+    stats_service: UserStatsService = Depends(get_user_stats_service),
+    mongo_adapter: MongoDBAdapter = Depends(get_mongo_adapter),
+):
     """Return aggregated statistics for the authenticated user."""
-    stats = user_stats_service.sync_user_stats(current_user.id)
-    refreshed_user = _load_user_by_username(current_user.username)
+    stats = stats_service.sync_user_stats(current_user.id)
+    refreshed_user = _load_user_by_username(current_user.username, mongo_adapter)
     return UserStats(
         total_distance_km=stats["total_distance_km"],
         total_elevation_gain_m=stats["total_elevation_gain_m"],
@@ -146,27 +200,37 @@ async def read_user_stats(current_user: User = Depends(get_current_user)):
     )
 
 @router.get("/me", response_model=UserProfile)
-async def read_users_me(current_user: User = Depends(get_current_user)):
+async def read_users_me(
+    current_user: User = Depends(get_current_user),
+    stats_service: UserStatsService = Depends(get_user_stats_service),
+    mongo_adapter: MongoDBAdapter = Depends(get_mongo_adapter),
+):
     """
     Get current user's profile with pinned trips.
     """
-    user_stats_service.sync_user_stats(current_user.id)
-    refreshed_user = _load_user_by_username(current_user.username)
-    return _build_profile_response(refreshed_user)
+    stats_service.sync_user_stats(current_user.id)
+    refreshed_user = _load_user_by_username(current_user.username, mongo_adapter)
+    return _build_profile_response(refreshed_user, mongo_adapter)
 
 @router.put("/me", response_model=UserProfile)
-async def update_user_me(user_update: UserUpdate, current_user: User = Depends(get_current_user)):
+async def update_user_me(
+    user_update: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    mongo_adapter: MongoDBAdapter = Depends(get_mongo_adapter),
+    stats_service: UserStatsService = Depends(get_user_stats_service),
+):
     """
     Update current user's profile (bio, location, pinned trips).
     """
-    mongo_adapter = AdapterFactory.create_mongodb_adapter()
     users_collection = mongo_adapter.get_collection("users")
     
     update_data = {k: v for k, v in user_update.model_dump().items() if v is not None}
     
     if not update_data:
         # Return current user with pinned trips populated
-        return await read_users_me(current_user)
+        stats_service.sync_user_stats(current_user.id)
+        refreshed_user = _load_user_by_username(current_user.username, mongo_adapter)
+        return _build_profile_response(refreshed_user, mongo_adapter)
         
     # Validate pinned trips if provided
     if "pinned_trip_ids" in update_data:
@@ -213,21 +277,27 @@ async def update_user_me(user_update: UserUpdate, current_user: User = Depends(g
     if updated_user_data and "_id" in updated_user_data:
         updated_user_data["id"] = str(updated_user_data.pop("_id"))
     updated_user = UserInDB(**updated_user_data)
-    stats = user_stats_service.sync_user_stats(updated_user.id)
+    stats = stats_service.sync_user_stats(updated_user.id)
     updated_user.total_distance_km = stats["total_distance_km"]
     updated_user.total_elevation_gain_m = stats["total_elevation_gain_m"]
     updated_user.total_trips = stats["total_trips"]
     
-    return _build_profile_response(updated_user)
+    return _build_profile_response(updated_user, mongo_adapter)
 
 @router.post("/me/avatar", response_model=UserProfile)
-async def upload_avatar(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    upload_service: FileUploadService = Depends(get_file_upload_service),
+    mongo_adapter: MongoDBAdapter = Depends(get_mongo_adapter),
+    stats_service: UserStatsService = Depends(get_user_stats_service),
+):
     """
     Upload a profile picture.
     """
     try:
         # Upload file using FileUploadService (trip_id=None for avatars)
-        result = FileUploadService.save_file(file, uploader_id=current_user.id, trip_id=None)
+        result = upload_service.upload_file(file, uploader_id=current_user.id, trip_id=None)
         
         # Construct avatar URL (assuming public access or signed URL logic elsewhere)
         # For now, we store the object key or a relative path
@@ -239,7 +309,6 @@ async def upload_avatar(file: UploadFile = File(...), current_user: User = Depen
              raise HTTPException(status_code=500, detail="Failed to get avatar object key")
 
         # Update user profile
-        mongo_adapter = AdapterFactory.create_mongodb_adapter()
         users_collection = mongo_adapter.get_collection("users")
         
         users_collection.update_one(
@@ -253,22 +322,25 @@ async def upload_avatar(file: UploadFile = File(...), current_user: User = Depen
             updated_user_data["id"] = str(updated_user_data.pop("_id"))
             
         updated_user = UserInDB(**updated_user_data)
-        stats = user_stats_service.sync_user_stats(updated_user.id)
+        stats = stats_service.sync_user_stats(updated_user.id)
         updated_user.total_distance_km = stats["total_distance_km"]
         updated_user.total_elevation_gain_m = stats["total_elevation_gain_m"]
         updated_user.total_trips = stats["total_trips"]
         
-        return _build_profile_response(updated_user)
+        return _build_profile_response(updated_user, mongo_adapter)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/search", response_model=List[User])
-async def search_users(q: str = Query(..., min_length=2), current_user: User = Depends(get_current_user)):
+async def search_users(
+    q: str = Query(..., min_length=2),
+    current_user: User = Depends(get_current_user),
+    mongo_adapter: MongoDBAdapter = Depends(get_mongo_adapter),
+):
     """
     Search users by username or full name.
     """
-    mongo_adapter = AdapterFactory.create_mongodb_adapter()
     users_collection = mongo_adapter.get_collection("users")
     
     # Case-insensitive search
@@ -291,13 +363,17 @@ async def search_users(q: str = Query(..., min_length=2), current_user: User = D
     return users
 
 @router.get("/{username}", response_model=PublicUserProfile)
-async def get_user_profile(username: str):
+async def get_user_profile(
+    username: str,
+    mongo_adapter: MongoDBAdapter = Depends(get_mongo_adapter),
+    stats_service: UserStatsService = Depends(get_user_stats_service),
+):
     """
     Get public profile of another user with pinned trips.
     """
-    user_obj = _load_user_by_username(username)
-    stats = user_stats_service.sync_user_stats(user_obj.id)
+    user_obj = _load_user_by_username(username, mongo_adapter)
+    stats = stats_service.sync_user_stats(user_obj.id)
     user_obj.total_distance_km = stats["total_distance_km"]
     user_obj.total_elevation_gain_m = stats["total_elevation_gain_m"]
     user_obj.total_trips = stats["total_trips"]
-    return _build_public_profile_response(user_obj)
+    return _build_public_profile_response(user_obj, mongo_adapter)

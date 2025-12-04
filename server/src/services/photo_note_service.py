@@ -1,23 +1,20 @@
-from typing import Optional, Dict, Any
-import logging
+"""Update helper for photo metadata notes and ordering."""
 
-from src.utils.adapter_factory import AdapterFactory
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, Optional
+
+from src.services.service_dependencies import ensure_storage_manager
 from src.utils.dbbutler.storage_manager import StorageManager
 
 
 class PhotoNoteService:
-    """
-    Lightweight service to manage photo notes and order indexes stored in file_metadata.
-    """
+    """Manage note/order fields for photo metadata documents."""
 
-    def __init__(self) -> None:
+    def __init__(self, storage_manager: StorageManager | None = None) -> None:
         self.logger = logging.getLogger(__name__)
-        self.storage_manager = StorageManager()
-        try:
-            mongodb_adapter = AdapterFactory.create_mongodb_adapter()
-            self.storage_manager.add_adapter('mongodb', mongodb_adapter)
-        except Exception as exc:
-            self.logger.warning("MongoDB adapter not initialized: %s", exc)
+        self.storage_manager = ensure_storage_manager(storage_manager, include_mongodb=True)
 
     def _get_collection(self):
         adapter = self.storage_manager.adapters.get('mongodb')

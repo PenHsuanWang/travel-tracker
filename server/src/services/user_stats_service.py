@@ -5,6 +5,7 @@ from typing import Dict, Iterable, Optional
 from bson import ObjectId
 
 from src.utils.adapter_factory import AdapterFactory
+from src.utils.dbbutler.mongodb_adapter import MongoDBAdapter
 
 
 DEFAULT_STATS = {
@@ -17,8 +18,8 @@ DEFAULT_STATS = {
 class UserStatsService:
     """Calculates and syncs user activity statistics based on trip data."""
 
-    def __init__(self) -> None:
-        self._mongo = AdapterFactory.create_mongodb_adapter()
+    def __init__(self, mongo_adapter: MongoDBAdapter | None = None) -> None:
+        self._mongo = mongo_adapter or AdapterFactory.create_mongodb_adapter()
         self._trips = self._mongo.get_collection("trips")
         self._users = self._mongo.get_collection("users")
 

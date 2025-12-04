@@ -1,15 +1,43 @@
-from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form, Depends
-from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
-from src.models.trip import Trip, TripResponse, TripMembersUpdate
-from src.services.trip_service import TripService
-from src.services.file_upload_service import FileUploadService
+"""Trip CRUD routes plus helpers for GPX-ingestion driven workflows."""
+
+from __future__ import annotations
+
 from datetime import datetime
+from functools import lru_cache
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from pydantic import BaseModel
+
 from src.auth import get_current_user
+from src.models.trip import Trip, TripMembersUpdate, TripResponse
 from src.models.user import User
+from src.services.file_upload_service import FileUploadService
+from src.services.trip_service import TripService
 
 router = APIRouter()
-trip_service = TripService()
+
+
+@lru_cache
+def _trip_service() -> TripService:
+    return TripService()
+
+
+@lru_cache
+def _file_upload_service() -> FileUploadService:
+    return FileUploadService(trip_service=_trip_service())
+
+
+def get_trip_service() -> TripService:
+    """Expose the shared trip service instance for FastAPI DI."""
+
+    return _trip_service()
+
+
+def get_file_upload_service() -> FileUploadService:
+    """Provide the upload service configured with the shared trip service."""
+
+    return _file_upload_service()
 
 
 class TripCreateWithGpxResponse(BaseModel):
@@ -23,7 +51,11 @@ class TripCreateWithGpxResponse(BaseModel):
     upload_metadata: Optional[Dict[str, Any]] = None
 
 @router.post("/", response_model=Trip, status_code=status.HTTP_201_CREATED)
-async def create_trip(trip: Trip, current_user: User = Depends(get_current_user)):
+async def create_trip(
+    trip: Trip,
+    current_user: User = Depends(get_current_user),
+    trip_service: TripService = Depends(get_trip_service),
+):
     """
     Create a new trip.
     """
@@ -56,6 +88,8 @@ async def create_trip_with_gpx(
     notes: Optional[str] = Form(None),
     gpx_file: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user),
+    trip_service: TripService = Depends(get_trip_service),
+    file_upload_service: FileUploadService = Depends(get_file_upload_service),
 ):
     """
     Create a new trip, optionally ingesting a GPX file to auto-fill dates.
@@ -88,7 +122,7 @@ async def create_trip_with_gpx(
 
         if gpx_file:
             try:
-                result = FileUploadService.save_file(gpx_file, trip_id=created_trip.id)
+                result = file_upload_service.upload_file(gpx_file, trip_id=created_trip.id)
                 upload_metadata = result
                 gpx_metadata_extracted = result.get("gpx_metadata_extracted")
                 gpx_start_datetime = result.get("gpx_start_datetime")
@@ -118,7 +152,10 @@ async def create_trip_with_gpx(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/", response_model=List[TripResponse])
-async def list_trips(user_id: Optional[str] = None):
+async def list_trips(
+    user_id: Optional[str] = None,
+    trip_service: TripService = Depends(get_trip_service),
+):
     """
     List all trips. Optionally filter by user_id (membership).
     """
@@ -128,7 +165,10 @@ async def list_trips(user_id: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{trip_id}", response_model=TripResponse)
-async def get_trip(trip_id: str):
+async def get_trip(
+    trip_id: str,
+    trip_service: TripService = Depends(get_trip_service),
+):
     """
     Get a specific trip by ID.
     """
@@ -138,7 +178,12 @@ async def get_trip(trip_id: str):
     return trip
 
 @router.put("/{trip_id}", response_model=Trip)
-async def update_trip(trip_id: str, update_data: Dict[str, Any], current_user: User = Depends(get_current_user)):
+async def update_trip(
+    trip_id: str,
+    update_data: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    trip_service: TripService = Depends(get_trip_service),
+):
     """
     Update a trip.
     """
@@ -156,7 +201,12 @@ async def update_trip(trip_id: str, update_data: Dict[str, Any], current_user: U
     return trip
 
 @router.put("/{trip_id}/members", response_model=Trip)
-async def update_trip_members(trip_id: str, members_update: TripMembersUpdate, current_user: User = Depends(get_current_user)):
+async def update_trip_members(
+    trip_id: str,
+    members_update: TripMembersUpdate,
+    current_user: User = Depends(get_current_user),
+    trip_service: TripService = Depends(get_trip_service),
+):
     """
     Update trip members.
     """
@@ -171,7 +221,11 @@ async def update_trip_members(trip_id: str, members_update: TripMembersUpdate, c
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_trip(trip_id: str, current_user: User = Depends(get_current_user)):
+async def delete_trip(
+    trip_id: str,
+    current_user: User = Depends(get_current_user),
+    trip_service: TripService = Depends(get_trip_service),
+):
     """
     Delete a trip.
     """

@@ -1,19 +1,46 @@
+"""Authentication endpoints for login and controlled registration."""
+
+from __future__ import annotations
+
 import os
 from datetime import timedelta
+from functools import lru_cache
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from src.auth import create_access_token, get_password_hash, verify_password, ACCESS_TOKEN_EXPIRE_MINUTES
-from src.models.user import Token, UserCreate, User
-from src.utils.adapter_factory import AdapterFactory
+
+from src.auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_password_hash, verify_password
+from src.models.user import Token, User, UserCreate
+from src.services.service_dependencies import ensure_storage_manager
+from src.utils.dbbutler.mongodb_adapter import MongoDBAdapter
+from src.utils.dbbutler.storage_manager import StorageManager
 
 router = APIRouter()
+
+
+@lru_cache
+def _storage_manager() -> StorageManager:
+    return ensure_storage_manager(include_mongodb=True)
+
+
+def get_mongo_adapter() -> MongoDBAdapter:
+    """Provide a cached Mongo adapter."""
+
+    manager = _storage_manager()
+    adapter = manager.adapters.get("mongodb")
+    if not adapter:
+        raise RuntimeError("MongoDB adapter not configured")
+    return adapter  # type: ignore[return-value]
 
 # Get registration key from env
 REGISTRATION_KEY = os.getenv("REGISTRATION_KEY", "admin_secret_key")
 
 @router.post("/login", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    mongo_adapter = AdapterFactory.create_mongodb_adapter()
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    mongo_adapter: MongoDBAdapter = Depends(get_mongo_adapter),
+):
+    """Authenticate a user using username/password and return a JWT."""
     users_collection = mongo_adapter.get_collection("users")
     
     user_data = users_collection.find_one({"username": form_data.username})
@@ -42,14 +69,16 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/register", response_model=User, status_code=status.HTTP_201_CREATED)
-async def register_user(user: UserCreate):
+async def register_user(
+    user: UserCreate,
+    mongo_adapter: MongoDBAdapter = Depends(get_mongo_adapter),
+):
     if user.registration_key != REGISTRATION_KEY:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid registration key",
         )
     
-    mongo_adapter = AdapterFactory.create_mongodb_adapter()
     users_collection = mongo_adapter.get_collection("users")
     
     if users_collection.find_one({"username": user.username}):

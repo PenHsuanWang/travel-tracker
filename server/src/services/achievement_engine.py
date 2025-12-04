@@ -1,15 +1,18 @@
+"""Gamification engine that awards badges based on trip stats."""
+
+from __future__ import annotations
+
 import logging
-from typing import Dict, Any, List
-from src.utils.adapter_factory import AdapterFactory
+from typing import Any, Dict, List
+
+from src.services.service_dependencies import ensure_storage_manager
 from src.utils.dbbutler.storage_manager import StorageManager
-from src.models.user import User
 
 logger = logging.getLogger(__name__)
 
 class AchievementEngine:
-    def __init__(self):
-        self.storage_manager = StorageManager()
-        self.storage_manager.add_adapter('mongodb', AdapterFactory.create_mongodb_adapter())
+    def __init__(self, storage_manager: StorageManager | None = None) -> None:
+        self.storage_manager = ensure_storage_manager(storage_manager, include_mongodb=True)
         self.collection_name = 'users'
         
         # Define Badges

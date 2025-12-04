@@ -1,30 +1,63 @@
-# src/routes/file_retrieval_routes.py
+"""Routes exposing file listings, GPX analysis, and photo note management."""
+
+from __future__ import annotations
 
 import logging
 import xml.etree.ElementTree as ET
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException, Response, Query, Depends  # type: ignore[import-not-found]
+from fastapi import APIRouter, Depends, HTTPException, Query, Response  # type: ignore[import-not-found]
 from pydantic import BaseModel  # type: ignore[import-not-found]
 
+from src.auth import get_current_user
+from src.models.file_metadata import FileMetadata
+from src.models.user import User
 from src.services.file_retrieval_service import FileRetrievalService
 from src.services.gpx_analysis_retrieval_service import GpxAnalysisRetrievalService
 from src.services.gpx_analysis_service import GpxAnalysisService
 from src.services.photo_note_service import PhotoNoteService
-from src.models.file_metadata import FileMetadata
-from src.auth import get_current_user
-from src.models.user import User
 
 router = APIRouter()
-
-retrieval_service = FileRetrievalService()
-analysis_retrieval_service = GpxAnalysisRetrievalService()
-photo_note_service = PhotoNoteService()
 
 logger = logging.getLogger(__name__)
 
 
+@lru_cache
+def _file_retrieval_service() -> FileRetrievalService:
+    return FileRetrievalService()
+
+
+@lru_cache
+def _analysis_retrieval_service() -> GpxAnalysisRetrievalService:
+    return GpxAnalysisRetrievalService()
+
+
+@lru_cache
+def _photo_note_service() -> PhotoNoteService:
+    return PhotoNoteService()
+
+
+def get_file_retrieval_service() -> FileRetrievalService:
+    """Provide a cached file retrieval service for dependency injection."""
+
+    return _file_retrieval_service()
+
+
+def get_analysis_retrieval_service() -> GpxAnalysisRetrievalService:
+    """Provide a cached GPX analysis retrieval service."""
+
+    return _analysis_retrieval_service()
+
+
+def get_photo_note_service() -> PhotoNoteService:
+    """Provide a cached photo note service."""
+
+    return _photo_note_service()
+
+
 class FileListItem(BaseModel):
+    """Response model combining storage state with metadata."""
     object_key: str
     metadata_id: str
     bucket: str
@@ -34,6 +67,7 @@ class FileListItem(BaseModel):
     warnings: List[str] = []
 
 class GeotaggedImage(BaseModel):
+    """Response model for geocoded images rendered on the map."""
     object_key: str
     original_filename: str
     lat: float
@@ -48,6 +82,7 @@ class GeotaggedImage(BaseModel):
 
 
 class GpxAnalysisResponse(BaseModel):
+    """Structured payload describing analyzed GPX tracks."""
     filename: str
     display_name: str
     analysis_status: Optional[str] = None
@@ -60,33 +95,42 @@ class GpxAnalysisResponse(BaseModel):
 
 
 class PhotoNotePayload(BaseModel):
+    """Request payload for updating a photo's note content."""
     note: Optional[str] = None
     note_title: Optional[str] = None
 
 
 class PhotoOrderPayload(BaseModel):
+    """Request payload for updating a photo ordering index."""
+
     order_index: int
 
 @router.get("/list-files", response_model=List[str])
-async def list_files(bucket: str = "gps-data", trip_id: Optional[str] = Query(None)):
-    """
-    List object keys in the specified MinIO bucket.
-    Defaults to 'gps-data'.
-    """
+async def list_files(
+    bucket: str = "gps-data",
+    trip_id: Optional[str] = Query(None),
+    service: FileRetrievalService = Depends(get_file_retrieval_service),
+):
+    """Return object keys for a given bucket/trip combination."""
+
     try:
-        keys = retrieval_service.list_files(bucket, trip_id=trip_id)
-        return keys
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        return service.list_files(bucket, trip_id=trip_id)
+    except Exception as exc:  # pragma: no cover - FastAPI converts to JSON
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/list-files/detail", response_model=List[FileListItem])
-async def list_files_with_metadata(bucket: str = "images", trip_id: Optional[str] = Query(None)):
-    """List files alongside any metadata captured during upload."""
+async def list_files_with_metadata(
+    bucket: str = "images",
+    trip_id: Optional[str] = Query(None),
+    service: FileRetrievalService = Depends(get_file_retrieval_service),
+):
+    """Return storage/metadata rows for the requested bucket/trip scope."""
+
     try:
-        return retrieval_service.list_files_with_metadata(bucket, trip_id)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        return service.list_files_with_metadata(bucket, trip_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _parse_raw_gpx_bytes(gpx_bytes: bytes) -> Tuple[List[List[float]], List[Dict[str, Any]], Optional[str]]:
@@ -162,18 +206,11 @@ async def get_geotagged_images(
     minLat: Optional[float] = Query(None),
     maxLon: Optional[float] = Query(None),
     maxLat: Optional[float] = Query(None),
-    trip_id: Optional[str] = Query(None)
+    trip_id: Optional[str] = Query(None),
+    service: FileRetrievalService = Depends(get_file_retrieval_service),
 ):
-    """
-    Retrieve geotagged images (images with GPS coordinates).
-    
-    :param bucket: The bucket to query (default: 'images')
-    :param minLon: Minimum longitude for bounding box filter
-    :param minLat: Minimum latitude for bounding box filter
-    :param maxLon: Maximum longitude for bounding box filter
-    :param maxLat: Maximum latitude for bounding box filter
-    :return: List of geotagged images with thumbnail URLs
-    """
+    """Return images that contain latitude/longitude metadata."""
+
     try:
         bbox = None
         if all(v is not None for v in [minLon, minLat, maxLon, maxLat]):
@@ -181,20 +218,22 @@ async def get_geotagged_images(
                 'minLon': minLon,
                 'minLat': minLat,
                 'maxLon': maxLon,
-                'maxLat': maxLat
+                'maxLat': maxLat,
             }
-        
-        return retrieval_service.list_geotagged_images(bucket, bbox, trip_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+        return service.list_geotagged_images(bucket, bbox, trip_id)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/gpx/{filename:path}/analysis", response_model=GpxAnalysisResponse)
-async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
-    """
-    Retrieve analyzed GPX data (coordinates, summary, waypoints, rest points).
-    Falls back to parsing the raw GPX when no analysis artifact is available.
-    """
+async def get_gpx_analysis(
+    filename: str,
+    trip_id: Optional[str] = Query(None),
+    service: FileRetrievalService = Depends(get_file_retrieval_service),
+    analysis_service: GpxAnalysisRetrievalService = Depends(get_analysis_retrieval_service),
+):
+    """Return analyzed track data or fall back to raw GPX parsing."""
     metadata_doc = None
     metadata: Optional[FileMetadata] = None
     analysis_status: Optional[str] = None
@@ -205,7 +244,7 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
     track_summary: Optional[Dict[str, Any]] = None
     display_name: str = filename
 
-    mongodb_adapter = retrieval_service.storage_manager.adapters.get('mongodb')
+    mongodb_adapter = service.storage_manager.adapters.get('mongodb')
     if mongodb_adapter:
         try:
             metadata_doc = mongodb_adapter.load_data(filename, collection_name='file_metadata')
@@ -235,11 +274,11 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
     # Try to load the persisted analyzed track
     if analysis_object_key and analysis_status == 'success':
         try:
-            analyzed_track = analysis_retrieval_service.get_analyzed_track(
+            analyzed_track = analysis_service.get_analyzed_track(
                 analysis_object_key,
                 analysis_bucket=analysis_bucket
             )
-            payload = analysis_retrieval_service.build_track_payload(
+            payload = analysis_service.build_track_payload(
                 analyzed_track,
                 metadata_summary=track_summary
             )
@@ -258,7 +297,7 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
             logger.error("Failed to load analyzed track %s: %s. Falling back to raw GPX.", filename, exc)
 
     # Fallback to raw GPX parsing
-    raw_bytes = retrieval_service.get_file_bytes(bucket, filename)
+    raw_bytes = service.get_file_bytes(bucket, filename)
     if raw_bytes is None:
         raise HTTPException(status_code=404, detail="GPX file not found")
 
@@ -266,16 +305,16 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
     # This handles cases where the pickle is missing/broken or metadata is incomplete (old files)
     try:
         analysis_result = GpxAnalysisService.analyze_gpx_data(raw_bytes, filename)
-        
+
         # Use the fresh summary which includes elevation_profile
         # Merge with existing track_summary if available to preserve other fields if any
         fresh_summary = analysis_result.summary
         if track_summary:
             fresh_summary = {**track_summary, **fresh_summary}
 
-        payload = analysis_retrieval_service.build_track_payload(
-            analysis_result.analyzed_track, 
-            metadata_summary=fresh_summary
+        payload = analysis_service.build_track_payload(
+            analysis_result.analyzed_track,
+            metadata_summary=fresh_summary,
         )
         
         return GpxAnalysisResponse(
@@ -314,11 +353,12 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
     )
 
 @router.get("/files/{filename:path}")
-async def get_file(filename: str, bucket: str = "gps-data"):
-    """
-    Retrieve a file from MinIO by filename.
-    Returns raw bytes with appropriate media type based on file extension.
-    """
+async def get_file(
+    filename: str,
+    bucket: str = "gps-data",
+    retrieval_service: FileRetrievalService = Depends(get_file_retrieval_service),
+):
+    """Stream raw bytes from MinIO, inferring the media type from the filename."""
     file_bytes = retrieval_service.get_file_bytes(bucket, filename)
     if file_bytes is None:
         raise HTTPException(status_code=404, detail="File not found in MinIO")

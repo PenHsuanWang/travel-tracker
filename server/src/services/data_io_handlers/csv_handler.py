@@ -1,22 +1,19 @@
-# src/services/handlers/csv_handler.py
+"""Handler implementation for CSV uploads."""
+
+from __future__ import annotations
 
 from fastapi import UploadFile
+
 from src.services.data_io_handlers.base_handler import BaseHandler
+from src.services.service_dependencies import ensure_storage_manager
 from src.utils.dbbutler.storage_manager import StorageManager
-from src.utils.adapter_factory import AdapterFactory
 
 
 class CSVHandler(BaseHandler):
-    """
-    Handler for CSV file uploads.
-    """
+    """Persist CSV files directly into object storage."""
 
-    def __init__(self):
-        self.storage_manager = StorageManager()
-        
-        # Use AdapterFactory for consistent initialization
-        minio_adapter = AdapterFactory.create_minio_adapter()
-        self.storage_manager.add_adapter('minio', minio_adapter)
+    def __init__(self, storage_manager: StorageManager | None = None) -> None:
+        self.storage_manager = ensure_storage_manager(storage_manager, include_minio=True)
 
     def handle(self, file: UploadFile) -> str:
         """

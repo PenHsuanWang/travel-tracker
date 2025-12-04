@@ -1,12 +1,14 @@
-# server/src/services/map_service.py
+"""Utilities to generate Leaflet-ready map HTML and GIS overlays."""
+
+from __future__ import annotations
 
 import folium
 import pickle
-import os
 from shapely.geometry import mapping
-from dotenv import load_dotenv
 
-load_dotenv()
+from src.services.service_dependencies import ensure_storage_manager
+
+STORAGE_MANAGER = ensure_storage_manager(include_minio=True)
 
 MAP_LAYERS = {
     "openstreetmap": {
@@ -20,6 +22,7 @@ MAP_LAYERS = {
 }
 
 def generate_map(layer: str, center=None):
+    """Return Leaflet HTML snippet for the requested basemap layer."""
     if center is None:
         center = (24.7553, 121.2906)
 
@@ -49,10 +52,7 @@ def generate_map(layer: str, center=None):
     return m._repr_html_()
 
 def generate_gis_map(layer: str, center=None, selected_rivers=None):
-    """
-    If you still want the old approach: 
-    Return a Folium map with selected rivers directly in HTML.
-    """
+    """Return Folium HTML with requested rivers toggled on."""
     if center is None:
         center = (24.7553, 121.2906)
     m = folium.Map(location=center, zoom_start=8, tiles=None)
@@ -63,19 +63,8 @@ def generate_gis_map(layer: str, center=None, selected_rivers=None):
         attr=tile_layer['attribution']
     ).add_to(m)
 
-    from src.utils.dbbutler.storage_manager import StorageManager
-    from src.utils.dbbutler.minio_adapter import MinIOAdapter
-    storage_manager = StorageManager()
-    minio_adapter = MinIOAdapter(
-        endpoint=os.getenv("MINIO_ENDPOINT", "localhost:9000"),
-        access_key=os.getenv("MINIO_ACCESS_KEY"),
-        secret_key=os.getenv("MINIO_SECRET_KEY"),
-        secure=os.getenv("MINIO_SECURE", "False").lower() == "true"
-    )
-    storage_manager.add_adapter('minio', minio_adapter)
-
     try:
-        file_bytes = storage_manager.load_data('minio', "taiwan-river.pickle", bucket="gis-data")
+        file_bytes = STORAGE_MANAGER.load_data('minio', "taiwan-river.pickle", bucket="gis-data")
         river_shapes = pickle.loads(file_bytes)
     except Exception as e:
         raise Exception("Error loading GIS data: " + str(e))

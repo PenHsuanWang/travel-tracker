@@ -1,40 +1,41 @@
-# src/services/file_upload_service.py
+"""Upload pipeline services for GPX tracks, photos, and CSVs."""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional, Tuple
 
 from fastapi import HTTPException, UploadFile  # type: ignore[import-not-found]
-from src.services.data_io_handlers.handler_factory import HandlerFactory
-from src.utils.dbbutler.storage_manager import StorageManager
-from src.utils.adapter_factory import AdapterFactory
-from src.models.file_metadata import HandlerResult, FileMetadata
-from datetime import datetime, timezone
-from typing import Dict, Any, Optional, Tuple
-import logging
-from src.services.trip_service import TripService
+
 from src.events.event_bus import EventBus
+from src.models.file_metadata import FileMetadata, HandlerResult
+from src.services.data_io_handlers.handler_factory import HandlerFactory
+from src.services.service_dependencies import ensure_storage_manager
+from src.services.trip_service import TripService
+from src.utils.dbbutler.storage_manager import StorageManager
 
 
 class FileUploadService:
-    """
-    Service to handle file uploads and metadata persistence.
-    """
-    
-    def __init__(self):
-        self.storage_manager = StorageManager()
-        # Initialize MongoDB adapter for metadata storage
-        mongodb_adapter = AdapterFactory.create_mongodb_adapter()
-        self.storage_manager.add_adapter('mongodb', mongodb_adapter)
+    """Coordinate handlers, storage adapters, and metadata persistence."""
 
-        # Try to initialize MinIO adapter as well so operations like delete
-        # can access the object storage. In some dev setups MinIO creds may
-        # not be configured, so we catch and log the error instead of failing
-        # service initialization.
-        try:
-            minio_adapter = AdapterFactory.create_minio_adapter()
-            self.storage_manager.add_adapter('minio', minio_adapter)
-        except Exception as e:
-            logging.getLogger(__name__).warning(f"MinIO adapter not initialized: {e}")
-
-        # Trip service is used for downstream updates (e.g., auto-filling trip dates from GPX)
-        self.trip_service = TripService()
+    def __init__(
+        self,
+        storage_manager: StorageManager | None = None,
+        *,
+        trip_service: TripService | None = None,
+        handler_factory: type[HandlerFactory] = HandlerFactory,
+        event_bus: type[EventBus] = EventBus,
+    ) -> None:
+        self.logger = logging.getLogger(__name__)
+        self.storage_manager = ensure_storage_manager(
+            storage_manager,
+            include_mongodb=True,
+            include_minio=True,
+        )
+        self.trip_service = trip_service or TripService()
+        self.handler_factory = handler_factory
+        self.event_bus = event_bus
 
     # --- GPX date helpers ---
     @staticmethod
@@ -113,7 +114,7 @@ class FileUploadService:
         try:
             trip = self.trip_service.get_trip(trip_id)
         except Exception as exc:
-            logging.getLogger(__name__).warning(
+            self.logger.warning(
                 "Trip lookup failed for %s (metadata_id=%s): %s", trip_id, metadata_id, exc
             )
             result["reason"] = "trip_lookup_failed"
@@ -150,19 +151,19 @@ class FileUploadService:
             result["reason"] = "trip_update_failed"
         return result
     
-    @classmethod
-    def save_file(cls, file: UploadFile, uploader_id: Optional[str] = None, trip_id: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Save the uploaded file using the appropriate handler and persist metadata.
+    def _save_file(
+        self,
+        file: UploadFile,
+        uploader_id: Optional[str] = None,
+        trip_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Persist file bytes, analysis artifacts, and Mongo-backed metadata."""
 
-        :param file: The uploaded file.
-        :param uploader_id: Optional ID of the user uploading the file.
-        :param trip_id: Optional ID of the trip this file belongs to.
-        :return: Dictionary containing file info and metadata.
-        """
-        service = cls()
-        file_extension = file.filename.split('.')[-1].lower()
-        handler = HandlerFactory.get_handler(file_extension)
+        file_extension = (file.filename or "").split('.')[-1].lower()
+        handler = self.handler_factory.get_handler(
+            file_extension,
+            storage_manager=self.storage_manager,
+        )
 
         # Enforce trip scoping for GPX and image uploads to avoid cross-trip leakage
         # Exception: Avatars (images without trip_id) are allowed
@@ -172,7 +173,7 @@ class FileUploadService:
         # Enforce single GPX file per trip: delete existing GPX files before uploading new one
         if file_extension == "gpx" and trip_id:
             try:
-                mongodb_adapter = service.storage_manager.adapters.get('mongodb')
+                mongodb_adapter = self.storage_manager.adapters.get('mongodb')
                 if mongodb_adapter:
                     collection = mongodb_adapter.get_collection('file_metadata')
                     # Find all GPX files for this trip
@@ -180,12 +181,12 @@ class FileUploadService:
                     for doc in cursor:
                         try:
                             # Use object_key (which is _id) and bucket to delete
-                            cls.delete_file(doc['_id'], bucket=doc.get('bucket', 'gps-data'))
-                            logging.getLogger(__name__).info(f"Deleted existing GPX file {doc['_id']} for trip {trip_id}")
-                        except Exception as e:
-                            logging.getLogger(__name__).warning(f"Failed to delete existing GPX {doc['_id']}: {e}")
-            except Exception as e:
-                logging.getLogger(__name__).warning(f"Error checking/deleting existing GPX files: {e}")
+                            self._delete_file(doc['_id'], bucket=doc.get('bucket', 'gps-data'))
+                            self.logger.info("Deleted existing GPX file %s for trip %s", doc['_id'], trip_id)
+                        except Exception as exc:
+                            self.logger.warning("Failed to delete existing GPX %s: %s", doc['_id'], exc)
+            except Exception as exc:
+                self.logger.warning("Error checking/deleting existing GPX files: %s", exc)
         
         result = handler.handle(file, trip_id=trip_id)
         
@@ -230,7 +231,7 @@ class FileUploadService:
             )
             
             # Save to MongoDB
-            service.storage_manager.save_data(
+            self.storage_manager.save_data(
                 metadata_id,
                 metadata.model_dump(by_alias=True),
                 adapter_name='mongodb',
@@ -261,7 +262,7 @@ class FileUploadService:
             }
 
             if getattr(result, "file_extension", "") and result.file_extension.lower() == "gpx" and trip_id:
-                auto_fill_details = service._maybe_autofill_trip_dates(trip_id, result.track_summary, metadata_id)
+                auto_fill_details = self._maybe_autofill_trip_dates(trip_id, result.track_summary, metadata_id)
                 response_payload["trip_dates_auto_filled"] = auto_fill_details.get("applied")
                 response_payload["auto_fill_reason"] = auto_fill_details.get("reason")
                 response_payload["gpx_metadata_extracted"] = auto_fill_details.get("metadata_extracted")
@@ -276,26 +277,32 @@ class FileUploadService:
                 if result.track_summary:
                     try:
                         stats_payload = {
-                            "distance_km": result.track_summary.get("total_distance_km") or (result.track_summary.get("total_distance_m") or 0) / 1000,
+                            "distance_km": result.track_summary.get("total_distance_km")
+                            or (result.track_summary.get("total_distance_m") or 0) / 1000,
                             "elevation_gain_m": result.track_summary.get("elevation_gain_m", 0),
                             "moving_time_sec": result.track_summary.get("duration_seconds", 0),
-                            "max_altitude_m": result.track_summary.get("max_elevation_m") or result.track_summary.get("max_altitude_m") or 0,
+                            "max_altitude_m": result.track_summary.get("max_elevation_m")
+                            or result.track_summary.get("max_altitude_m")
+                            or 0,
                         }
-                        service.trip_service.update_trip_stats(trip_id, stats_payload)
+                        self.trip_service.update_trip_stats(trip_id, stats_payload)
 
-                        trip = service.trip_service.get_trip(trip_id)
+                        trip = self.trip_service.get_trip(trip_id)
                         if trip:
                             stats = {
                                 "distance_km": result.track_summary.get("total_distance_km", 0),
                                 "elevation_gain_m": result.track_summary.get("elevation_gain_m", 0),
                             }
-                            EventBus.publish("GPX_PROCESSED", {
-                                "trip_id": trip_id,
-                                "stats": stats,
-                                "member_ids": trip.member_ids
-                            })
-                    except Exception as e:
-                        logging.getLogger(__name__).error(f"Failed to publish GPX_PROCESSED event: {e}")
+                            self.event_bus.publish(
+                                "GPX_PROCESSED",
+                                {
+                                    "trip_id": trip_id,
+                                    "stats": stats,
+                                    "member_ids": trip.member_ids,
+                                },
+                            )
+                    except Exception as exc:
+                        self.logger.error("Failed to publish GPX_PROCESSED event: %s", exc)
 
             return response_payload
         
@@ -304,40 +311,58 @@ class FileUploadService:
             "status": "unknown",
             "error": "Unexpected handler result type"
         }
-    
+
+    def upload_file(
+        self,
+        file: UploadFile,
+        uploader_id: Optional[str] = None,
+        trip_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Public entry point that reuses the injected storage manager and dependencies."""
+
+        return self._save_file(file, uploader_id, trip_id)
+
     @classmethod
-    def get_file_metadata(cls, metadata_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Retrieve metadata for a file.
-        
-        :param metadata_id: The metadata ID (object key).
-        :return: File metadata or None.
-        """
-        service = cls()
-        metadata = service.storage_manager.load_data(
+    def save_file(
+        cls,
+        file: UploadFile,
+        uploader_id: Optional[str] = None,
+        trip_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Backward-compatible entry point that builds a default service."""
+
+        return cls().upload_file(file, uploader_id, trip_id)
+    
+    def _get_file_metadata(self, metadata_id: str) -> Optional[Dict[str, Any]]:
+        """Load persisted metadata for a specific object key."""
+
+        return self.storage_manager.load_data(
             'mongodb',
             metadata_id,
             collection_name='file_metadata'
         )
-        return metadata
-    
+
+    def get_metadata(self, metadata_id: str) -> Optional[Dict[str, Any]]:
+        """Return metadata for a stored object using cached adapters."""
+
+        return self._get_file_metadata(metadata_id)
+
     @classmethod
-    def delete_file(cls, filename: str, bucket: str = "images") -> Dict[str, Any]:
-        """
-        Delete a file from storage and its metadata from database.
-        
-        :param filename: The filename/object key to delete.
-        :param bucket: The bucket name.
-        :return: Success message with details.
-        """
-        service = cls()
+    def get_file_metadata(cls, metadata_id: str) -> Optional[Dict[str, Any]]:
+        """Backward-compatible wrapper that instantiates a default service."""
+
+        return cls().get_metadata(metadata_id)
+    
+    def _delete_file(self, filename: str, bucket: str = "images") -> Dict[str, Any]:
+        """Remove the object from MinIO and prune its MongoDB metadata."""
+
         deleted_items = []
         errors = []
         metadata_snapshot: Optional[Dict[str, Any]] = None
         
         # Delete from MinIO
         try:
-            minio_adapter = service.storage_manager.adapters.get('minio')
+            minio_adapter = self.storage_manager.adapters.get('minio')
             if minio_adapter:
                 # Check if file exists
                 if minio_adapter.exists(filename, bucket=bucket):
@@ -352,7 +377,7 @@ class FileUploadService:
         
         # Capture metadata before deletion and remove stored document
         try:
-            mongodb_adapter = service.storage_manager.adapters.get('mongodb')
+            mongodb_adapter = self.storage_manager.adapters.get('mongodb')
             if mongodb_adapter:
                 try:
                     snapshot_raw = mongodb_adapter.load_data(
@@ -397,13 +422,24 @@ class FileUploadService:
             if errors:
                 result["warnings"] = errors
             return result
-        else:
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "message": "File not found or deletion failed",
-                    "filename": filename,
-                    "bucket": bucket,
-                    "errors": errors
-                }
-            )
+
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "message": "File not found or deletion failed",
+                "filename": filename,
+                "bucket": bucket,
+                "errors": errors
+            }
+        )
+
+    def remove_file(self, filename: str, bucket: str = "images") -> Dict[str, Any]:
+        """Remove objects and metadata using already-initialized adapters."""
+
+        return self._delete_file(filename, bucket)
+
+    @classmethod
+    def delete_file(cls, filename: str, bucket: str = "images") -> Dict[str, Any]:
+        """Backward-compatible wrapper that instantiates a default service."""
+
+        return cls().remove_file(filename, bucket)
