@@ -1,45 +1,80 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { Camera, MapPin, Link as LinkIcon } from 'lucide-react';
+import { Camera, MapPin, Link as LinkIcon, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 // --- TimelineItem Sub-component ---
 
-const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, isEditing, onEditToggle }) => {
-    const [editForm, setEditForm] = useState({
-        title: item.title || '',
-        timestamp: new Date(item.timestamp || Date.now()).toISOString().slice(0, 16), // Format for datetime-local
-        note: item.note || '',
-    });
+const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readOnly }) => {
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [isEditingNote, setIsEditingNote] = useState(false);
+    const [titleValue, setTitleValue] = useState(item.title || '');
+    const [noteValue, setNoteValue] = useState(item.note || '');
+    
     const titleInputRef = useRef(null);
+    const noteInputRef = useRef(null);
 
-    // Auto-focus title input when entering edit mode
+    // Sync local state with props when they change (e.g. from map update)
     useEffect(() => {
-        if (isEditing && titleInputRef.current) {
+        setTitleValue(item.title || '');
+    }, [item.title]);
+
+    useEffect(() => {
+        setNoteValue(item.note || '');
+    }, [item.note]);
+
+    // Auto-focus inputs
+    useEffect(() => {
+        if (isEditingTitle && titleInputRef.current) {
             titleInputRef.current.focus();
         }
-    }, [isEditing]);
+    }, [isEditingTitle]);
 
-    const handleCardClick = () => {
-        if (!isEditing) {
-            onEditToggle(item.id);
+    useEffect(() => {
+        if (isEditingNote && noteInputRef.current) {
+            noteInputRef.current.focus();
+        }
+    }, [isEditingNote]);
+
+    const handleTitleSave = () => {
+        setIsEditingTitle(false);
+        if (titleValue !== item.title) {
+            onUpdate({
+                photoId: item.id,
+                noteTitle: titleValue,
+                note: item.note // Preserve existing note
+            });
         }
     };
 
-
-    const handleSave = (e) => {
-        e.stopPropagation();
-        const updatedTimestamp = new Date(editForm.timestamp).getTime();
-        onUpdate(item.id, {
-            ...editForm,
-            timestamp: updatedTimestamp,
-        });
-        onEditToggle(null); // Close edit mode
+    const handleNoteSave = () => {
+        setIsEditingNote(false);
+        if (noteValue !== item.note) {
+            onUpdate({
+                photoId: item.id,
+                note: noteValue,
+                noteTitle: item.title // Preserve existing title
+            });
+        }
     };
 
-    const handleCancel = (e) => {
-        e.stopPropagation();
-        onEditToggle(null); // Close edit mode
+    const handleTitleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            handleTitleSave();
+        } else if (e.key === 'Escape') {
+            setTitleValue(item.title || '');
+            setIsEditingTitle(false);
+        }
+    };
+
+    const handleNoteKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault(); // Prevent newline if desired, or allow it
+            handleNoteSave();
+        } else if (e.key === 'Escape') {
+            setNoteValue(item.note || '');
+            setIsEditingNote(false);
+        }
     };
 
     const handleDelete = (e) => {
@@ -47,11 +82,6 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, isEdi
         if (window.confirm('Are you sure you want to delete this item?')) {
             onDelete(item.id);
         }
-    };
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setEditForm(prev => ({ ...prev, [name]: value }));
     };
 
     // Helper to format date+time for view mode timestamp
@@ -91,7 +121,8 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, isEdi
 
     return (
         <div
-            className="relative pl-8 animate-fade-in-up"
+            id={`timeline-item-${item.id}`}
+            className="relative pl-8 animate-fade-in-up group"
             style={{ animationDelay: `${index * 30}ms` }}
             onMouseEnter={() => onHover && onHover(item.id, true)}
             onMouseLeave={() => onHover && onHover(item.id, false)}
@@ -107,110 +138,105 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, isEdi
                 <span className="text-sm font-medium text-slate-500 mr-auto">
                     {formatFullDateTime(item.timestamp)}
                 </span>
+                
+                {/* Delete Button (Visible on Hover) */}
+                {!readOnly && onDelete && (
+                    <button 
+                        onClick={handleDelete}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-red-500 rounded-full hover:bg-red-50"
+                        title="Delete item"
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                )}
             </div>
 
             {/* Row 2: Content Card */}
-            <div
-                className={`bg-white rounded-xl border transition-all duration-200 ${isEditing
-                    ? 'ring-2 ring-indigo-200 border-indigo-300 shadow-md'
-                    : 'border-slate-200 hover:border-slate-300 shadow-sm'
-                    }`}
-                onClick={isEditing ? undefined : handleCardClick}
-            >
-                {isEditing ? (
-                    // Edit Mode
-                    <div className="p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1">Title</label>
-                            <input
-                                ref={titleInputRef}
-                                type="text"
-                                name="title"
-                                value={editForm.title}
-                                onChange={handleChange}
-                                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                placeholder="Title"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1">Time</label>
-                            <div className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-700">
-                                {formatFullDateTime(item.timestamp)}
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1">Note</label>
-                            <textarea
-                                name="note"
-                                value={editForm.note}
-                                onChange={handleChange}
-                                rows={3}
-                                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                                placeholder="Add a note..."
-                            />
-                        </div>
-                        <div className="flex justify-end space-x-2 pt-2">
-                            {onDelete && (
-                                <button
-                                    onClick={handleDelete}
-                                    className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-md transition-colors mr-auto"
-                                >
-                                    Delete
-                                </button>
-                            )}
-                            <button
-                                onClick={handleCancel}
-                                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSave}
-                                className="px-3 py-1.5 text-xs font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-md transition-colors"
-                            >
-                                Save
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    // View Mode
-                    <div className="p-4 cursor-pointer" onClick={handleCardClick}>
-                        {/* Title */}
-                        <h3 className="font-semibold text-slate-800 mb-1">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:border-slate-300 transition-all duration-200 p-4">
+                
+                {/* Title Section */}
+                <div className="mb-1 min-h-[24px]">
+                    {!readOnly && isEditingTitle ? (
+                        <input
+                            ref={titleInputRef}
+                            type="text"
+                            value={titleValue}
+                            onChange={(e) => setTitleValue(e.target.value)}
+                            onBlur={handleTitleSave}
+                            onKeyDown={handleTitleKeyDown}
+                            className="w-full px-2 py-1 text-base font-semibold text-slate-800 border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                            placeholder="Title"
+                        />
+                    ) : (
+                        <h3 
+                            className={`font-semibold text-slate-800 ${!readOnly ? 'cursor-text hover:text-indigo-600' : ''}`}
+                            onClick={() => !readOnly && setIsEditingTitle(true)}
+                            title={!readOnly ? "Click to edit title" : ""}
+                        >
                             {getDefaultTitle()}
                         </h3>
+                    )}
+                </div>
 
-                        {/* Subtitle */}
-                        <p className="text-xs text-slate-500 mb-3">
-                            {item.type === 'waypoint'
-                                ? `Elevation: ${item.elevation || 0}m`
-                                : formatDate(item.timestamp)
-                            }
-                        </p>
+                {/* Subtitle */}
+                <p className="text-xs text-slate-500 mb-3">
+                    {item.type === 'waypoint'
+                        ? `Elevation: ${item.elevation || 0}m`
+                        : formatDate(item.timestamp)
+                    }
+                </p>
 
-                        {/* Photo Display */}
-                        {item.type === 'photo' && (item.thumbnailUrl || item.imageUrl) && (
-                            <div className="w-[90%] mx-auto my-3 overflow-hidden rounded-lg shadow-sm">
-                                <img
-                                    src={item.thumbnailUrl || item.imageUrl}
-                                    alt={item.title || 'Memory'}
-                                    className="w-full h-auto object-cover transition-transform duration-300 hover:scale-105"
-                                />
-                            </div>
-                        )}
+                {/* Photo Display (Click to View) */}
+                {item.type === 'photo' && (item.thumbnailUrl || item.imageUrl) && (
+                    <div 
+                        className="w-[90%] mx-auto my-3 overflow-hidden rounded-lg shadow-sm cursor-pointer relative group/image"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onClick(item);
+                        }}
+                    >
+                        <img
+                            src={item.thumbnailUrl || item.imageUrl}
+                            alt={item.title || 'Memory'}
+                            className="w-full h-auto object-cover transition-transform duration-300 group-hover/image:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover/image:bg-opacity-10 transition-opacity flex items-center justify-center">
+                            {/* Optional: Add a zoom icon on hover if desired */}
+                        </div>
+                    </div>
+                )}
 
-                        {/* Note Body */}
-                        <div className="text-sm mt-2">
+                {/* Note Body */}
+                <div className="text-sm mt-2 min-h-[20px]">
+                    {!readOnly && isEditingNote ? (
+                        <textarea
+                            ref={noteInputRef}
+                            value={noteValue}
+                            onChange={(e) => setNoteValue(e.target.value)}
+                            onBlur={handleNoteSave}
+                            onKeyDown={handleNoteKeyDown}
+                            rows={3}
+                            className="w-full px-3 py-2 text-sm border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none bg-white"
+                            placeholder="Add a note..."
+                        />
+                    ) : (
+                        <div 
+                            className={`prose prose-sm max-w-none ${!readOnly ? 'cursor-text hover:bg-slate-50 rounded p-1 -m-1 transition-colors' : ''}`}
+                            onClick={() => !readOnly && setIsEditingNote(true)}
+                            title={!readOnly ? "Click to edit note" : ""}
+                        >
                             {item.note ? (
                                 <div className="text-green-600 font-medium">
                                     <ReactMarkdown>{item.note}</ReactMarkdown>
                                 </div>
                             ) : (
-                                <span className="italic text-slate-400 text-xs">No notes added...</span>
+                                <span className="italic text-slate-400 text-xs">
+                                    {readOnly ? 'No notes added...' : 'Add a note...'}
+                                </span>
                             )}
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );
@@ -232,23 +258,39 @@ TimelineItem.propTypes = {
     onDelete: PropTypes.func,
     onClick: PropTypes.func.isRequired,
     onHover: PropTypes.func,
-    isEditing: PropTypes.bool.isRequired,
-    onEditToggle: PropTypes.func.isRequired,
+    readOnly: PropTypes.bool,
 };
 
 // --- Main Component: TimelinePanel ---
 
 const TimelinePanel = ({
     items,
+    scrollToItemId,
     onAddPhoto,
     onAddUrl,
     onUpdateItem,
     onDeleteItem,
     onItemClick,
-    onItemHover
+    onItemHover,
+    readOnly
 }) => {
     const fileInputRef = useRef(null);
     const [activeEditItemId, setActiveEditItemId] = useState(null);
+
+    // Scroll to item when scrollToItemId changes
+    useEffect(() => {
+        if (scrollToItemId) {
+            const element = document.getElementById(`timeline-item-${scrollToItemId}`);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Optional: Add a temporary highlight effect
+                element.classList.add('bg-yellow-50', 'transition-colors', 'duration-1000');
+                setTimeout(() => {
+                    element.classList.remove('bg-yellow-50');
+                }, 2000);
+            }
+        }
+    }, [scrollToItemId]);
 
     const handleFileSelect = (e) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -274,30 +316,32 @@ const TimelinePanel = ({
                     <h1 className="text-2xl font-bold text-slate-800">Memories</h1>
                     <p className="text-sm text-slate-500">Capture your journey</p>
                 </div>
-                <div className="flex space-x-2">
-                    <button
-                        onClick={onAddUrl}
-                        className="flex items-center px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors shadow-sm"
-                    >
-                        <LinkIcon size={16} className="mr-2" />
-                        Add URL
-                    </button>
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center px-3 py-2 bg-indigo-600 rounded-lg text-sm font-medium text-white hover:bg-indigo-700 transition-colors shadow-sm"
-                    >
-                        <Camera size={16} className="mr-2" />
-                        Add Photos
-                    </button>
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileSelect}
-                        accept="image/*"
-                        multiple
-                        className="hidden"
-                    />
-                </div>
+                {!readOnly && (
+                    <div className="flex space-x-2">
+                        <button
+                            onClick={onAddUrl}
+                            className="flex items-center px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors shadow-sm"
+                        >
+                            <LinkIcon size={16} className="mr-2" />
+                            Add URL
+                        </button>
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex items-center px-3 py-2 bg-indigo-600 rounded-lg text-sm font-medium text-white hover:bg-indigo-700 transition-colors shadow-sm"
+                        >
+                            <Camera size={16} className="mr-2" />
+                            Add Photos
+                        </button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileSelect}
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Main Body Section (Journey Log) */}
@@ -321,8 +365,7 @@ const TimelinePanel = ({
                                     onDelete={onDeleteItem}
                                     onClick={onItemClick}
                                     onHover={onItemHover}
-                                    isEditing={activeEditItemId === item.id}
-                                    onEditToggle={setActiveEditItemId}
+                                    readOnly={readOnly}
                                 />
                             ))
                         ) : (
@@ -348,6 +391,7 @@ TimelinePanel.propTypes = {
         thumbnailUrl: PropTypes.string,
         note: PropTypes.string,
     })).isRequired,
+    scrollToItemId: PropTypes.string,
     onAddPhoto: PropTypes.func,
     onAddUrl: PropTypes.func,
     onUpdateItem: PropTypes.func,

@@ -33,6 +33,7 @@ The application's primary navigation is defined in `App.js`, which sets up the f
     -   **Layout Management:** Serves as the main container integrating `TripSidebar`, `LeafletMapView`, and `TimelinePanel`
     -   **Trip Selector:** Header with quick-switch dropdown to navigate between trips and "Back to My Trips" link
     -   **State Management:** Manages photos, waypoints, GPX tracks, and timeline data with chronological sorting
+    -   **Access Control:** Determines `readOnly` status based on authentication. Propagates this state to child components (`TripSidebar`, `LeafletMapView`, `TimelinePanel`) to disable editing features for guest users.
     -   **Responsive Timeline:** Adaptive timeline display with three modes:
         -   **Side mode** (>1180px): Fixed-width resizable side panel
         -   **Overlay mode** (1024-1180px): Floating overlay on the right
@@ -43,18 +44,65 @@ The application's primary navigation is defined in `App.js`, which sets up the f
     -   **Photo Viewer:** Opens `PhotoViewerOverlay` for full-size image viewing with navigation
     -   **Event Communication:** Uses custom events for cross-component updates (imageUploaded, imageDeleted, photoNoteUpdated, centerMapOnLocation, mapImageSelected)
 
+### `/login` -> `LoginPage.js`
+
+-   **File:** `client/src/pages/LoginPage.js`
+-   **Purpose:** Allows users to authenticate with the system.
+-   **Functionality:**
+    -   **Form:** Captures username and password.
+    -   **Authentication:** Calls `authService.login` to retrieve a JWT.
+    -   **Redirection:** Redirects to the trips page upon successful login.
+
+### `/register` -> `RegisterPage.js`
+
+-   **File:** `client/src/pages/RegisterPage.js`
+-   **Purpose:** Allows new users to create an account.
+-   **Functionality:**
+    -   **Form:** Captures username, password, email, full name, and a registration key.
+    -   **Registration:** Calls `authService.register` to create a new user.
+    -   **Redirection:** Redirects to the login page upon successful registration.
+
+### `/profile/me` -> `ProfilePage.js`
+
+-   **File:** `client/src/pages/ProfilePage.js`
+-   **Purpose:** The personal dashboard for the logged-in user.
+-   **Functionality:**
+    -   **Profile Header:** Displays avatar, username, optional full name/bio/location, and an "Edit Profile" link when viewing your own account.
+    -   **Stats Tiles:** Pulls denormalized metrics (`total_trips`, `total_distance_km`, `total_elevation_gain_m`) from `/users/me/stats` when available, otherwise falls back to values embedded in the profile payload.
+    -   **Activity Heatmap:** Uses `ActivityHeatmap` to paint a calendar-style heatmap derived from every trip where the user is listed as a member (including pinned trips). Clicking a cell scrolls the recent timeline to the associated trip.
+    -   **Recent Activity Timeline:** Renders up to five recent trips with `TripTimeline`/`TripTimelineCard`, including hover-to-highlight ranges on the heatmap and quick navigation to `/trips` for the full log.
+    -   **Achievements:** Displays earned badge icons via `BadgeIcon`; shows a placeholder message when no badges exist.
+
+### `/profile/:username` -> `ProfilePage.js`
+
+-   **File:** `client/src/pages/ProfilePage.js`
+-   **Purpose:** Public profile view for other users.
+-   **Functionality:** Similar to the personal dashboard but read-only (no edit controls).
+
+### `/settings/profile` -> `SettingsPage.js`
+
+-   **File:** `client/src/pages/SettingsPage.js`
+-   **Purpose:** Form to update user profile details.
+-   **Functionality:**
+    -   **Avatar Upload:** Upload a new profile picture.
+    -   **Profile Fields:** Edit Full Name, Bio, and Location (pinned trip management has not been implemented yet).
+
 ## 3. Layout Components
 
 The consistent structure of the application is maintained by these components found in `client/src/components/layout/`.
 
--   **`Header.js`**: The top navigation bar displaying the application title/logo. Simple and clean design without cluttered navigation elements.
+-   **`Header.js`**: The top navigation bar displaying the application title/logo. It dynamically renders authentication controls:
+    -   **Guest**: Shows "Login" and "Register" links.
+    -   **Authenticated**: Shows user avatar and username (linking to profile) and a "Logout" button.
 -   **`TripSidebar.js`**: The left-hand collapsible panel on the `TripDetailPage`. Contains:
-    -   `TripSummaryCard`: Displays trip overview, name, region, dates, notes, and statistics (photo/track counts)
+    -   `TripSummaryCard`: Displays trip overview, name, region, dates, notes, and statistics.
+        -   **Organizer Section:** Displays the trip owner's avatar and name.
+        -   **Members Section:** Lists all trip members. If the user is the owner, a "+" button allows adding new members via `ManageMembersModal`.
     -   `ImageGalleryPanel`: Photo browsing interface
-    -   `TripStatsHUD`: A floating panel at the bottom of the map displaying trip statistics (distance, duration, elevation gain, max elevation) and an interactive elevation profile graph.
+    -   `TripStatsHUD`: A floating panel at the bottom of the map displaying trip statistics.
     -   `Footer.js`: Application footer with copyright information or links.
 
-**Note:** The original documentation mentioned `Sidebar.js` and `MainArea.js`, but the actual implementation uses `TripSidebar.js` for the trip detail page sidebar, and the map view is handled by `LeafletMapView.js` rather than a generic `MainArea.js` component.
+**Note:** The original documentation mentioned `Sidebar.js` and `MainArea.js`, but the actual implementation uses `TripSidebar.js` for the trip detail page sidebar.
 
 ## 4. Panels and Core Components
 
@@ -86,21 +134,17 @@ These components provide the primary features of the application, mostly within 
         -   Uses React-Leaflet components: `MapContainer`, `TileLayer`, `GeoJSON`, `Polyline`, `Marker`, `Popup`, `Tooltip`
 
 -   **`ImageLayer.js`**:
-    -   **Purpose:** A React-Leaflet component that fetches and displays geotagged image markers on the map
+    -   **Purpose:** A React-Leaflet component that renders geotagged image markers on the map.
     -   **Functionality & User Experience:**
-        -   Fetches geotagged image metadata from backend using `getGeotaggedImages` API
+        -   Renders markers from a `photos` prop supplied by the parent (the component no longer fetches images itself). New props: `photos` (array) and `onPhotoUpdate(photoKey, note, saveNow)` (callback for note edits).
         -   Creates custom-styled circular markers (`.photo-marker`) with image thumbnails
         -   **User Interaction:**
             -   **Hover:** Displays tooltip with image filename
-            -   **Click:** Opens popup with thumbnail, filename, coordinates, and note editor
-            -   **Note Editing:** In-popup text area for adding/updating photo notes with save button
-            -   **View Details:** Button to open full photo viewer
-        -   **Real-time Updates:** Listens for global events:
-            -   `imageUploaded`: Adds new markers for uploaded photos
-            -   `imageDeleted`: Removes markers for deleted photos
-            -   `centerMapOnLocation`: Centers map and opens popup for specific photo
-            -   `photoNoteUpdated`: Updates popup content when notes are edited elsewhere
-        -   **Trip Context:** Filters images by trip ID when provided
+            -   **Click:** Opens a popup with thumbnail, filename, coordinates, and note editor. Marker click no longer automatically opens the photo viewer/lightbox.
+            -   **Note Editing:** In-popup text editor performs optimistic updates and reports changes via `onPhotoUpdate`. Parents should persist changes and re-supply `photos` so the map and popup content stay in sync.
+            -   **Viewer control:** Selection emits metadata via `onImageSelected(image, meta)` and `mapImageSelected` events; `meta` may include `preventViewer`, `forceViewer`, and `source` so the parent decides whether to open the full viewer.
+        -   **Real-time Updates:** The component expects the parent to update the `photos` prop when images are uploaded or deleted — `ImageLayer` will create/update/remove markers to match the provided array.
+        -   **Trip Context:** Parent should pass only photos relevant to the current trip; `ImageLayer` renders markers from that list.
 
 -   **`MapToolbar.js`**:
     -   **Purpose:** Provides UI controls for switching map base layers
@@ -128,7 +172,7 @@ These components provide the primary features of the application, mostly within 
             -   "View on Map" button (if photo has GPS coordinates)
             -   Delete button
         4.  **Hover Interaction:** Displays detailed tooltip with file info, GPS coordinates, and EXIF camera metadata
-        5.  **Click Interaction:** Opens full-size image viewer modal with metadata sidebar
+        5.  **Click Interaction:** Opens full-size image viewer modal with metadata sidebar (gallery interactions dispatch selection metadata; the parent may set `preventViewer: true` so the viewer is not always opened automatically).
         6.  **Map Synchronization:** 
             -   Clicking thumbnail scrolls to and highlights the photo
             -   "View on Map" centers map on photo location
@@ -147,12 +191,12 @@ These components provide the primary features of the application, mostly within 
             -   Thumbnail (for photos)
             -   Note/description field
         3.  **User Interactions:**
-            -   **Click photo card:** Opens full photo viewer
+            -   **Click photo card:** Typically opens the photo viewer, but `TripDetailPage` now controls whether the viewer opens. Map and popup selections include metadata (`preventViewer` / `forceViewer`) so the parent can suppress or force the viewer.
             -   **Click waypoint card:** Centers map on waypoint location
             -   **Hover:** Highlights corresponding marker on map
             -   **Edit button:** Opens inline editor for title and note (supports Markdown)
             -   **Delete button:** Removes item (photos only; waypoints are from GPX)
-        4.  **Add Actions:** 
+        4.  **Add Actions:** (Hidden in read-only mode)
             -   "Add Photo" button to upload new images
             -   "Add URL" button (placeholder for future web image import)
         5.  **Chronological Sorting:** Items automatically sorted by capture/waypoint timestamp
@@ -164,12 +208,17 @@ These components provide the primary features of the application, mostly within 
 This directory contains reusable UI elements shared across the application.
 
 -   **`CreateTripModal.js`**: Modal dialog for creating a new trip. Contains a form capturing trip name, start date, end date, region, and notes. Calls the `createTrip` API to save the new trip record.
+-   **`ManageMembersModal.js`**: Modal dialog for managing trip members. Allows the trip owner to search for users by name and add/remove them from the trip.
+-   **`ActivityHeatmap.js`**: Calendar-style heatmap component that consumes normalized `{ date, value, metadata[] }` entries. Supports highlighting and `onCellClick` callbacks so parent components can jump to related content.
+-   **`TripTimeline.js`** & **`TripTimelineCard.js`**: Compact timeline used on the profile page to summarize recent trips. Accepts hover callbacks for cross-highlighting with the heatmap and exposes `registerRef` hooks so parents can scroll to individual cards.
+-   **`BadgeIcon.js`**: Renders earned achievement icons and tooltips based on `badgeInfoMap`; used on the profile page and ready for reuse elsewhere.
 -   **`PhotoViewerOverlay.js`**: Full-screen overlay that appears when a user clicks on a photo thumbnail. Displays the image in a larger view with:
     -   Navigation controls (previous/next arrows)
     -   Image counter (e.g., "3 / 24")
     -   Close button
     -   Keyboard navigation support (arrow keys, Escape)
 -   **`TripStatsHUD.js`**: Heads-up display component showing real-time trip statistics (photo count, track count, etc.)
+-   **`ProtectedRoute.js`**: Wrapper component that redirects unauthenticated users to the login page.
 -   **`Button.js`**, **`Input.js`**, **`Checkbox.js`**: Styled form elements providing consistent UI across the application with standardized props and styling
 
 ## 4. Additional Component Directories
@@ -194,6 +243,19 @@ The application uses a combination of:
     -   `TripDetailPage.css`, `MainBlock.css`: Page layout styles
 
 ## 6. Key User Flows
+
+### Authentication
+1.  **Guest Access (View-Only):**
+    -   Users can view all trips, maps, and photos without logging in.
+    -   Editing controls (upload, delete, edit notes) are hidden.
+2.  **Login:**
+    -   User navigates to `/login`.
+    -   Enters credentials.
+    -   Upon success, is redirected to `/trips` with "Edit Mode" enabled.
+3.  **Registration:**
+    -   User navigates to `/register`.
+    -   Enters details and the required registration key.
+    -   Upon success, can proceed to login.
 
 ### Creating and Managing Trips
 1. User visits `/trips` and sees the trips list
@@ -229,14 +291,15 @@ The application uses a combination of:
 ## 7. Technical Notes
 
 ### State Management
--   **Local Component State**: Most components use React `useState` and `useEffect` hooks
--   **Props Drilling**: Parent-to-child communication via props
+-   **Global Auth State:** `AuthContext.js` provides `user` and `isAuthenticated` state to the entire app via the Context API.
+-   **Local Component State:** Most components use React `useState` and `useEffect` hooks
+-   **Props Drilling:** Parent-to-child communication via props
 -   **Event-Based Communication**: Cross-component updates using custom DOM events:
-    -   `imageUploaded`, `imageUploadedWithGPS`: Notify components of new photos
-    -   `imageDeleted`: Trigger marker and gallery removal
-    -   `photoNoteUpdated`: Sync note changes across components
-    -   `centerMapOnLocation`: Center map on specific coordinates
-    -   `mapImageSelected`: Notify when photo marker is clicked
+     -   `imageUploaded`, `imageUploadedWithGPS`: (Emitted by upload logic) parents should update the `photos` array they supply to `ImageGalleryPanel` / `ImageLayer` so the UI can re-sync markers and gallery items. `ImageLayer` no longer relies on these events to create markers directly.
+     -   `imageDeleted`: (Emitted where appropriate) parents should remove deleted photos from their `photos` array so `ImageLayer` removes markers.
+     -   `photoNoteUpdated` (legacy): Note edits from the `ImageLayer` popup are reported to the parent via the `onPhotoUpdate(photoKey, note, saveNow)` prop; if you previously relied on a global `photoNoteUpdated` event, reemit it from the parent handler or adapt consumers to the callback contract.
+     -   `centerMapOnLocation`: Centers the map on specific coordinates. When centering on a photo marker the centering call may include selection metadata (e.g. `{ object_key, preventViewer }`) so the parent can decide viewer behavior.
+     -   `mapImageSelected`: Notifies when a photo marker is selected. Payloads now include `source` and may include `preventViewer` / `forceViewer` so parents decide whether to open the viewer.
 
 ### API Integration
 -   All backend communication goes through `client/src/services/api.js`

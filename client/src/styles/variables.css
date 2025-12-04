@@ -1,9 +1,24 @@
 :root {
+  /* Colors */
+  --primary-color: #2f855a;
+  --primary-hover: #276749;
+  --secondary-color: #3182ce;
+  
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  
+  --text-primary: #1f2933;
+  --text-secondary: #64748b;
+  
+  --border-color: #e2e8f0;
+  
+  /* Spacing */
   --spacing: 8px;
-  --sidebar-width: 280px;
-  --header-height: 60px;
+  --header-height: 64px;
   --footer-height: 40px;
-
+  
+  /* Legacy variables (keep for compatibility if used) */
+  --sidebar-width: 280px;
   --color-bg-sidebar: #1f2327;
   --color-text-light: #ffffff;
   --color-accent: #4f90ff;

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Tuple
 import logging
 from src.services.trip_service import TripService
+from src.events.event_bus import EventBus
 
 
 class FileUploadService:
@@ -96,6 +97,8 @@ class FileUploadService:
             "metadata_extracted": metadata_extracted,
             "start_datetime": start_dt.isoformat() if start_dt else None,
             "end_datetime": end_dt.isoformat() if end_dt else None,
+            "activity_start_datetime": None,
+            "activity_end_datetime": None,
             "trip": None,
         }
 
@@ -120,18 +123,28 @@ class FileUploadService:
             result["reason"] = "trip_not_found"
             return result
 
-        if trip.start_date or trip.end_date:
-            result["reason"] = "trip_dates_already_set"
-            result["trip"] = trip.model_dump(by_alias=True)
-            return result
+        activity_start = self._floor_to_date(start_dt)
+        activity_end = self._floor_to_date(end_dt)
+        result["activity_start_datetime"] = activity_start.isoformat()
+        result["activity_end_datetime"] = activity_end.isoformat()
 
         update_payload = {
-            "start_date": self._floor_to_date(start_dt),
-            "end_date": self._floor_to_date(end_dt),
+            "activity_start_date": activity_start,
+            "activity_end_date": activity_end,
         }
+        applied = False
+        if not trip.start_date:
+            update_payload["start_date"] = activity_start
+            applied = True
+        if not trip.end_date:
+            update_payload["end_date"] = activity_end
+            applied = True
+
         updated_trip = self.trip_service.update_trip(trip_id, update_payload)
         if updated_trip:
-            result["applied"] = True
+            result["applied"] = applied
+            if not applied and trip.start_date and trip.end_date:
+                result["reason"] = "trip_dates_already_set"
             result["trip"] = updated_trip.model_dump(by_alias=True)
         else:
             result["reason"] = "trip_update_failed"
@@ -152,8 +165,9 @@ class FileUploadService:
         handler = HandlerFactory.get_handler(file_extension)
 
         # Enforce trip scoping for GPX and image uploads to avoid cross-trip leakage
-        if file_extension in {"gpx", "jpg", "jpeg", "png", "gif"} and not trip_id:
-            raise ValueError("trip_id is required when uploading GPX tracks or photos")
+        # Exception: Avatars (images without trip_id) are allowed
+        if file_extension == "gpx" and not trip_id:
+            raise ValueError("trip_id is required when uploading GPX tracks")
         
         # Enforce single GPX file per trip: delete existing GPX files before uploading new one
         if file_extension == "gpx" and trip_id:
@@ -253,8 +267,35 @@ class FileUploadService:
                 response_payload["gpx_metadata_extracted"] = auto_fill_details.get("metadata_extracted")
                 response_payload["gpx_start_datetime"] = auto_fill_details.get("start_datetime")
                 response_payload["gpx_end_datetime"] = auto_fill_details.get("end_datetime")
+                response_payload["activity_start_datetime"] = auto_fill_details.get("activity_start_datetime")
+                response_payload["activity_end_datetime"] = auto_fill_details.get("activity_end_datetime")
                 if auto_fill_details.get("trip"):
                     response_payload["trip"] = auto_fill_details["trip"]
+
+                # Publish GPX_PROCESSED event for gamification
+                if result.track_summary:
+                    try:
+                        stats_payload = {
+                            "distance_km": result.track_summary.get("total_distance_km") or (result.track_summary.get("total_distance_m") or 0) / 1000,
+                            "elevation_gain_m": result.track_summary.get("elevation_gain_m", 0),
+                            "moving_time_sec": result.track_summary.get("duration_seconds", 0),
+                            "max_altitude_m": result.track_summary.get("max_elevation_m") or result.track_summary.get("max_altitude_m") or 0,
+                        }
+                        service.trip_service.update_trip_stats(trip_id, stats_payload)
+
+                        trip = service.trip_service.get_trip(trip_id)
+                        if trip:
+                            stats = {
+                                "distance_km": result.track_summary.get("total_distance_km", 0),
+                                "elevation_gain_m": result.track_summary.get("elevation_gain_m", 0),
+                            }
+                            EventBus.publish("GPX_PROCESSED", {
+                                "trip_id": trip_id,
+                                "stats": stats,
+                                "member_ids": trip.member_ids
+                            })
+                    except Exception as e:
+                        logging.getLogger(__name__).error(f"Failed to publish GPX_PROCESSED event: {e}")
 
             return response_payload
         

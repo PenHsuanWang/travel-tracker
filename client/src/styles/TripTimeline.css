@@ -1,0 +1,295 @@
+/* client/src/styles/TripTimeline.css */
+
+.trip-timeline {
+  position: relative;
+  padding-left: 50px; /* Space for the line and dots */
+  margin-top: 1.5rem;
+}
+
+.timeline-year-group {
+  position: relative;
+  margin-bottom: 2rem;
+}
+
+.timeline-year-marker {
+  position: absolute;
+  left: -50px;
+  top: 0;
+  width: 40px;
+  text-align: right;
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: var(--text-primary);
+  transform: translateY(-50%); /* Center vertically */
+  z-index: 10;
+  background: var(--bg-primary); /* Ensure year is readable over line */
+  padding-right: 10px;
+}
+
+.trip-timeline-item {
+  position: relative;
+  margin-bottom: 2rem; /* Space between items */
+}
+
+/* The vertical line */
+.trip-timeline::before {
+  content: '';
+  position: absolute;
+  left: 20px; /* Center of the dots */
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: var(--border-color); /* Subtle line color */
+  z-index: 1;
+}
+
+/* The dots */
+.timeline-dot {
+  position: absolute;
+  left: 14px; /* Center with the line */
+  top: 0.5rem; /* Align with card content */
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: var(--primary-color); /* Highlight color */
+  border: 2px solid var(--bg-primary); /* White border to stand out */
+  z-index: 2;
+}
+
+.trip-card-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 12px;
+  overflow: hidden; /* For border-radius on image */
+  margin-left: -20px; /* Pull card slightly left to align with dot */
+}
+
+.trip-card-link:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+}
+
+.trip-card-content-wrapper {
+  display: flex;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.trip-card-date {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 1rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  min-width: 60px; /* Fixed width for date */
+  flex-shrink: 0;
+  border-right: 1px solid rgba(255,255,255,0.2);
+}
+
+.trip-card-date .month {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.trip-card-date .day {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.trip-card-body {
+  display: flex;
+  flex-grow: 1;
+}
+
+.trip-card-thumbnail {
+  width: 120px; /* Fixed width for thumbnail */
+  height: 90px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.trip-card-image-placeholder {
+  width: 120px;
+  height: 90px;
+  background-color: var(--border-color);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.trip-card-image-placeholder .placeholder-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.trip-card-details {
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.trip-card-title {
+  font-size: 1rem;
+  font-weight: bold;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem 0;
+}
+
+.trip-card-excerpt {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0 0 0.5rem 0;
+  flex-grow: 1;
+}
+
+.trip-card-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  align-items: center;
+}
+
+.trip-card-stats svg {
+  margin-right: 0.25rem;
+  color: var(--primary-color); /* Highlight icons */
+}
+
+.trip-card-stats .difficulty-easy { color: #28a745; } /* Green */
+.trip-card-stats .difficulty-moderate { color: #ffc107; } /* Yellow */
+.trip-card-stats .difficulty-hard { color: #dc3545; } /* Red */
+
+
+/* Empty state */
+.trip-timeline-empty {
+  background-color: var(--bg-secondary);
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-secondary);
+  margin-top: 1.5rem;
+}
+
+.trip-timeline-empty p {
+  font-size: 1.1rem;
+  margin-bottom: 1.5rem;
+}
+
+.trip-timeline-empty .button {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--primary-color);
+  color: white;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: bold;
+  transition: background-color 0.2s ease;
+}
+
+.trip-timeline-empty .button:hover {
+  background-color: var(--primary-hover);
+}
+
+/* Section Header for Recent Activity */
+.profile-page .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.profile-page .section-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.4rem;
+}
+
+.profile-page .view-all-link {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.profile-page .view-all-link:hover {
+  text-decoration: underline;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .trip-timeline {
+    padding-left: 0; /* Remove space for line on small screens */
+  }
+
+  .trip-timeline::before,
+  .timeline-dot {
+    display: none; /* Hide line and dots */
+  }
+
+  .timeline-year-marker {
+    position: static; /* No absolute positioning */
+    text-align: left;
+    transform: none;
+    padding-left: 0;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+  }
+
+  .trip-card-link {
+    margin-left: 0;
+  }
+
+  .trip-card-content-wrapper {
+    flex-direction: column; /* Stack date, thumbnail, and details */
+  }
+
+  .trip-card-date {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-right: none;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+  }
+
+  .trip-card-date .month {
+    font-size: 1rem;
+  }
+
+  .trip-card-date .day {
+    font-size: 1rem;
+  }
+
+  .trip-card-thumbnail,
+  .trip-card-image-placeholder {
+    width: 100%;
+    height: 180px; /* Adjust height for stacked layout */
+  }
+
+  .trip-card-details {
+    padding: 1rem;
+  }
+
+  .trip-card-stats {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}

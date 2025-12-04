@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import LeafletMapView from './LeafletMapView';
 import TripSidebar from '../layout/TripSidebar';
 import TimelinePanel from '../panels/TimelinePanel';
@@ -137,6 +138,7 @@ const getStoredTimelineWidth = () => {
 };
 
 const TripDetailPage = () => {
+    const { isAuthenticated, user } = useAuth();
     const { tripId } = useParams();
     const [trip, setTrip] = useState(null);
     const [allTrips, setAllTrips] = useState([]);
@@ -153,6 +155,21 @@ const TripDetailPage = () => {
     const [timelineMode, setTimelineMode] = useState('side');
     const [timelineOpen, setTimelineOpen] = useState(true);
     const [timelineWidth, setTimelineWidth] = useState(() => getStoredTimelineWidth());
+    const [scrollToItemId, setScrollToItemId] = useState(null);
+
+    // Robust check for user ID (handles id vs _id) and type coercion
+    const userId = user ? (user.id || user._id) : null;
+    const isOwner = useMemo(() => {
+        if (!userId || !trip) return false;
+        // Check direct owner_id match
+        if (trip.owner_id && String(trip.owner_id) === String(userId)) return true;
+        // Check owner object match (fallback)
+        if (trip.owner && trip.owner.id && String(trip.owner.id) === String(userId)) return true;
+        if (trip.owner && trip.owner.username && user?.username && trip.owner.username === user.username) return true;
+        return false;
+    }, [userId, trip, user?.username]);
+
+    const readOnly = !isOwner;
 
     // Lifted GPX State
     // Refactored: Single GPX file per trip
@@ -162,6 +179,20 @@ const TripDetailPage = () => {
 
     const mapRef = useRef(null);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const handleScrollRequest = (event) => {
+            const { itemId } = event.detail || {};
+            if (itemId) {
+                setScrollToItemId(itemId);
+                if (timelineMode !== 'side') {
+                    setTimelineOpen(true);
+                }
+            }
+        };
+        window.addEventListener('timelineScrollToItem', handleScrollRequest);
+        return () => window.removeEventListener('timelineScrollToItem', handleScrollRequest);
+    }, [timelineMode]);
 
     useEffect(() => {
         const fetchTripDetails = async () => {
@@ -450,11 +481,16 @@ const TripDetailPage = () => {
     }, [timelineMode, timelineWidth]);
 
     const handleMapPhotoSelected = useCallback(
-        (image) => {
+        (image, meta = {}) => {
             if (!image) return;
             const key = image.object_key || image.objectKey;
             if (!key) return;
-            handleSelectPhoto(key, { openViewer: true, centerMap: false, ensureTimeline: true });
+            const shouldOpenViewer = meta.forceViewer ? true : !meta.preventViewer;
+            handleSelectPhoto(key, {
+                openViewer: shouldOpenViewer,
+                centerMap: false,
+                ensureTimeline: true,
+            });
         },
         [handleSelectPhoto]
     );
@@ -569,6 +605,14 @@ const TripDetailPage = () => {
         },
         [applyNoteToPhotoState, applyNoteToWaypointState, photos]
     );
+
+    const handleMapPhotoUpdate = useCallback((photoId, note, save = false) => {
+        if (save) {
+            handleNoteSave({ photoId, note });
+        } else {
+            applyNoteToPhotoState(photoId, { note });
+        }
+    }, [handleNoteSave, applyNoteToPhotoState]);
 
     useEffect(() => {
         const handleExternalNoteUpdate = (event) => {
@@ -701,13 +745,15 @@ const TripDetailPage = () => {
                             </option>
                         ))}
                     </select>
-                    <button
-                        type="button"
-                        className="ghost-button danger-button"
-                        onClick={handleDeleteTrip}
-                    >
-                        Delete Trip
-                    </button>
+                    {!readOnly && (
+                        <button
+                            type="button"
+                            className="ghost-button danger-button"
+                            onClick={handleDeleteTrip}
+                        >
+                            Delete Trip
+                        </button>
+                    )}
                 </div>
             </div>
             <div className="MainBlock">
@@ -717,6 +763,8 @@ const TripDetailPage = () => {
                     stats={tripStats}
                     onTripDataChange={handleTripDataChange}
                     notice={tripNotice}
+                    readOnly={readOnly}
+                    isOwner={isOwner}
                 />
                 <div
                     className={`MapAndTimeline ${timelineMode !== 'side' ? 'timeline-floating' : ''} ${timelineMode === 'sheet' ? 'timeline-sheet' : ''}`}
@@ -741,6 +789,10 @@ const TripDetailPage = () => {
                             // GPX Props (Refactored)
                             gpxTrack={gpxTrack}
                             highlightedItemId={highlightedItemId}
+                            readOnly={readOnly}
+                            // Photo Props (Lifted State)
+                            photos={photos}
+                            onPhotoUpdate={handleMapPhotoUpdate}
                         />
                         {gpxTrack && gpxTrack.summary && (
                             <TripStatsHUD trackSummary={gpxTrack.summary} />
@@ -758,12 +810,14 @@ const TripDetailPage = () => {
                             <div style={{ width: 'var(--timeline-width)', flex: '0 0 var(--timeline-width)', height: '100%', borderLeft: '1px solid #e2e8f0' }}>
                                 <TimelinePanel
                                     items={timelineItems}
+                                    scrollToItemId={scrollToItemId}
                                     onAddPhoto={handleAddPhoto}
                                     onAddUrl={handleAddUrl}
                                     onUpdateItem={handleNoteSave}
                                     onDeleteItem={handleDeletePhoto}
                                     onItemClick={(item) => handleSelectPhoto(item, { openViewer: true, centerMap: true })}
                                     onItemHover={(id, isHovering) => setHighlightedItemId(isHovering ? id : null)}
+                                    readOnly={readOnly}
                                 />
                             </div>
                         </>
@@ -780,12 +834,14 @@ const TripDetailPage = () => {
                             </div>
                             <TimelinePanel
                                 items={timelineItems}
+                                scrollToItemId={scrollToItemId}
                                 onAddPhoto={handleAddPhoto}
                                 onAddUrl={handleAddUrl}
                                 onUpdateItem={handleNoteSave}
                                 onDeleteItem={handleDeletePhoto}
                                 onItemClick={(item) => handleSelectPhoto(item, { openViewer: true, centerMap: true })}
                                 onItemHover={(id, isHovering) => setHighlightedItemId(isHovering ? id : null)}
+                                readOnly={readOnly}
                             />
                         </div>
                     )}

@@ -10,15 +10,22 @@ class MongoDBAdapter(StorageAdapter):
     Adapter for MongoDB storage.
     """
 
-    def __init__(self, host: str = 'localhost', port: int = 27017, db_name: str = 'mydatabase'):
+    def __init__(self, host: str = 'localhost', port: int = 27017, db_name: str = 'mydatabase', username: Optional[str] = None, password: Optional[str] = None):
         """
         Initialize MongoDBAdapter.
 
         :param host: The MongoDB server host.
         :param port: The MongoDB server port.
         :param db_name: The database name to use in MongoDB.
+        :param username: The username for authentication (optional).
+        :param password: The password for authentication (optional).
         """
-        self.client = MongoClient(host, port)
+        if username and password:
+            # When a root user is created via MONGO_INITDB_ROOT_USERNAME, it exists in the 'admin' database.
+            # Specify authSource='admin' so authentication succeeds when connecting to the target database.
+            self.client = MongoClient(host, port, username=username, password=password, authSource='admin')
+        else:
+            self.client = MongoClient(host, port)
         self.db = self.client[db_name]
 
     def get_collection(self, collection_name: str):

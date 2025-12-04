@@ -4,7 +4,6 @@
   flex-direction: column;
   min-height: 100vh;
   height: 100vh;
-  overflow: hidden;
 }
 
 .App-body {
@@ -13,7 +12,7 @@
   flex-direction: column;
   min-height: 0;
   width: 100%;
-  overflow: hidden;
+  overflow-y: auto; /* Allow vertical scrolling */
 }
 
 .App-header {

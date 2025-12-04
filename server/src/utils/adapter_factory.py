@@ -49,9 +49,13 @@ class AdapterFactory:
         host = os.getenv("MONGODB_HOST", "localhost")
         port = int(os.getenv("MONGODB_PORT", "27017"))
         db_name = os.getenv("MONGODB_DATABASE", "travel_tracker")
+        username = os.getenv("MONGODB_USERNAME")
+        password = os.getenv("MONGODB_PASSWORD")
 
         return MongoDBAdapter(
             host=host,
             port=port,
-            db_name=db_name
+            db_name=db_name,
+            username=username,
+            password=password
         )

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import {
     deleteTrip,
     getTrips,
@@ -8,6 +9,7 @@ import {
     updateTrip,
     uploadFile,
 } from '../../services/api';
+import userService from '../../services/userService';
 import CreateTripModal from '../common/CreateTripModal';
 import './TripsPage.css';
 
@@ -56,7 +58,16 @@ const TripCard = ({
     onSelectToggle,
     onOpenCover,
     onDelete,
+    readOnly,
+    isPinned,
+    onTogglePin,
+    currentUserId,
 }) => {
+    const owner = trip.owner;
+    const isOwner = currentUserId && (trip.owner_id === currentUserId || (owner && owner.id === currentUserId));
+    const canEdit = !readOnly && isOwner;
+    const canPin = !readOnly;
+
     const coverUrl =
         trip.cover_image_url ||
         (trip.cover_photo_id ? getImageUrl(trip.cover_photo_id) : null);
@@ -115,46 +126,54 @@ const TripCard = ({
                     </div>
                 )}
 
-                <div className="cover-overlay">
-                    {trip.cover_type && (
-                        <span className="cover-pill">
-                            {trip.cover_type === 'custom' ? 'Custom cover' : 'Auto cover'}
-                        </span>
-                    )}
-                    <div className="cover-actions">
-                        <button
-                            type="button"
-                            className="ghost-button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenCover(trip);
-                            }}
-                        >
-                            {hasCover ? 'Change cover' : 'Add cover image'}
-                        </button>
-                        {hasCover && (
-                            <button
-                                type="button"
-                                className="ghost-button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onOpenCover(trip);
-                                }}
-                            >
-                                Choose from photos
-                            </button>
+                {!readOnly && (
+                    <div className="cover-overlay">
+                        {trip.cover_type && (
+                            <span className="cover-pill">
+                                {trip.cover_type === 'custom' ? 'Custom cover' : 'Auto cover'}
+                            </span>
                         )}
-                        <button
-                            type="button"
-                            className="ghost-button ghost-icon"
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label="More cover options (coming soon)"
-                            title="More options coming soon"
-                        >
-                            ⋯
-                        </button>
+                        <div className="cover-actions">
+                            {canEdit && (
+                                <button
+                                    type="button"
+                                    className="ghost-button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenCover(trip);
+                                    }}
+                                >
+                                    {hasCover ? 'Change cover' : 'Add cover image'}
+                                </button>
+                            )}
+                            {canEdit && hasCover && (
+                                <button
+                                    type="button"
+                                    className="ghost-button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenCover(trip);
+                                    }}
+                                >
+                                    Choose from photos
+                                </button>
+                            )}
+                            {canPin && (
+                                <button
+                                    type="button"
+                                    className={`ghost-button ghost-icon ${isPinned ? 'pinned' : ''}`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onTogglePin(trip.id);
+                                    }}
+                                    title={isPinned ? "Unpin from profile" : "Pin to profile"}
+                                >
+                                    {isPinned ? '★' : '☆'}
+                                </button>
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
 
             <div className="trip-body">
@@ -162,6 +181,17 @@ const TripCard = ({
                     <div className="trip-title">
                         {trip.name || trip.title || 'Untitled trip'}
                     </div>
+                    {owner && (
+                        <div className="trip-owner">
+                            <img 
+                                src={owner.avatar_url ? (owner.avatar_url.startsWith('http') ? owner.avatar_url : getImageUrl(owner.avatar_url)) : '/default-avatar.svg'} 
+                                alt={owner.username} 
+                                className="owner-avatar-small" 
+                                title={`Owner: ${owner.username}`}
+                            />
+                            <span className="owner-name">{owner.username}</span>
+                        </div>
+                    )}
                     <div className="trip-date">
                         {formatDateRange(trip.start_date, trip.end_date)}
                     </div>
@@ -202,24 +232,28 @@ const TripCard = ({
                     >
                         Open Map
                     </Link>
-                    <button
-                        type="button"
-                        className="ghost-button danger"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onDelete?.(trip.id);
-                        }}
-                    >
-                        Delete
-                    </button>
-                    <button
-                        type="button"
-                        className="ghost-button ghost-icon"
-                        onClick={(e) => e.stopPropagation()}
-                        aria-label="More trip actions"
-                    >
-                        ⋯
-                    </button>
+                    {canEdit && (
+                        <button
+                            type="button"
+                            className="ghost-button danger"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete?.(trip.id);
+                            }}
+                        >
+                            Delete
+                        </button>
+                    )}
+                    {canEdit && (
+                        <button
+                            type="button"
+                            className="ghost-button ghost-icon"
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label="More trip actions"
+                        >
+                            ⋯
+                        </button>
+                    )}
                 </div>
             </div>
         </article>
@@ -239,6 +273,7 @@ const TripsToolbar = ({
     onToggleSelectMode,
     viewMode,
     onViewModeChange,
+    readOnly,
 }) => {
     return (
         <div className="trips-toolbar">
@@ -248,16 +283,20 @@ const TripsToolbar = ({
                     <p>Manage your hiking journal, covers, and bulk actions in one place.</p>
                 </div>
                 <div className="toolbar-actions">
-                    <button type="button" className="ghost-button" onClick={onImport}>
-                        ⬇ Import
-                    </button>
-                    <button
-                        type="button"
-                        className="primary-button"
-                        onClick={onNewTrip}
-                    >
-                        + New Trip
-                    </button>
+                    {!readOnly && (
+                        <>
+                            <button type="button" className="ghost-button" onClick={onImport}>
+                                ⬇ Import
+                            </button>
+                            <button
+                                type="button"
+                                className="primary-button"
+                                onClick={onNewTrip}
+                            >
+                                + New Trip
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -347,14 +386,16 @@ const TripsToolbar = ({
                     />
                 </label>
 
-                <button
-                    type="button"
-                    className={`toggle-button ${selectMode ? 'active' : ''}`}
-                    onClick={onToggleSelectMode}
-                    aria-pressed={selectMode}
-                >
-                    ▢ Select
-                </button>
+                {!readOnly && (
+                    <button
+                        type="button"
+                        className={`toggle-button ${selectMode ? 'active' : ''}`}
+                        onClick={onToggleSelectMode}
+                        aria-pressed={selectMode}
+                    >
+                        ▢ Select
+                    </button>
+                )}
 
                 <div className="view-toggle" role="group" aria-label="Toggle view mode">
                     <button
@@ -420,20 +461,22 @@ const BulkActionBar = ({
     );
 };
 
-const EmptyStateCard = ({ onCreate, onImport }) => {
+const EmptyStateCard = ({ onCreate, onImport, readOnly }) => {
     return (
         <div className="empty-state">
             <div className="empty-illustration">🥾</div>
             <h2>You don’t have any trips yet</h2>
             <p>Create a trip, upload your GPX track and photos to start your hiking journal.</p>
-            <div className="empty-actions">
-                <button type="button" className="primary-button" onClick={onCreate}>
-                    + Create your first trip
-                </button>
-                <button type="button" className="ghost-button" onClick={onImport}>
-                    Import GPX history
-                </button>
-            </div>
+            {!readOnly && (
+                <div className="empty-actions">
+                    <button type="button" className="primary-button" onClick={onCreate}>
+                        + Create your first trip
+                    </button>
+                    <button type="button" className="ghost-button" onClick={onImport}>
+                        Import GPX history
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
@@ -635,6 +678,7 @@ const CoverImageModal = ({ trip, onClose, onSave }) => {
 };
 
 const TripsPage = () => {
+    const { isAuthenticated, user, fetchUser } = useAuth();
     const [trips, setTrips] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -646,6 +690,8 @@ const TripsPage = () => {
     const [selectedTripIds, setSelectedTripIds] = useState([]);
     const [coverModalTrip, setCoverModalTrip] = useState(null);
     const [busyMessage, setBusyMessage] = useState('');
+
+    const readOnly = !isAuthenticated;
 
     useEffect(() => {
         fetchTrips();
@@ -694,6 +740,35 @@ const TripsPage = () => {
         setSelectedTripIds((prev) =>
             prev.includes(tripId) ? prev.filter((id) => id !== tripId) : [...prev, tripId]
         );
+    };
+
+    const handleTogglePin = async (tripId) => {
+        if (!user) return;
+        
+        const currentPinned = user.pinned_trip_ids || [];
+        const isPinned = currentPinned.includes(tripId);
+        
+        let newPinned;
+        if (isPinned) {
+            newPinned = currentPinned.filter(id => id !== tripId);
+        } else {
+            if (currentPinned.length >= 3) {
+                alert("You can only pin up to 3 trips.");
+                return;
+            }
+            newPinned = [...currentPinned, tripId];
+        }
+        
+        try {
+            await userService.updateProfile({ pinned_trip_ids: newPinned });
+            // Refresh user profile to update UI
+            if (fetchUser) {
+                await fetchUser();
+            }
+        } catch (error) {
+            console.error("Failed to update pinned trips", error);
+            alert("Failed to update pinned trips.");
+        }
     };
 
     const handleFilterChange = (partial) => {
@@ -879,6 +954,7 @@ const TripsPage = () => {
                 onToggleSelectMode={toggleSelectMode}
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
+                readOnly={readOnly}
             />
 
             {busyMessage && <div className="inline-status">{busyMessage}</div>}
@@ -886,7 +962,7 @@ const TripsPage = () => {
             {loading ? (
                 <div className="loading">Loading trips…</div>
             ) : filteredTrips.length === 0 ? (
-                <EmptyStateCard onCreate={() => setIsModalOpen(true)} onImport={handleImport} />
+                <EmptyStateCard onCreate={() => setIsModalOpen(true)} onImport={handleImport} readOnly={readOnly} />
             ) : (
                 <div
                     className={`trips-grid ${
@@ -903,22 +979,28 @@ const TripsPage = () => {
                             onSelectToggle={handleSelectToggle}
                             onOpenCover={setCoverModalTrip}
                             onDelete={handleDeleteTrip}
+                            readOnly={readOnly}
+                            isPinned={user?.pinned_trip_ids?.includes(trip.id)}
+                            onTogglePin={handleTogglePin}
+                            currentUserId={user?.id}
                         />
                     ))}
                 </div>
             )}
 
-            <BulkActionBar
-                selectedCount={selectedTripIds.length}
-                onArchive={handleBulkArchive}
-                onDelete={handleBulkDelete}
-                onExport={handleBulkExport}
-                onMerge={handleMerge}
-                onExitSelect={() => {
-                    setSelectMode(false);
-                    setSelectedTripIds([]);
-                }}
-            />
+            {!readOnly && (
+                <BulkActionBar
+                    selectedCount={selectedTripIds.length}
+                    onArchive={handleBulkArchive}
+                    onDelete={handleBulkDelete}
+                    onExport={handleBulkExport}
+                    onMerge={handleMerge}
+                    onExitSelect={() => {
+                        setSelectMode(false);
+                        setSelectedTripIds([]);
+                    }}
+                />
+            )}
 
             <CreateTripModal
                 isOpen={isModalOpen}

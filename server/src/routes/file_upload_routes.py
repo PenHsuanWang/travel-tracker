@@ -1,10 +1,13 @@
 # src/routes/file_upload_routes.py
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from src.controllers.file_upload_controller import FileUploadController
 from src.models.trip import Trip
+from src.auth import get_current_user
+from src.models.user import User
+from src.services.trip_service import TripService
 
 router = APIRouter()
 
@@ -40,7 +43,8 @@ class UploadResponse(BaseModel):
 async def upload_file(
     file: UploadFile = File(...),
     uploader_id: Optional[str] = Query(None),
-    trip_id: Optional[str] = Query(None)
+    trip_id: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Upload a file and return metadata including EXIF data for images.
@@ -51,6 +55,17 @@ async def upload_file(
     :return: Upload response with file info and metadata.
     :raises HTTPException: If the file upload fails.
     """
+    # Enforce uploader_id to be current_user.id
+    uploader_id = current_user.id
+    
+    if trip_id:
+        trip_service = TripService()
+        trip = trip_service.get_trip(trip_id)
+        if not trip:
+             raise HTTPException(status_code=404, detail="Trip not found")
+        if trip.owner_id and trip.owner_id != current_user.id:
+             raise HTTPException(status_code=403, detail="Not authorized to upload to this trip")
+
     try:
         result = FileUploadController.upload_file(file, uploader_id, trip_id)
         
@@ -113,7 +128,7 @@ async def get_file_metadata(metadata_id: str):
 
 
 @router.delete("/delete/{filename:path}")
-async def delete_file(filename: str, bucket: str = Query(default="images")):
+async def delete_file(filename: str, bucket: str = Query(default="images"), current_user: User = Depends(get_current_user)):
     """
     Delete an image file and its metadata.
     
@@ -122,6 +137,25 @@ async def delete_file(filename: str, bucket: str = Query(default="images")):
     :return: Success message.
     :raises HTTPException: If deletion fails.
     """
+    # Check ownership before deletion
+    metadata = FileUploadController.get_file_metadata(filename)
+    if metadata:
+        # Check uploader
+        if metadata.get("uploader_id") and metadata.get("uploader_id") != current_user.id:
+             # If not uploader, check if owner of the trip
+             trip_id = metadata.get("trip_id")
+             if trip_id:
+                 trip_service = TripService()
+                 trip = trip_service.get_trip(trip_id)
+                 if trip and trip.owner_id != current_user.id:
+                      raise HTTPException(status_code=403, detail="Not authorized to delete this file")
+                 elif not trip:
+                      # Trip not found, but file exists. Only uploader can delete.
+                      raise HTTPException(status_code=403, detail="Not authorized to delete this file")
+             else:
+                 # No trip associated, and not uploader
+                 raise HTTPException(status_code=403, detail="Not authorized to delete this file")
+
     try:
         result = FileUploadController.delete_file(filename, bucket)
         return result

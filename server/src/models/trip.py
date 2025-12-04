@@ -1,7 +1,26 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 import uuid
+# We use a forward reference or conditional import to avoid circular dependency if user.py ever imports trip.py
+# But for now it seems safe.
+# Actually, to be safe, let's define UserSummary here or use a generic dict, 
+# but importing is better for docs.
+# Let's try importing.
+try:
+    from src.models.user import UserSummary
+except ImportError:
+    # Fallback if circular import happens (though it shouldn't)
+    class UserSummary(BaseModel):
+        id: str
+        username: str
+        avatar_url: Optional[str] = None
+
+class TripStats(BaseModel):
+    distance_km: float = 0.0
+    elevation_gain_m: float = 0.0
+    moving_time_sec: float = 0.0
+    max_altitude_m: float = 0.0
 
 class Trip(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -12,6 +31,14 @@ class Trip(BaseModel):
     notes: Optional[str] = None
     cover_photo_id: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # New Fields
+    owner_id: Optional[str] = Field(default=None, index=True)
+    member_ids: List[str] = Field(default=[], index=True)
+    is_public: bool = Field(default=True)
+    stats: TripStats = Field(default_factory=TripStats)
+    activity_start_date: Optional[datetime] = None
+    activity_end_date: Optional[datetime] = None
 
     class Config:
         populate_by_name = True
@@ -26,3 +53,11 @@ class Trip(BaseModel):
                 "created_at": "2024-09-30T10:00:00"
             }
         }
+
+class TripResponse(Trip):
+    owner: Optional[UserSummary] = None
+    members: List[UserSummary] = []
+
+class TripMembersUpdate(BaseModel):
+    member_ids: List[str]
+

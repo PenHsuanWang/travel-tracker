@@ -85,19 +85,28 @@ find_mc() {
 
 # Function to check if MinIO is accessible
 check_minio() {
-    print_info "Checking MinIO accessibility..."
+    print_info "Waiting for MinIO at ${MINIO_ENDPOINT}..."
+    local max_attempts=15
+    local attempt=0
+
+    # Loop until the health check passes or we time out
+    while ! curl -sf "http://${MINIO_ENDPOINT}/minio/health/live" > /dev/null 2>&1; do
+        attempt=$((attempt + 1))
+        if [ $attempt -ge $max_attempts ]; then
+            echo # Newline after dots
+            print_error "MinIO did not become accessible at http://${MINIO_ENDPOINT}"
+            print_warning "Please ensure:"
+            echo "  1. MinIO container is running (docker ps | grep minio)"
+            echo "  2. Network configuration allows connection between containers"
+            return 1
+        fi
+        echo -n "."
+        sleep 2
+    done
     
-    if curl -sf "http://${MINIO_ENDPOINT}/minio/health/live" > /dev/null 2>&1; then
-        print_success "MinIO is accessible at http://${MINIO_ENDPOINT}"
-        return 0
-    else
-        print_error "MinIO is not accessible at http://${MINIO_ENDPOINT}"
-        print_warning "Please ensure:"
-        echo "  1. MinIO container is running (docker ps | grep minio)"
-        echo "  2. MinIO is accessible on port 9000"
-        echo "  3. Run: docker-compose up -d minio"
-        return 1
-    fi
+    echo # Newline after dots
+    print_success "MinIO is accessible."
+    return 0
 }
 
 # Function to configure mc client

@@ -4,7 +4,7 @@ import logging
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException, Response, Query  # type: ignore[import-not-found]
+from fastapi import APIRouter, HTTPException, Response, Query, Depends  # type: ignore[import-not-found]
 from pydantic import BaseModel  # type: ignore[import-not-found]
 
 from src.services.file_retrieval_service import FileRetrievalService
@@ -12,6 +12,8 @@ from src.services.gpx_analysis_retrieval_service import GpxAnalysisRetrievalServ
 from src.services.gpx_analysis_service import GpxAnalysisService
 from src.services.photo_note_service import PhotoNoteService
 from src.models.file_metadata import FileMetadata
+from src.auth import get_current_user
+from src.models.user import User
 
 router = APIRouter()
 
@@ -334,7 +336,7 @@ async def get_file(filename: str, bucket: str = "gps-data"):
 
 
 @router.patch("/photos/{metadata_id:path}/note")
-async def update_photo_note(metadata_id: str, payload: PhotoNotePayload):
+async def update_photo_note(metadata_id: str, payload: PhotoNotePayload, current_user: User = Depends(get_current_user)):
     """
     Update the note/note_title for a photo metadata entry.
     """
@@ -352,7 +354,7 @@ async def update_photo_note(metadata_id: str, payload: PhotoNotePayload):
 
 
 @router.patch("/photos/{metadata_id:path}/order")
-async def update_photo_order(metadata_id: str, payload: PhotoOrderPayload):
+async def update_photo_order(metadata_id: str, payload: PhotoOrderPayload, current_user: User = Depends(get_current_user)):
     """
     Update the order index for a photo metadata entry.
     """
