@@ -2,6 +2,7 @@
 import React from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { getImageUrl } from '../../services/api';
 import '../../styles/Header.css';
 
 function Header() {
@@ -12,6 +13,10 @@ function Header() {
     logout();
     navigate('/login');
   };
+
+  const avatarSrc = user?.avatar_url 
+    ? (user.avatar_url.startsWith('http') ? user.avatar_url : getImageUrl(user.avatar_url))
+    : '/default-avatar.svg';
 
   return (
     <header className="main-header" role="banner">
@@ -31,18 +36,26 @@ function Header() {
           >
             Trips
           </NavLink>
+          <NavLink
+            to="/community"
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          >
+            Community
+          </NavLink>
           <button type="button" className="nav-link muted" title="Map view coming soon">
             Map
-          </button>
-          <button type="button" className="nav-link muted" title="Settings coming soon">
-            Settings
           </button>
         </nav>
 
         <div className="header-actions">
           {isAuthenticated ? (
             <div className="auth-controls">
-              <span className="user-greeting">Hi, {user?.username}</span>
+              <Link to="/profile/me" className="user-profile-link">
+                {avatarSrc && (
+                  <img src={avatarSrc} alt="" className="header-avatar" />
+                )}
+                <span className="user-greeting">{user?.username}</span>
+              </Link>
               <button 
                 type="button" 
                 className="nav-link" 

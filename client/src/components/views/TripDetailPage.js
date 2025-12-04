@@ -138,7 +138,7 @@ const getStoredTimelineWidth = () => {
 };
 
 const TripDetailPage = () => {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
     const { tripId } = useParams();
     const [trip, setTrip] = useState(null);
     const [allTrips, setAllTrips] = useState([]);
@@ -157,7 +157,19 @@ const TripDetailPage = () => {
     const [timelineWidth, setTimelineWidth] = useState(() => getStoredTimelineWidth());
     const [scrollToItemId, setScrollToItemId] = useState(null);
 
-    const readOnly = !isAuthenticated;
+    // Robust check for user ID (handles id vs _id) and type coercion
+    const userId = user ? (user.id || user._id) : null;
+    const isOwner = useMemo(() => {
+        if (!userId || !trip) return false;
+        // Check direct owner_id match
+        if (trip.owner_id && String(trip.owner_id) === String(userId)) return true;
+        // Check owner object match (fallback)
+        if (trip.owner && trip.owner.id && String(trip.owner.id) === String(userId)) return true;
+        if (trip.owner && trip.owner.username && user?.username && trip.owner.username === user.username) return true;
+        return false;
+    }, [userId, trip, user?.username]);
+
+    const readOnly = !isOwner;
 
     // Lifted GPX State
     // Refactored: Single GPX file per trip
@@ -752,6 +764,7 @@ const TripDetailPage = () => {
                     onTripDataChange={handleTripDataChange}
                     notice={tripNotice}
                     readOnly={readOnly}
+                    isOwner={isOwner}
                 />
                 <div
                     className={`MapAndTimeline ${timelineMode !== 'side' ? 'timeline-floating' : ''} ${timelineMode === 'sheet' ? 'timeline-sheet' : ''}`}

@@ -33,10 +33,20 @@ class ImageHandler(BaseHandler):
         :param trip_id: Optional ID of the trip this file belongs to.
         :return: HandlerResult containing file info and EXIF data.
         """
-        if not trip_id:
-            raise ValueError("trip_id is required when uploading images so they can be scoped to a trip")
-
+        # If trip_id is missing, we assume it's a profile avatar or similar non-trip image
+        # We will use a different bucket or prefix if needed, but for now we just relax the check.
+        # Ideally, we should have a 'context' param, but for now we infer from trip_id presence.
+        
         bucket_name = 'images'
+        if not trip_id:
+            # Use 'avatars' bucket or prefix for non-trip images? 
+            # For simplicity, let's keep using 'images' but use a 'public' or 'avatars' prefix
+            # However, the current architecture uses trip_id as prefix.
+            # Let's use 'avatars' as the "trip_id" prefix for avatars.
+            prefix = "avatars"
+        else:
+            prefix = trip_id
+
         original_filename = file.filename
         file_extension = original_filename.split('.')[-1].lower()
         upload_time = datetime.now(timezone.utc)
@@ -45,7 +55,7 @@ class ImageHandler(BaseHandler):
         # Generate unique object key
         unique_id = str(uuid.uuid4())
         safe_original = (original_filename or "image").replace("/", "_")
-        object_key = f"{trip_id}/{unique_id}_{safe_original}"
+        object_key = f"{prefix}/{unique_id}_{safe_original}"
         
         # Use SpooledTemporaryFile for memory-efficient handling
         with tempfile.SpooledTemporaryFile(max_size=10*1024*1024) as temp_file:

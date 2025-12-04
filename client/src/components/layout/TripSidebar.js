@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { getImageUrl } from '../../services/api';
 import ImageGalleryPanel from '../panels/ImageGalleryPanel';
+import ManageMembersModal from '../common/ManageMembersModal';
 import '../../styles/Sidebar.css';
 
 const formatDate = (value) => {
@@ -13,7 +16,7 @@ const formatDate = (value) => {
     }
 };
 
-const TripSummaryCard = ({ trip, stats }) => {
+const TripSummaryCard = ({ trip, stats, onManageMembers, isOwner }) => {
     if (!trip) {
         return (
             <div className="TripSummaryCard">
@@ -24,6 +27,10 @@ const TripSummaryCard = ({ trip, stats }) => {
 
     const start = formatDate(trip.start_date);
     const end = formatDate(trip.end_date);
+    
+    // Separate owner from members list if present
+    const owner = trip.owner;
+    const members = (trip.members || []).filter(m => !owner || m.id !== owner.id);
 
     return (
         <div className="TripSummaryCard">
@@ -36,6 +43,55 @@ const TripSummaryCard = ({ trip, stats }) => {
             {trip.notes && (
                 <p style={{ fontStyle: 'italic' }}>{trip.notes}</p>
             )}
+            
+            {/* Owner Section */}
+            {owner && (
+                <div className="trip-members-section">
+                    <p className="section-label">Organizer</p>
+                    <Link to={`/profile/${owner.username}`} className="member-item-link">
+                        <div className="member-item" title={`Organizer: ${owner.username}`}>
+                            <img 
+                                src={owner.avatar_url ? (owner.avatar_url.startsWith('http') ? owner.avatar_url : getImageUrl(owner.avatar_url)) : '/default-avatar.svg'} 
+                                alt={owner.username} 
+                                className="member-avatar owner-avatar"
+                            />
+                            <span className="member-name">{owner.username}</span>
+                        </div>
+                    </Link>
+                </div>
+            )}
+
+            {/* Members Section */}
+            <div className="trip-members-section">
+                <div className="section-header-row">
+                    <p className="section-label">Members</p>
+                    {isOwner && (
+                        <button 
+                            className="icon-button-small" 
+                            onClick={onManageMembers}
+                            title="Manage members"
+                        >
+                            +
+                        </button>
+                    )}
+                </div>
+                <div className="members-list">
+                    {members.map(member => (
+                        <div key={member.id} className="member-item" title={member.username}>
+                            <img 
+                                src={member.avatar_url ? (member.avatar_url.startsWith('http') ? member.avatar_url : getImageUrl(member.avatar_url)) : '/default-avatar.svg'} 
+                                alt={member.username} 
+                                className="member-avatar"
+                            />
+                            <span className="member-name">{member.username}</span>
+                        </div>
+                    ))}
+                    {members.length === 0 && (
+                        <p className="empty-members-text">No other members</p>
+                    )}
+                </div>
+            </div>
+
             <div className="TripSummaryStats">
                 <div className="TripSummaryStat">🖼 {stats.photos} photos</div>
                 <div className="TripSummaryStat">🧭 {stats.tracks} tracks</div>
@@ -50,11 +106,23 @@ function TripSidebar({
     stats,
     onTripDataChange,
     notice,
-    readOnly
+    readOnly,
+    isOwner
 }) {
+    const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+
+    const handleTripUpdated = (updatedTrip) => {
+        onTripDataChange({ trip: updatedTrip });
+    };
+
     return (
         <aside className="Sidebar">
-            <TripSummaryCard trip={trip} stats={stats} />
+            <TripSummaryCard 
+                trip={trip} 
+                stats={stats} 
+                onManageMembers={() => setIsMemberModalOpen(true)}
+                isOwner={isOwner}
+            />
             {notice && (
                 <div className="TripNotice" role="status">
                     {notice}
@@ -62,6 +130,13 @@ function TripSidebar({
             )}
 
             <ImageGalleryPanel tripId={tripId} onDataChange={onTripDataChange} readOnly={readOnly} />
+            
+            <ManageMembersModal
+                isOpen={isMemberModalOpen}
+                onClose={() => setIsMemberModalOpen(false)}
+                trip={trip}
+                onTripUpdated={handleTripUpdated}
+            />
         </aside>
     );
 }

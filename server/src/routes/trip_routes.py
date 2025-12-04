@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form, Depends
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
-from src.models.trip import Trip
+from src.models.trip import Trip, TripResponse, TripMembersUpdate
 from src.services.trip_service import TripService
 from src.services.file_upload_service import FileUploadService
 from datetime import datetime
@@ -28,6 +28,10 @@ async def create_trip(trip: Trip, current_user: User = Depends(get_current_user)
     Create a new trip.
     """
     try:
+        if current_user.id:
+            trip.owner_id = current_user.id
+            if not trip.member_ids:
+                trip.member_ids = [current_user.id]
         return trip_service.create_trip(trip)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -67,6 +71,11 @@ async def create_trip_with_gpx(
             region=region,
             notes=notes,
         )
+        
+        if current_user.id:
+            trip.owner_id = current_user.id
+            trip.member_ids = [current_user.id]
+
         created_trip = trip_service.create_trip(trip)
 
         gpx_metadata_extracted = None
@@ -108,17 +117,17 @@ async def create_trip_with_gpx(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/", response_model=List[Trip])
-async def list_trips():
+@router.get("/", response_model=List[TripResponse])
+async def list_trips(user_id: Optional[str] = None):
     """
-    List all trips.
+    List all trips. Optionally filter by user_id (membership).
     """
     try:
-        return trip_service.get_trips()
+        return trip_service.get_trips(user_id=user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{trip_id}", response_model=Trip)
+@router.get("/{trip_id}", response_model=TripResponse)
 async def get_trip(trip_id: str):
     """
     Get a specific trip by ID.
@@ -133,16 +142,47 @@ async def update_trip(trip_id: str, update_data: Dict[str, Any], current_user: U
     """
     Update a trip.
     """
+    # Check ownership
+    existing_trip = trip_service.get_trip(trip_id)
+    if not existing_trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    
+    if existing_trip.owner_id and existing_trip.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this trip")
+
     trip = trip_service.update_trip(trip_id, update_data)
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")
     return trip
+
+@router.put("/{trip_id}/members", response_model=Trip)
+async def update_trip_members(trip_id: str, members_update: TripMembersUpdate, current_user: User = Depends(get_current_user)):
+    """
+    Update trip members.
+    """
+    try:
+        trip = trip_service.update_members(trip_id, members_update.member_ids, current_user.id)
+        if not trip:
+            raise HTTPException(status_code=404, detail="Trip not found")
+        return trip
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Only the owner can manage members")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_trip(trip_id: str, current_user: User = Depends(get_current_user)):
     """
     Delete a trip.
     """
+    # Check ownership
+    existing_trip = trip_service.get_trip(trip_id)
+    if not existing_trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+        
+    if existing_trip.owner_id and existing_trip.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this trip")
+
     success = trip_service.delete_trip(trip_id)
     if not success:
         raise HTTPException(status_code=404, detail="Trip not found or could not be deleted")

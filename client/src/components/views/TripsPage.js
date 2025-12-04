@@ -9,6 +9,7 @@ import {
     updateTrip,
     uploadFile,
 } from '../../services/api';
+import userService from '../../services/userService';
 import CreateTripModal from '../common/CreateTripModal';
 import './TripsPage.css';
 
@@ -58,7 +59,15 @@ const TripCard = ({
     onOpenCover,
     onDelete,
     readOnly,
+    isPinned,
+    onTogglePin,
+    currentUserId,
 }) => {
+    const owner = trip.owner;
+    const isOwner = currentUserId && (trip.owner_id === currentUserId || (owner && owner.id === currentUserId));
+    const canEdit = !readOnly && isOwner;
+    const canPin = !readOnly;
+
     const coverUrl =
         trip.cover_image_url ||
         (trip.cover_photo_id ? getImageUrl(trip.cover_photo_id) : null);
@@ -125,17 +134,19 @@ const TripCard = ({
                             </span>
                         )}
                         <div className="cover-actions">
-                            <button
-                                type="button"
-                                className="ghost-button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onOpenCover(trip);
-                                }}
-                            >
-                                {hasCover ? 'Change cover' : 'Add cover image'}
-                            </button>
-                            {hasCover && (
+                            {canEdit && (
+                                <button
+                                    type="button"
+                                    className="ghost-button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenCover(trip);
+                                    }}
+                                >
+                                    {hasCover ? 'Change cover' : 'Add cover image'}
+                                </button>
+                            )}
+                            {canEdit && hasCover && (
                                 <button
                                     type="button"
                                     className="ghost-button"
@@ -147,15 +158,19 @@ const TripCard = ({
                                     Choose from photos
                                 </button>
                             )}
-                            <button
-                                type="button"
-                                className="ghost-button ghost-icon"
-                                onClick={(e) => e.stopPropagation()}
-                                aria-label="More cover options (coming soon)"
-                                title="More options coming soon"
-                            >
-                                ⋯
-                            </button>
+                            {canPin && (
+                                <button
+                                    type="button"
+                                    className={`ghost-button ghost-icon ${isPinned ? 'pinned' : ''}`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onTogglePin(trip.id);
+                                    }}
+                                    title={isPinned ? "Unpin from profile" : "Pin to profile"}
+                                >
+                                    {isPinned ? '★' : '☆'}
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}
@@ -166,6 +181,17 @@ const TripCard = ({
                     <div className="trip-title">
                         {trip.name || trip.title || 'Untitled trip'}
                     </div>
+                    {owner && (
+                        <div className="trip-owner">
+                            <img 
+                                src={owner.avatar_url ? (owner.avatar_url.startsWith('http') ? owner.avatar_url : getImageUrl(owner.avatar_url)) : '/default-avatar.svg'} 
+                                alt={owner.username} 
+                                className="owner-avatar-small" 
+                                title={`Owner: ${owner.username}`}
+                            />
+                            <span className="owner-name">{owner.username}</span>
+                        </div>
+                    )}
                     <div className="trip-date">
                         {formatDateRange(trip.start_date, trip.end_date)}
                     </div>
@@ -206,7 +232,7 @@ const TripCard = ({
                     >
                         Open Map
                     </Link>
-                    {!readOnly && (
+                    {canEdit && (
                         <button
                             type="button"
                             className="ghost-button danger"
@@ -218,7 +244,7 @@ const TripCard = ({
                             Delete
                         </button>
                     )}
-                    {!readOnly && (
+                    {canEdit && (
                         <button
                             type="button"
                             className="ghost-button ghost-icon"
@@ -652,7 +678,7 @@ const CoverImageModal = ({ trip, onClose, onSave }) => {
 };
 
 const TripsPage = () => {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user, fetchUser } = useAuth();
     const [trips, setTrips] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -714,6 +740,35 @@ const TripsPage = () => {
         setSelectedTripIds((prev) =>
             prev.includes(tripId) ? prev.filter((id) => id !== tripId) : [...prev, tripId]
         );
+    };
+
+    const handleTogglePin = async (tripId) => {
+        if (!user) return;
+        
+        const currentPinned = user.pinned_trip_ids || [];
+        const isPinned = currentPinned.includes(tripId);
+        
+        let newPinned;
+        if (isPinned) {
+            newPinned = currentPinned.filter(id => id !== tripId);
+        } else {
+            if (currentPinned.length >= 3) {
+                alert("You can only pin up to 3 trips.");
+                return;
+            }
+            newPinned = [...currentPinned, tripId];
+        }
+        
+        try {
+            await userService.updateProfile({ pinned_trip_ids: newPinned });
+            // Refresh user profile to update UI
+            if (fetchUser) {
+                await fetchUser();
+            }
+        } catch (error) {
+            console.error("Failed to update pinned trips", error);
+            alert("Failed to update pinned trips.");
+        }
     };
 
     const handleFilterChange = (partial) => {
@@ -925,6 +980,9 @@ const TripsPage = () => {
                             onOpenCover={setCoverModalTrip}
                             onDelete={handleDeleteTrip}
                             readOnly={readOnly}
+                            isPinned={user?.pinned_trip_ids?.includes(trip.id)}
+                            onTogglePin={handleTogglePin}
+                            currentUserId={user?.id}
                         />
                     ))}
                 </div>

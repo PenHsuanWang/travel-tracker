@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { createTrip, createTripWithGpx } from '../../services/api';
-import './CreateTripModal.css'; // We'll create this CSS file next
+import React, { useState, useRef, useEffect } from 'react';
+import { createTrip, createTripWithGpx, getImageUrl } from '../../services/api';
+import userService from '../../services/userService';
+import './CreateTripModal.css';
 
 const CreateTripModal = ({ isOpen, onClose, onTripCreated }) => {
     const [formData, setFormData] = useState({
@@ -14,7 +15,34 @@ const CreateTripModal = ({ isOpen, onClose, onTripCreated }) => {
     const [gpxError, setGpxError] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    
+    // Member Management State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [selectedMembers, setSelectedMembers] = useState([]);
+    const [searching, setSearching] = useState(false);
+
     const fileInputRef = useRef(null);
+
+    // Debounce search
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            if (searchQuery.length >= 2) {
+                setSearching(true);
+                try {
+                    const results = await userService.searchUsers(searchQuery);
+                    setSearchResults(results);
+                } catch (err) {
+                    console.error("Search failed", err);
+                } finally {
+                    setSearching(false);
+                }
+            } else {
+                setSearchResults([]);
+            }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     if (!isOpen) return null;
 
@@ -24,6 +52,18 @@ const CreateTripModal = ({ isOpen, onClose, onTripCreated }) => {
             ...prev,
             [name]: value
         }));
+    };
+
+    const handleAddMember = (user) => {
+        if (!selectedMembers.find(m => m.id === user.id)) {
+            setSelectedMembers(prev => [...prev, user]);
+        }
+        setSearchQuery('');
+        setSearchResults([]);
+    };
+
+    const handleRemoveMember = (userId) => {
+        setSelectedMembers(prev => prev.filter(m => m.id !== userId));
     };
 
     const handleFileSelect = (e) => {
@@ -63,7 +103,8 @@ const CreateTripModal = ({ isOpen, onClose, onTripCreated }) => {
             const payload = {
                 ...formData,
                 start_date: formData.start_date || null,
-                end_date: formData.end_date || null
+                end_date: formData.end_date || null,
+                member_ids: selectedMembers.map(m => m.id)
             };
             const response = gpxFile
                 ? await createTripWithGpx(payload, gpxFile)
@@ -95,6 +136,8 @@ const CreateTripModal = ({ isOpen, onClose, onTripCreated }) => {
                 notes: ''
             });
             setGpxFile(null);
+            setSelectedMembers([]);
+            setSearchQuery('');
         } catch (err) {
             console.error("Failed to create trip:", err);
             setError("Failed to create trip. Please try again.");
@@ -170,6 +213,55 @@ const CreateTripModal = ({ isOpen, onClose, onTripCreated }) => {
                             rows="3"
                             placeholder="Any details about the trip..."
                         />
+                    </div>
+
+                    {/* Member Management */}
+                    <div className="form-group">
+                        <label>Add Members</label>
+                        <div className="member-search-container">
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search users by name..."
+                                className="member-search-input"
+                            />
+                            {searchResults.length > 0 && (
+                                <div className="search-results-dropdown">
+                                    {searchResults.map(user => (
+                                        <div 
+                                            key={user.id} 
+                                            className="search-result-item"
+                                            onClick={() => handleAddMember(user)}
+                                        >
+                                            <img 
+                                                src={user.avatar_url ? (user.avatar_url.startsWith('http') ? user.avatar_url : getImageUrl(user.avatar_url)) : '/default-avatar.svg'} 
+                                                alt="" 
+                                                className="result-avatar"
+                                            />
+                                            <span>{user.username}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        
+                        {selectedMembers.length > 0 && (
+                            <div className="selected-members-list">
+                                {selectedMembers.map(member => (
+                                    <div key={member.id} className="selected-member-chip">
+                                        <span>{member.username}</span>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => handleRemoveMember(member.id)}
+                                            className="remove-member-btn"
+                                        >
+                                            &times;
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="form-group">

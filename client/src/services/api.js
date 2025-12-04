@@ -44,8 +44,8 @@ export const createTripWithGpx = async (tripData, gpxFile) => {
   return response.data;
 };
 
-export const getTrips = async () => {
-  const response = await apiClient.get('/trips/');
+export const getTrips = async (params = {}) => {
+  const response = await apiClient.get('/trips/', { params });
   return response.data;
 };
 
@@ -61,6 +61,16 @@ export const updateTrip = async (tripId, tripData) => {
 
 export const deleteTrip = async (tripId) => {
   await apiClient.delete(`/trips/${tripId}`);
+};
+
+export const searchUsers = async (query) => {
+  const response = await apiClient.get('/users/search', { params: { q: query } });
+  return response.data;
+};
+
+export const updateTripMembers = async (tripId, memberIds) => {
+  const response = await apiClient.put(`/trips/${tripId}/members`, { member_ids: memberIds });
+  return response.data;
 };
 
 // --- File API ---

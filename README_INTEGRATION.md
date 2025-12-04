@@ -34,6 +34,9 @@ The application has the following client-side routes defined in `client/src/App.
 | `/` | `Navigate` | Root path redirects to `/trips` | Browser address bar |
 | `/trips` | `TripsPage` | List view of all trips with search, filter, sort, and bulk operations | Root redirect, "Back to My Trips" link in trip detail header, browser back button |
 | `/trips/:tripId` | `TripDetailPage` | Detailed view of a single trip with interactive map, sidebar panels, and photo timeline | "View Trip" or "Open Map" buttons on trip cards, quick-switch dropdown in trip detail header |
+| `/profile/me` | `ProfilePage` | Personal dashboard showing user stats, bio, and pinned trips | Header profile link |
+| `/profile/:username` | `ProfilePage` | Public profile view of another user | Clicking on member/owner names in trip details |
+| `/settings/profile` | `SettingsPage` | Form to edit profile details and upload avatar | "Edit Profile" button on personal dashboard |
 
 **User Navigation Flow**:
 ```
@@ -67,16 +70,22 @@ Each route renders a different React component, but all share the same HTML docu
 
 The following sections detail the API endpoints exposed by the backend and consumed by the frontend.
 
-### Authentication API
+### Authentication and User API
 
--   **Prefix**: `/api/auth`
--   **Frontend Service**: `client/src/services/authService.js`
--   **Backend Router**: `server/src/routes/auth_routes.py`
+-   **Prefix**: `/api/auth`, `/api/users`
+-   **Frontend Service**: `client/src/services/authService.js`, `client/src/services/userService.js`
+-   **Backend Router**: `server/src/routes/auth_routes.py`, `server/src/routes/user_routes.py`
 
 | Method | Endpoint    | Frontend Function | Description                                                                 |
 | :----- | :---------- | :---------------- | :-------------------------------------------------------------------------- |
-| `POST` | `/login`    | `login(...)`      | Authenticates a user. Expects `username` and `password` (OAuth2 form data). Returns a JWT access token. |
-| `POST` | `/register` | `register(...)`   | Registers a new user. Expects JSON body with `username`, `password`, `registration_key`, and optional `email`, `full_name`. |
+| `POST` | `/auth/login`    | `login(...)`      | Authenticates a user. Expects `username` and `password` (OAuth2 form data). Returns a JWT access token. |
+| `POST` | `/auth/register` | `register(...)`   | Registers a new user. Expects JSON body with `username`, `password`, `registration_key`, and optional `email`, `full_name`. |
+| `GET`  | `/users/me`      | `getProfile()`    | Retrieves the current user's profile, including stats and pinned trips. |
+| `PUT`  | `/users/me`      | `updateProfile(...)` | Updates user profile details (currently bio, location, and full name). |
+| `POST` | `/users/me/avatar` | `uploadAvatar(...)` | Uploads a new profile picture. |
+| `GET`  | `/users/me/stats` | `getStats()`      | Retrieves the latest aggregated stats and earned badges for the authenticated user. |
+| `GET`  | `/users/search`  | `searchUsers(q)`  | Searches for users by name or username. Used for adding trip members. |
+| `GET`  | `/users/{username}` | `getUserProfile(...)` | Retrieves the public profile of another user. |
 
 ### Trips API
 
@@ -88,9 +97,10 @@ The following sections detail the API endpoints exposed by the backend and consu
 | :----- | :-------------------------- | :------------------------ | :----------------------------------------------------------------------------------------------------------------- |
 | `POST` | `/`                         | `createTrip(tripData)`    | Creates a new trip. Expects a JSON body with trip details (`name`, `start_date`, etc.).                              |
 | `POST` | `/with-gpx`                 | `createTripWithGpx(...)`  | Creates a new trip and simultaneously uploads a GPX file. The backend auto-fills trip dates from the GPX if not provided. |
-| `GET`  | `/`                         | `getTrips()`              | Retrieves a list of all `Trip` objects.                                                                            |
+| `GET`  | `/`                         | `getTrips(params?)`       | Retrieves trips. Supports optional query params like `user_id` to return only trips where the user is a member (used by the profile page). |
 | `GET`  | `/{trip_id}`                | `getTrip(tripId)`         | Retrieves a single `Trip` object by its ID.                                                                        |
 | `PUT`  | `/{trip_id}`                | `updateTrip(id, data)`    | Updates an existing trip's details. Expects a JSON body with the fields to update.                                   |
+| `PUT`  | `/{trip_id}/members`        | `updateTripMembers(id, memberIds)` | Updates the list of members for a trip. Only accessible by the trip owner.                                   |
 | `DELETE` | `/{trip_id}`                | `deleteTrip(tripId)`      | Deletes a trip and all its associated files (from MinIO) and metadata (from MongoDB).                              |
 
 ### File and Data API
@@ -156,8 +166,33 @@ This covers file uploads, metadata management, and raw file retrieval.
 4.  **Frontend**:
     -   Stores token in `localStorage`.
     -   Updates `AuthContext` state to `isAuthenticated = true`.
+    -   Fetches user profile via `GET /api/users/me` to populate user details (avatar, etc.).
     -   Redirects user to `/trips`.
     -   Subsequent API requests include `Authorization: Bearer <token>` header via Axios interceptor.
+
+### Flow 0.5: Managing Trip Members
+
+1.  **User Action**: Trip owner clicks the "+" button in the "Members" section of the sidebar on `/trips/:tripId`.
+2.  **Frontend**:
+    -   Opens `ManageMembersModal`.
+    -   User types in the search box.
+    -   Calls `userService.searchUsers(query)` → `GET /api/users/search?q={query}`.
+3.  **Backend**:
+    -   Queries `users` collection for matching usernames or full names.
+    -   Returns list of matching user objects (excluding sensitive data).
+4.  **Frontend**:
+    -   Displays search results.
+    -   User selects a user to add.
+    -   User clicks "Save Changes".
+    -   Calls `api.updateTripMembers(tripId, memberIds)` → `PUT /api/trips/{tripId}/members`.
+5.  **Backend**:
+    -   Verifies the requester is the trip owner.
+    -   Updates the `member_ids` array in the `Trip` document via `TripService.update_members`, which also publishes a `MEMBER_ADDED` event for every newly added user.
+    -   The event triggers `UserStatsService`/`AchievementEngine` subscribers so profile totals and badges stay in sync without manual refreshes.
+    -   Returns the updated trip.
+6.  **Frontend**:
+    -   Updates local trip state with new members list.
+    -   Sidebar updates to show the new member.
 
 ### Flow 1: Viewing the Trips List Page
 
@@ -193,6 +228,22 @@ This covers file uploads, metadata management, and raw file retrieval.
         -   "View Trip" button navigates to `/trips/{tripId}` using React Router's `Link` component
         -   "Open Map" button navigates to `/trips/{tripId}` with state `{focus: 'map'}`
         -   "Delete" button deletes the trip after confirmation
+
+### Flow 1a: Loading the Profile Dashboard
+
+1.  **User Action**: Navigates to `/profile/me` (own dashboard) or `/profile/:username` (public view).
+2.  **Frontend** (`ProfilePage` component):
+    -   Determines whether the route targets the current user (`/profile/me`) or another user via `useParams()`.
+    -   Calls either `userService.getProfile()` → `GET /api/users/me` or `userService.getUserProfile(username)` → `GET /api/users/{username}` to fetch profile data (bio, avatar, pinned trips, earned badges).
+    -   If the viewer owns the profile, triggers `userService.getStats()` → `GET /api/users/me/stats` to obtain fresh aggregates (`total_trips`, `total_distance_km`, `total_elevation_gain_m`, `earned_badges`). Results override any stale values embedded in the profile payload.
+3.  **Frontend** (Activity Data Fetch):
+    -   After a profile loads, executes `getTrips({ user_id: profile.id })` → `GET /api/trips?user_id={profile.id}` to retrieve every trip where the user appears in `member_ids`.
+    -   Combines these trips with pinned trips (if any) to build the calendar heatmap data structure (`[{date, value, metadata}]`).
+4.  **Frontend** (Rendering and Interaction):
+    -   `ActivityHeatmap` renders the normalized activity calendar and invokes `onCellClick` to scroll the recent timeline when a date is selected.
+    -   `TripTimeline` / `TripTimelineCard` render the five most recent trips, exposing hover callbacks so the heatmap can highlight the exact date range of the hovered trip.
+    -   `BadgeIcon` components display earned achievements; a fallback message appears when none exist.
+    -   "Edit Profile" button links to `/settings/profile` for the owner; public viewers only see read-only fields.
 
 ### Flow 1: Viewing the Trip Detail Page
 
@@ -349,17 +400,23 @@ This covers file uploads, metadata management, and raw file retrieval.
   "end_date": "2025-01-05T00:00:00",
   "region": "Region/Location Name",
   "notes": "Optional trip notes",
-  "cover_photo_id": "optional-image-object-key",
-  "cover_image_url": "optional-url",
-  "cover_type": "custom|auto",
-  "created_at": "2025-11-29T07:56:01.868013",
-  "difficulty": "easy|moderate|hard",
-  "distance_km": 25.5,
-  "elevation_gain": 1200,
-  "has_gpx": true,
-  "photo_count": 42
+    "cover_photo_id": "optional-image-object-key",
+    "created_at": "2025-11-29T07:56:01.868013",
+    "owner_id": "user-uuid",
+    "member_ids": ["user-uuid", "friend-uuid"],
+    "is_public": true,
+    "stats": {
+        "distance_km": 25.5,
+        "elevation_gain_m": 1200,
+        "moving_time_sec": 86400,
+        "max_altitude_m": 3952
+    },
+    "activity_start_date": "2025-01-01T08:00:00",
+    "activity_end_date": "2025-01-05T18:00:00"
 }
 ```
+
+> **Note:** `TripService` returns `TripResponse`, which extends this model with populated `owner` (id/username/avatar) and a `members` array of `UserSummary` objects. The frontend derives helper fields such as `cover_image_url`, `photo_count`, or `has_gpx` when composing UI state.
 
 ### FileMetadata Model
 ```json
@@ -477,6 +534,15 @@ useEffect(() => {
 }, []);
 ```
 
+### Backend Event Pipeline
+
+-   **Event Bus:** `server/src/events/event_bus.py` provides a lightweight in-process pub/sub mechanism. Subscribers are registered during FastAPI startup in `src/app.py`.
+-   **`GPX_PROCESSED`:** Emitted by `FileUploadService.save_file` after a GPX upload is parsed. Carries `{trip_id, stats}` so `TripService.update_trip_stats` and the `AchievementEngine` can update denormalized stats and evaluate badge thresholds.
+-   **`MEMBER_ADDED`:** Emitted by `TripService.update_members` for each newly invited user. The event payload contains the new `member_ids` and the trip's stats so downstream consumers can credit the new members.
+-   **Subscribers:**
+        -   `UserStatsService` listens for both events (directly for GPX updates, indirectly via synchronous sync calls) to recalculate each affected user's totals.
+        -   `AchievementEngine` listens for both events and adds badge IDs to a user's document whenever thresholds are crossed.
+
 ## 7. Error Handling
 
 ### Frontend Error Handling
@@ -512,16 +578,17 @@ useEffect(() => {
 
 ### Current Implementation (Development)
 -   **CORS**: Allows all origins (`*`) - suitable for development only
--   **Authentication**: None implemented - all endpoints are publicly accessible
+-   **Authentication**: Implemented via OAuth2 password flow + JWT. Endpoints under `/api/auth` issue bearer tokens that the frontend stores in `localStorage` and attaches via Axios interceptors.
+-   **Authorization**: Owner-only routes (e.g., updating members) enforce checks server-side, but several read-only endpoints intentionally remain accessible without a token for demo purposes.
 -   **File Upload**: Limited validation on file types and sizes
 
 ### Production Recommendations
 -   Restrict CORS to specific frontend origins
--   Implement authentication (JWT, OAuth2, API keys)
+-   Require authentication for all endpoints that serve user-specific data (trips, files, stats) and consider expiring tokens or rotating secrets
 -   Add rate limiting on upload endpoints
 -   Validate and sanitize all file uploads (size limits, virus scanning)
 -   Use HTTPS for all communication
--   Implement user-based authorization (trips belong to users, users can only access their own data)
+-   Enforce user/role-based authorization on every route (e.g., list only trips the requester can see)
 -   Add input validation and sanitization for all user-provided text fields
 -   Secure MinIO with proper IAM policies and bucket policies
 
