@@ -44,24 +44,18 @@ docker-compose -f docker-compose.build.yml up -d --build
 ## 🎯 Tested Features
 
 ### ✅ Working Functionality:
-1. ✅ View interactive maps with multiple tile layers
-2. ✅ Upload GPX files to storage
-3. ✅ Upload images to storage
-4. ✅ List uploaded files
-5. ✅ Download files from storage
-6. ✅ Overlay GIS river data on maps
-7. ✅ Search and filter rivers
-8. ✅ Generate maps centered on specific coordinates
-9. ✅ Toggle river layers on/off
-10. ✅ View cached river GeoJSON data
+1. ✅ Multi-layer basemaps with river overlays and cached GeoJSON data
+2. ✅ GPX upload, parsing, auto-centering, and trip stats via `TripStatsHUD`
+3. ✅ Image uploads with EXIF extraction, gallery + timeline views, and note editing
+4. ✅ File management APIs (list, download, delete) across `gps-data`, `images`, `gps-analysis-data`, `gis-data`
+5. ✅ Map generation + GIS endpoints (search/filter rivers, generate GIS map payloads)
+6. ✅ Health-checked FastAPI backend with Swagger docs and MinIO console access
 
 ### ⚠️ Not Yet Implemented:
-- GPX track line visualization on maps
-- Image geotagging from EXIF data
-- Photo markers on maps
-- Linking images to GPS tracks
-- User authentication
-- File upload size limits
+- In-map GPX polyline styling driven by EXIF timestamps
+- Automatic photo markers/thumbnails directly on the Leaflet map
+- User authentication & authorization flows
+- File upload size enforcement + quota management
 
 ---
 
