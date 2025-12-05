@@ -3,10 +3,9 @@
 This module provides lightweight helpers used by the backend to construct
 Folium maps (returned as HTML fragments) for embedding in the frontend.
 
-Functions:
-- `generate_map`: Create a simple tiled Folium map and return its HTML.
-- `generate_gis_map`: Build a Folium map with GIS features loaded from
-    persistent storage (MinIO), optionally filtering rivers.
+The service provides two main functions: `generate_map` to create a simple
+tiled map, and `generate_gis_map` to build a map with GIS features loaded
+from persistent storage (MinIO).
 
 The implementations intentionally keep map generation synchronous and
 return the raw HTML representation from Folium's `_repr_html_()` method.
