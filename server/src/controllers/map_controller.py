@@ -1,4 +1,9 @@
-# server/src/controllers/map_controller.py
+"""Controller utilities for map and GIS endpoints.
+
+This module provides helpers used by the routing layer to generate HTML
+map fragments, list available map layers, and to load/simplify cached
+river GeoJSON data stored in object storage.
+"""
 
 from fastapi.responses import HTMLResponse
 import pickle
@@ -20,17 +25,33 @@ MAP_LAYERS = {
     },
 }
 
+
 def get_layers():
+    """Return a list of available map layer keys."""
     return list(MAP_LAYERS.keys())
 
+
 def generate_map_endpoint(layer: str, center=None):
+    """Generate an HTMLResponse for a rendered map layer.
+
+    Args:
+        layer (str): Layer key from ``MAP_LAYERS``.
+        center: Optional center coordinate passed to the renderer.
+
+    Returns:
+        HTMLResponse: Rendered HTML or a 404 HTMLResponse if layer missing.
+    """
     if layer not in MAP_LAYERS:
         return HTMLResponse(content="<h1>Layer not found</h1>", status_code=404)
     return HTMLResponse(content=generate_map(layer, center))
 
+
 def get_river_names():
-    """
-    If you want just the list of river names (no geometry).
+    """Return the list of river names available in the GIS dataset.
+
+    This function loads a cached pickle from object storage and returns
+    the valid keys. It is intended for lightweight enumeration (no
+    geometry is returned).
     """
     from src.utils.dbbutler.storage_manager import StorageManager
     from src.utils.dbbutler.minio_adapter import MinIOAdapter
@@ -49,21 +70,26 @@ def get_river_names():
     valid_keys = [k for k in river_shapes.keys() if isinstance(k, str) and k]
     return valid_keys
 
+
 def get_map_metadata():
+    """Return metadata about map layers and a default center coordinate."""
     return {
         "availableLayers": list(MAP_LAYERS.keys()),
         "defaultCenter": (24.7553, 121.2906)
     }
+
 
 # ----------------------
 # Caching + Simplify
 # ----------------------
 _river_data_cache = None  # in-memory cache
 
+
 def get_river_data_as_geojson() -> dict:
-    """
-    Return a JSON-friendly dict {riverName: geojsonObject}, 
-    caching in memory & simplifying geometry.
+    """Return a JSON-friendly mapping of riverName -> GeoJSON-like object.
+
+    The function uses an in-memory cache and simplifies geometries for
+    efficient delivery to the frontend.
     """
     global _river_data_cache
     if _river_data_cache is not None:

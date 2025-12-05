@@ -1,3 +1,10 @@
+"""Services for computing and syncing per-user activity statistics.
+
+This module exposes `UserStatsService` which aggregates trip records to
+compute cumulative statistics (distance, elevation, trips) and syncs them
+back to the `users` collection in MongoDB.
+"""
+
 from __future__ import annotations
 
 from typing import Dict, Iterable, Optional
@@ -15,7 +22,12 @@ DEFAULT_STATS = {
 
 
 class UserStatsService:
-    """Calculates and syncs user activity statistics based on trip data."""
+    """Calculates and syncs user activity statistics based on trip data.
+
+    Typical usage:
+        stats = user_stats_service.calculate_stats(user_id)
+        user_stats_service.sync_user_stats(user_id)
+    """
 
     def __init__(self) -> None:
         self._mongo = AdapterFactory.create_mongodb_adapter()
@@ -23,6 +35,17 @@ class UserStatsService:
         self._users = self._mongo.get_collection("users")
 
     def _user_query(self, user_id: str) -> Dict[str, ObjectId | str]:
+        """Build a MongoDB query for a user id.
+
+        Accepts either a string ObjectId or an application-level identifier
+        and returns a query dict safe to pass to collection methods.
+
+        Args:
+            user_id (str): The user identifier.
+
+        Returns:
+            Dict[str, ObjectId | str]: Query dict for `_id`.
+        """
         if not user_id:
             return {"_id": None}
         try:
@@ -31,6 +54,16 @@ class UserStatsService:
             return {"_id": user_id}
 
     def calculate_stats(self, user_id: Optional[str]) -> Dict[str, float | int]:
+        """Aggregate trip records to compute user statistics.
+
+        Args:
+            user_id (Optional[str]): User id to calculate stats for. If
+                falsy, returns the `DEFAULT_STATS` template.
+
+        Returns:
+            Dict[str, float|int]: Calculated totals for distance, elevation,
+                and trip count.
+        """
         if not user_id:
             return DEFAULT_STATS.copy()
 
@@ -68,6 +101,14 @@ class UserStatsService:
         }
 
     def sync_user_stats(self, user_id: Optional[str]) -> Dict[str, float | int]:
+        """Calculate and persist stats for a single user.
+
+        Args:
+            user_id (Optional[str]): The user id whose stats will be synced.
+
+        Returns:
+            Dict[str, float|int]: The computed stats.
+        """
         stats = self.calculate_stats(user_id)
         if not user_id:
             return stats
@@ -77,6 +118,11 @@ class UserStatsService:
         return stats
 
     def sync_multiple_users(self, user_ids: Iterable[Optional[str]]):
+        """Sync stats for multiple users, deduplicating input.
+
+        Args:
+            user_ids (Iterable[Optional[str]]): Iterable of user ids to sync.
+        """
         seen = set()
         for user_id in user_ids:
             if not user_id or user_id in seen:

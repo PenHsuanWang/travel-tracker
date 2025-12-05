@@ -1,4 +1,17 @@
-# server/src/utils/adapter_factory.py
+"""Adapter factory for creating configured storage adapters.
+
+This module centralizes initialization of storage adapters used by the
+backend (MinIO for object storage and MongoDB for document storage). The
+factory reads configuration from environment variables and performs
+minimal validation of required credentials.
+
+Environment variables consumed:
+    MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_SECURE
+    MONGODB_HOST, MONGODB_PORT, MONGODB_DATABASE, MONGODB_USERNAME, MONGODB_PASSWORD
+
+Only adapter construction is performed here; adapters returned are ready
+to be added to the project's `StorageManager` or used directly.
+"""
 
 import os
 from src.utils.dbbutler.minio_adapter import MinIOAdapter
@@ -9,18 +22,25 @@ load_dotenv()
 
 
 class AdapterFactory:
-    """
-    Factory class for creating storage adapters with proper configuration.
-    Centralizes adapter initialization to avoid code duplication.
+    """Factory for creating storage adapters with proper configuration.
+
+    This class centralizes adapter initialization to avoid duplication and
+    provides convenience methods to construct adapters configured from
+    environment variables.
     """
 
     @staticmethod
     def create_minio_adapter() -> MinIOAdapter:
-        """
-        Create and configure a MinIO adapter using environment variables.
+        """Create and configure a MinIO adapter.
 
-        :return: Configured MinIOAdapter instance.
-        :raises ValueError: If required environment variables are not set.
+        Reads MinIO configuration from environment variables and validates
+        that access credentials are present.
+
+        Returns:
+            MinIOAdapter: Configured MinIO adapter instance.
+
+        Raises:
+            ValueError: If ``MINIO_ACCESS_KEY`` or ``MINIO_SECRET_KEY`` are missing.
         """
         endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9000")
         access_key = os.getenv("MINIO_ACCESS_KEY")
@@ -41,10 +61,13 @@ class AdapterFactory:
     
     @staticmethod
     def create_mongodb_adapter() -> MongoDBAdapter:
-        """
-        Create and configure a MongoDB adapter using environment variables.
+        """Create and configure a MongoDB adapter.
 
-        :return: Configured MongoDBAdapter instance.
+        Reads MongoDB connection parameters from environment variables and
+        returns a ready-to-use adapter instance.
+
+        Returns:
+            MongoDBAdapter: Configured MongoDB adapter instance.
         """
         host = os.getenv("MONGODB_HOST", "localhost")
         port = int(os.getenv("MONGODB_PORT", "27017"))

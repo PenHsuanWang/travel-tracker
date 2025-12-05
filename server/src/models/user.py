@@ -1,18 +1,29 @@
+"""User-related Pydantic models used across the application.
+
+The module defines full user models, lightweight summaries for listing
+users, and DTOs used during registration and authentication flows.
+"""
+
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
+
 class User(BaseModel):
+    """Primary user model used for API request/response payloads.
+
+    The database layer may convert MongoDB ObjectId values to strings
+    before constructing this model; thus the `id` field is a plain
+    optional string for API compatibility.
+    """
     model_config = ConfigDict(populate_by_name=True)
 
-    # Use plain `id` field (string) for API compatibility. Database layer will
-    # convert ObjectId to string before constructing models.
     id: Optional[str] = Field(default=None)
     username: str
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
     
-    # New Fields
+    # Profile fields
     bio: Optional[str] = Field(default=None, max_length=500)
     location: Optional[str] = Field(default=None, max_length=100)
     avatar_url: Optional[str] = None
@@ -28,8 +39,9 @@ class User(BaseModel):
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+
 class UserSummary(BaseModel):
-    """Lightweight model for the Community Grid"""
+    """Lightweight model for user lists and summaries."""
     id: str
     username: str
     full_name: Optional[str] = None
@@ -39,8 +51,9 @@ class UserSummary(BaseModel):
     total_trips: int = 0
     created_at: Optional[datetime] = None
 
+
 class PublicUserProfile(BaseModel):
-    """Detailed model for Public Profile View"""
+    """Public profile representation returned by profile endpoints."""
     id: str
     username: str
     full_name: Optional[str] = None
@@ -56,19 +69,26 @@ class PublicUserProfile(BaseModel):
     earned_badges: List[str]
     
     # Content
-    # We use List[dict] or ForwardRef to avoid circular import with TripResponse
     pinned_trips: List[dict] = []
 
+
 class UserInDB(User):
+    """Internal model including DB-only fields like hashed password."""
     hashed_password: str
 
+
 class UserCreate(User):
+    """Payload used to register a new user."""
     password: str
     registration_key: str
 
+
 class Token(BaseModel):
+    """JWT token response model."""
     access_token: str
     token_type: str
 
+
 class TokenData(BaseModel):
+    """Token payload data used during token validation."""
     username: Optional[str] = None

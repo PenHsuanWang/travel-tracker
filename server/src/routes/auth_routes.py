@@ -1,3 +1,14 @@
+"""Authentication and user registration routes.
+
+Provides endpoints for obtaining access tokens and registering new users.
+Routes:
+    POST /login: Exchange username/password for a JWT access token.
+    POST /register: Create a new user account (requires registration key).
+
+These handlers interact directly with the users collection via a MongoDB
+adapter produced by :class:`src.utils.adapter_factory.AdapterFactory`.
+"""
+
 import os
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status

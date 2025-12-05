@@ -1,3 +1,11 @@
+"""Trip management routes.
+
+Expose CRUD endpoints for Trip resources and a convenience endpoint to
+create a trip while uploading a GPX file. Endpoints generally return
+Pydantic models from :mod:`src.models.trip` and require authentication
+for modifying operations.
+"""
+
 from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form, Depends
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel

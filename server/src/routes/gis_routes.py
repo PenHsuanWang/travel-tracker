@@ -1,4 +1,8 @@
-# server/src/routes/gis_routes.py
+"""GIS-related routes for river lists and precomputed GeoJSON data.
+
+Provides lightweight endpoints to enumerate river names and fetch cached
+GeoJSON feature collections that are consumed by the frontend map layers.
+"""
 
 from fastapi import APIRouter, HTTPException
 from typing import List
