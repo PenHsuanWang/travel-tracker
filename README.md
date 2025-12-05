@@ -11,10 +11,11 @@ Travel Tracker lets outdoor enthusiasts upload trips, visualize GPX tracks, over
 5. [Configuration](#configuration)
 6. [Database & Storage Setup](#database--storage-setup)
 7. [Testing](#testing)
-8. [Operations Reference](#operations-reference)
-9. [Troubleshooting](#troubleshooting)
-10. [Roadmap](#roadmap)
-11. [Contributing & License](#contributing--license)
+8. [API Documentation](#api-documentation)
+9. [Operations Reference](#operations-reference)
+10. [Troubleshooting](#troubleshooting)
+11. [Roadmap](#roadmap)
+12. [Contributing & License](#contributing--license)
 
 ## Features
 
@@ -222,6 +223,26 @@ When building Docker images, `REACT_APP_API_BASE_URL` is set to `/api` so Nginx 
    ```
 
 - **End-to-end / scripts**: see `verify-setup.sh`, `test_annotation_feature.sh`, `test_search_feature.sh`, `TEST_RESULTS_20251030.md` for curated scenarios.
+
+## API Documentation
+
+The backend API reference is automatically generated from docstrings using [Sphinx](https://www.sphinx-doc.org/).
+
+To build the documentation locally:
+
+1.  **Install dependencies:**
+
+    ```bash
+    pip install -r docs/requirements.txt
+    ```
+
+2.  **Build the HTML site:**
+
+    ```bash
+    python3 -m sphinx -b html docs docs/build
+    ```
+
+The generated documentation will be available in the `docs/build` directory. You can open `docs/build/index.html` in your browser to view it.
 
 ## Operations Reference
 
