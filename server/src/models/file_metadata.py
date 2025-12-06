@@ -10,15 +10,7 @@ from datetime import datetime, timezone
 
 
 class GPSData(BaseModel):
-    """GPS coordinates and auxiliary tags extracted from image EXIF.
-
-    Attributes:
-        latitude: Optional[float]
-        longitude: Optional[float]
-        altitude: Optional[float]
-        latitude_ref: Optional[str]
-        longitude_ref: Optional[str]
-    """
+    """GPS coordinates and auxiliary tags extracted from image EXIF."""
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     altitude: Optional[float] = None

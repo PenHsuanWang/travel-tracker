@@ -14,13 +14,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AnalysisResult:
-    """Container for analysis artifacts returned by :class:`GpxAnalysisService`.
-
-    Attributes:
-        analyzed_track (AnalyzedTrackObject): In-memory analyzed track object.
-        serialized_object (bytes): Pickled representation suitable for storage.
-        summary (Dict[str, Any]): Lightweight summary of track statistics.
-    """
+    """Container for analysis artifacts returned by :class:`GpxAnalysisService`."""
     analyzed_track: AnalyzedTrackObject
     serialized_object: bytes
     summary: Dict[str, Any]
