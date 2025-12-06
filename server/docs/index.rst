@@ -11,6 +11,8 @@ accurate API reference.
    :caption: Contents
 
    overview
+   api_workflows
+   backend_logic
    api/index
 
 
