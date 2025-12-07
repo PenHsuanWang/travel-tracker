@@ -1,3 +1,10 @@
+"""Service for managing photo notes and ordering metadata.
+
+This module provides a thin service used by endpoints that edit photo
+metadata (notes, titles, display order). It persists changes to the
+`file_metadata` collection via the project's storage adapters.
+"""
+
 from typing import Optional, Dict, Any
 import logging
 
@@ -6,8 +13,10 @@ from src.utils.dbbutler.storage_manager import StorageManager
 
 
 class PhotoNoteService:
-    """
-    Lightweight service to manage photo notes and order indexes stored in file_metadata.
+    """Lightweight service to manage photo notes and order indexes stored in `file_metadata`.
+
+    Methods return the normalized metadata document suitable for API
+    responses (datetime fields converted to ISO strings where applicable).
     """
 
     def __init__(self) -> None:
@@ -24,10 +33,16 @@ class PhotoNoteService:
         if not adapter:
             raise RuntimeError("MongoDB adapter not configured")
         return adapter.get_collection('file_metadata')
-
     def update_note(self, metadata_id: str, note: Optional[str], note_title: Optional[str]) -> Dict[str, Any]:
-        """
-        Update the note/note_title for a photo metadata entry.
+        """Update the note and optional title for a photo metadata entry.
+
+        Args:
+            metadata_id (str): The metadata document id to update.
+            note (Optional[str]): Free-form note text.
+            note_title (Optional[str]): Optional short title for the note.
+
+        Returns:
+            Dict[str, Any]: The updated metadata document.
         """
         collection = self._get_collection()
         update_doc: Dict[str, Any] = {"note": note}
@@ -40,8 +55,14 @@ class PhotoNoteService:
         return self._load_metadata(metadata_id)
 
     def update_order(self, metadata_id: str, order_index: int) -> Dict[str, Any]:
-        """
-        Update the order_index for a photo metadata entry.
+        """Update the display order index for a photo metadata entry.
+
+        Args:
+            metadata_id (str): The metadata document id to update.
+            order_index (int): Zero-based order index for display sorting.
+
+        Returns:
+            Dict[str, Any]: The updated metadata document.
         """
         collection = self._get_collection()
         result = collection.update_one({"_id": metadata_id}, {"$set": {"order_index": order_index}})
@@ -51,8 +72,16 @@ class PhotoNoteService:
         return self._load_metadata(metadata_id)
 
     def _load_metadata(self, metadata_id: str) -> Dict[str, Any]:
-        """
-        Load metadata and normalize datetime fields to isoformat for API responses.
+        """Load metadata and normalize datetime fields for API responses.
+
+        Converts datetime-like fields such as `created_at` and `captured_at`
+        to ISO 8601 strings for safe JSON serialization.
+
+        Args:
+            metadata_id (str): Identifier of the `file_metadata` document.
+
+        Returns:
+            Dict[str, Any]: Parsed and normalized metadata document.
         """
         adapter = self.storage_manager.adapters.get('mongodb')
         if not adapter:

@@ -1,4 +1,8 @@
-# utils/mongodb_adapter.py
+"""MongoDB storage adapter implementation for document storage.
+
+This adapter implements the `StorageAdapter` interface and provides a
+minimal set of document operations used by the StorageManager.
+"""
 
 from pymongo import MongoClient
 from typing import Mapping, Any, Optional, Dict, List
@@ -6,20 +10,17 @@ from src.utils.dbbutler.storage_adapter import StorageAdapter
 
 
 class MongoDBAdapter(StorageAdapter):
-    """
-    Adapter for MongoDB storage.
+    """Adapter backed by a MongoDB database.
+
+    Args:
+        host (str): Hostname of the MongoDB server.
+        port (int): Port of the MongoDB server.
+        db_name (str): Database name to use.
+        username (Optional[str]): Username for auth (optional).
+        password (Optional[str]): Password for auth (optional).
     """
 
     def __init__(self, host: str = 'localhost', port: int = 27017, db_name: str = 'mydatabase', username: Optional[str] = None, password: Optional[str] = None):
-        """
-        Initialize MongoDBAdapter.
-
-        :param host: The MongoDB server host.
-        :param port: The MongoDB server port.
-        :param db_name: The database name to use in MongoDB.
-        :param username: The username for authentication (optional).
-        :param password: The password for authentication (optional).
-        """
         if username and password:
             # When a root user is created via MONGO_INITDB_ROOT_USERNAME, it exists in the 'admin' database.
             # Specify authSource='admin' so authentication succeeds when connecting to the target database.
@@ -29,22 +30,11 @@ class MongoDBAdapter(StorageAdapter):
         self.db = self.client[db_name]
 
     def get_collection(self, collection_name: str):
-        """
-        Get the specified collection.
-
-        :param collection_name: The collection name to use in MongoDB.
-        :return: The collection object.
-        """
+        """Return a PyMongo collection object for `collection_name`."""
         return self.db[collection_name]
 
     def save_data(self, key: str, value: Mapping[str, Any], **kwargs) -> None:
-        """
-        Save data to MongoDB.
-
-        :param key: The key under which the data is to be saved.
-        :param value: The data to be saved.
-        :param kwargs: Additional parameters such as 'collection_name'.
-        """
+        """Persist `value` under `_id` == `key` in the named collection."""
         collection_name = kwargs.get('collection_name')
         if not collection_name:
             raise ValueError("Collection name is required")
@@ -52,13 +42,7 @@ class MongoDBAdapter(StorageAdapter):
         collection.update_one({'_id': key}, {'$set': value}, upsert=True)
 
     def load_data(self, key: str, **kwargs) -> Optional[Mapping[str, Any]]:
-        """
-        Load data from MongoDB.
-
-        :param key: The key for the data to be loaded.
-        :param kwargs: Additional parameters such as 'collection_name'.
-        :return: The loaded data.
-        """
+        """Load a document by `_id` from the named collection."""
         collection_name = kwargs.get('collection_name')
         if not collection_name:
             raise ValueError("Collection name is required")
@@ -67,13 +51,7 @@ class MongoDBAdapter(StorageAdapter):
         return document if document else None
 
     def delete_data(self, key: str, **kwargs) -> bool:
-        """
-        Delete data from MongoDB.
-
-        :param key: The key for the data to be deleted.
-        :param kwargs: Additional parameters such as 'collection_name'.
-        :return: True if deletion was successful, False otherwise.
-        """
+        """Delete a document by `_id` from the named collection."""
         collection_name = kwargs.get('collection_name')
         if not collection_name:
             raise ValueError("Collection name is required")
@@ -82,13 +60,7 @@ class MongoDBAdapter(StorageAdapter):
         return result.deleted_count > 0
 
     def save_batch_data(self, data: Dict[str, Mapping[str, Any]], **kwargs) -> bool:
-        """
-        Save multiple data items to MongoDB.
-
-        :param data: Dictionary of key-value pairs to be saved.
-        :param kwargs: Additional parameters such as 'collection_name'.
-        :return: True if saving was successful, False otherwise.
-        """
+        """Save multiple documents to the same named collection."""
         collection_name = kwargs.get('collection_name')
         if not collection_name:
             raise ValueError("Collection name is required")
@@ -102,26 +74,14 @@ class MongoDBAdapter(StorageAdapter):
             return False
 
     def load_batch_data(self, keys: List[str], **kwargs) -> Dict[str, Optional[Mapping[str, Any]]]:
-        """
-        Load multiple data items from MongoDB.
-
-        :param keys: List of keys for the data to be loaded.
-        :param kwargs: Additional parameters such as 'collection_name'.
-        :return: Dictionary of key-value pairs.
-        """
+        """Load multiple documents by `_id` from the named collection."""
         collection_name = kwargs.get('collection_name')
         if not collection_name:
             raise ValueError("Collection name is required")
         return {key: self.load_data(key, collection_name=collection_name) for key in keys}
 
     def delete_batch_data(self, keys: List[str], **kwargs) -> bool:
-        """
-        Delete multiple data items from MongoDB.
-
-        :param keys: List of keys for the data to be deleted.
-        :param kwargs: Additional parameters such as 'collection_name'.
-        :return: True if deletion was successful, False otherwise.
-        """
+        """Delete multiple documents by `_id` from the named collection."""
         collection_name = kwargs.get('collection_name')
         if not collection_name:
             raise ValueError("Collection name is required")
@@ -134,13 +94,7 @@ class MongoDBAdapter(StorageAdapter):
             return False
 
     def exists(self, key: str, **kwargs) -> bool:
-        """
-        Check if a key exists in MongoDB.
-
-        :param key: The key to check for existence.
-        :param kwargs: Additional parameters such as 'collection_name'.
-        :return: True if the key exists, False otherwise.
-        """
+        """Return True when a document with `_id` == `key` exists."""
         collection_name = kwargs.get('collection_name')
         if not collection_name:
             raise ValueError("Collection name is required")
@@ -148,13 +102,7 @@ class MongoDBAdapter(StorageAdapter):
         return collection.find_one({'_id': key}) is not None
 
     def list_keys(self, prefix: str = "", **kwargs) -> List[str]:
-        """
-        List keys in MongoDB matching a prefix.
-
-        :param prefix: The prefix to match keys.
-        :param kwargs: Additional parameters such as 'collection_name'.
-        :return: List of keys.
-        """
+        """Return list of `_id` values that start with `prefix`."""
         collection_name = kwargs.get('collection_name')
         if not collection_name:
             raise ValueError("Collection name is required")

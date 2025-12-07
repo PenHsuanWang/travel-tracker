@@ -1,4 +1,8 @@
-# src/routes/file_retrieval_routes.py
+"""File retrieval endpoints and GPX analysis access.
+
+Includes routes to list files, fetch metadata, retrieve raw files, and
+to obtain GPX analysis results (with a fallback to raw GPX parsing).
+"""
 
 import logging
 import xml.etree.ElementTree as ET

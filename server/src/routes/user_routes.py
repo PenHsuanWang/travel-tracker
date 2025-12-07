@@ -1,3 +1,9 @@
+"""User profile and user-listing endpoints.
+
+Endpoints provide authenticated user profile access, avatar upload,
+searching users, and public profile retrieval used by the frontend.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from typing import List, Optional
 from src.auth import get_current_user

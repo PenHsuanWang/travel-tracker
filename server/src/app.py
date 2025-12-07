@@ -1,4 +1,16 @@
-# server/src/app.py
+"""FastAPI application bootstrap for the Travel Tracker backend.
+
+This module configures middleware (CORS and GZip), registers API routers
+under the `/api/*` prefixes, and subscribes background event handlers
+used by the system (for example, gamification handlers listening to
+`GPX_PROCESSED` events).
+
+Environment variables:
+    ALLOWED_ORIGINS: Comma-separated list of allowed CORS origins (default: "*").
+
+Run as a script to start with Uvicorn in development:
+    python -m uvicorn src.app:app --port 5002
+"""
 
 from dotenv import load_dotenv
 import os

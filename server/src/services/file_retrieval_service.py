@@ -18,8 +18,12 @@ load_dotenv()
 
 
 class FileRetrievalService:
-    """
-    Service for listing and retrieving files from MinIO.
+    """Service for listing and retrieving files and metadata from storage.
+
+    This service provides utilities to list objects, merge metadata from
+    MongoDB, retrieve raw bytes for files, and assemble payloads used by
+    the API layer (including geotagged image summaries and GPX analysis
+    fallbacks).
     """
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -38,8 +42,14 @@ class FileRetrievalService:
             self.logger.warning("MongoDB adapter not initialized: %s", exc)
 
     def list_files(self, bucket_name: str, trip_id: Optional[str] = None) -> List[str]:
-        """
-        List object keys in the given bucket.
+        """List object keys in the given bucket.
+
+        Args:
+            bucket_name (str): Name of the MinIO bucket.
+            trip_id (Optional[str]): If provided, list keys under the trip prefix.
+
+        Returns:
+            List[str]: Object keys in the bucket (possibly filtered by trip).
         """
         if 'minio' not in self.storage_manager.adapters:
             raise RuntimeError("MinIO adapter not configured")
@@ -47,12 +57,19 @@ class FileRetrievalService:
         return self.storage_manager.list_keys('minio', prefix=prefix, bucket=bucket_name)
 
     def list_files_with_metadata(self, bucket_name: str, trip_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """
-        List files and merge in metadata when available.
+        """List files and merge in metadata when available.
 
-        When trip_id is provided, only files explicitly associated with that
-        trip are returned. Objects from other trips (or orphan objects with no
-        metadata) are intentionally hidden to prevent cross-trip leakage.
+        When ``trip_id`` is provided, only files explicitly associated with
+        that trip are returned. Objects from other trips (or orphan objects
+        with no metadata) are intentionally hidden to prevent cross-trip leakage.
+
+        Args:
+            bucket_name (str): MinIO bucket name.
+            trip_id (Optional[str]): Optional trip id to scope results.
+
+        Returns:
+            List[Dict[str, Any]]: Entries describing object_key, metadata_id,
+            and included metadata where available.
         """
         if 'minio' not in self.storage_manager.adapters:
             raise RuntimeError("MinIO adapter not configured")
@@ -133,12 +150,17 @@ class FileRetrievalService:
         bbox: Optional[Dict[str, float]] = None,
         trip_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """
-        List images with GPS coordinates (geotagged images).
-        
-        :param bucket_name: The bucket name (default: 'images')
-        :param bbox: Bounding box filter {minLon, minLat, maxLon, maxLat} (optional)
-        :return: List of geotagged image data with thumbnail URLs
+        """List images that contain GPS coordinates and return thumbnails.
+
+        Args:
+            bucket_name (str): Bucket name (default: "images").
+            bbox (Optional[Dict[str, float]]): Bounding box filter with keys
+                ``minLon``, ``minLat``, ``maxLon``, ``maxLat``.
+            trip_id (Optional[str]): Trip id to scope results.
+
+        Returns:
+            List[Dict[str, Any]]: Geotagged image entries with coordinates and
+            thumbnail URLs.
         """
         try:
             mongodb_adapter = self.storage_manager.adapters.get('mongodb')
@@ -221,12 +243,17 @@ class FileRetrievalService:
             return []
 
     def _generate_thumbnail_url(self, object_key: str, bucket_name: str) -> str:
-        """
-        Generate a thumbnail URL for an image.
-        
-        :param object_key: The object key in MinIO
-        :param bucket_name: The bucket name
-        :return: URL string (presigned URL or direct URL)
+        """Generate a thumbnail URL for an image.
+
+        This currently returns a direct API path; in future it may return
+        a presigned URL or a thumbnail service URL.
+
+        Args:
+            object_key (str): The object key in MinIO.
+            bucket_name (str): The bucket name.
+
+        Returns:
+            str: URL string for the image/thumbnail.
         """
         try:
             from urllib.parse import quote
@@ -245,9 +272,14 @@ class FileRetrievalService:
             return f"/api/files/{quote(object_key, safe='/')}?bucket={bucket_name}"
 
     def get_file_bytes(self, bucket_name: str, filename: str) -> Optional[bytes]:
-        """
-        Retrieve the raw bytes of a file from MinIO.
-        Returns None if file doesn't exist.
+        """Retrieve raw bytes for a named object from MinIO.
+
+        Args:
+            bucket_name (str): MinIO bucket name.
+            filename (str): Object key.
+
+        Returns:
+            Optional[bytes]: Raw bytes or ``None`` if not found.
         """
         # Check if the file exists in the bucket.
         exists = self.storage_manager.exists('minio', filename, bucket=bucket_name)

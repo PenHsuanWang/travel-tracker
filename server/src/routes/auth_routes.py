@@ -1,3 +1,10 @@
+"""Authentication and user registration routes.
+
+This module provides endpoints for obtaining access tokens (POST /login) and
+registering new users (POST /register). These handlers interact directly
+with the users collection via a MongoDB adapter.
+"""
+
 import os
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status

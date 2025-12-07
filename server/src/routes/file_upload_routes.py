@@ -1,4 +1,8 @@
-# src/routes/file_upload_routes.py
+"""File upload endpoints for images, GPX and other asset types.
+
+Provides endpoints to upload files, retrieve metadata, and delete stored
+objects. Uploads are processed by :class:`src.controllers.file_upload_controller.FileUploadController`.
+"""
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Depends
 from pydantic import BaseModel

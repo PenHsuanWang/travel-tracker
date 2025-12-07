@@ -1,4 +1,8 @@
-# src/models/file_metadata.py
+"""Pydantic models and schemas for file metadata and handler results.
+
+These models represent persisted file metadata records and the lightweight
+payload returned by file handler implementations.
+"""
 
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
@@ -6,7 +10,7 @@ from datetime import datetime, timezone
 
 
 class GPSData(BaseModel):
-    """GPS coordinates and metadata"""
+    """GPS coordinates and auxiliary tags extracted from image EXIF."""
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     altitude: Optional[float] = None
@@ -15,7 +19,12 @@ class GPSData(BaseModel):
 
 
 class FileMetadata(BaseModel):
-    """Metadata for uploaded files"""
+    """Metadata for uploaded files as stored in `file_metadata` collection.
+
+    Notes:
+        - The `id` field maps to the MongoDB `_id` using `Field(..., alias='_id')`.
+        - Datetime fields are UTC-aware and stored as `datetime` where present.
+    """
     id: str = Field(..., alias='_id')
     object_key: str
     bucket: str
@@ -50,7 +59,11 @@ class FileMetadata(BaseModel):
 
 
 class HandlerResult(BaseModel):
-    """Result returned by file handlers"""
+    """Result returned by file handlers used during upload processing.
+
+    The handler result is a compact representation of the stored object and
+    any analysis status produced by post-processing hooks.
+    """
     object_key: str
     bucket: str
     filename: str

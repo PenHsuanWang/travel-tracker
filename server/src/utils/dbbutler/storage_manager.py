@@ -1,36 +1,39 @@
-# utils/storage_manager.py
+"""Manager for coordinating multiple storage adapters.
+
+The `StorageManager` provides a simple façade around multiple
+`StorageAdapter` implementations (MinIO, MongoDB, Redis, etc.). It is used
+by services that need to read/write data to one or more configured storage
+backends.
+"""
 
 from typing import Dict, Any, Optional, Mapping
 from src.utils.dbbutler.storage_adapter import StorageAdapter
 
 
 class StorageManager:
-    """
-    Manager for coordinating multiple storage adapters.
+    """Coordinator for registered storage adapters.
+
+    Adapters are registered with `add_adapter(name, adapter)` and then
+    addressed by name for load/save/delete operations. When `adapter_name`
+    is omitted in save/delete operations the manager will operate across
+    all registered adapters (backward compatibility behavior).
     """
 
     def __init__(self) -> None:
-        """
-        Initialize StorageManager.
-        """
+        """Initialize an empty StorageManager."""
         self.adapters: Dict[str, StorageAdapter] = {}
 
     def add_adapter(self, name: str, adapter: StorageAdapter) -> None:
-        """
-        Add a storage adapter.
-
-        :param name: The name of the adapter.
-        :param adapter: The storage adapter instance.
-        """
+        """Register a `StorageAdapter` instance under `name`."""
         self.adapters[name] = adapter
 
     def save_data(self, key: str, value: Any, adapter_name: str = None, **kwargs) -> None:
-        """
-        Save data to specific adapter or all adapters.
+        """Save data to a specific adapter or to all adapters.
 
-        :param key: The key under which the data is to be saved.
-        :param value: The data to be saved.
-        :param adapter_name: If provided, save to specific adapter only.
+        Args:
+            key (str): Logical key to store the value under.
+            value (Any): The data to persist.
+            adapter_name (str|None): If provided, target only this adapter.
         """
         if adapter_name:
             # Save to specific adapter
@@ -45,12 +48,9 @@ class StorageManager:
                 adapter.save_data(key, value, **kwargs)
 
     def load_data(self, name: str, key: str, **kwargs) -> Optional[Any]:
-        """
-        Load data from a specific storage adapter.
+        """Load data from a named adapter.
 
-        :param name: The name of the adapter to load data from.
-        :param key: The key for the data to be loaded.
-        :return: The loaded data.
+        Returns `None` when the adapter is not present or the key is missing.
         """
         adapter = self.adapters.get(name)
         if adapter:
@@ -58,12 +58,10 @@ class StorageManager:
         return None
 
     def delete_data(self, key: str, adapter_name: str = None, **kwargs) -> bool:
-        """
-        Delete data from a specific adapter or all configured adapters.
+        """Delete data from a specific adapter or from all adapters.
 
-        :param key: The key for the data to be deleted.
-        :param adapter_name: If provided, delete from this adapter only.
-        :return: True if any adapter reports a successful deletion, False otherwise.
+        Returns True when any targeted adapter reports a deletion as
+        successful.
         """
         if adapter_name:
             adapter = self.adapters.get(adapter_name)
@@ -78,21 +76,14 @@ class StorageManager:
         return any(bool(result) for result in results)
 
     def save_batch_data(self, data: dict, **kwargs) -> None:
-        """
-        Save multiple data items to all configured storage adapters.
-
-        :param data: Dictionary of key-value pairs to be saved.
-        """
+        """Save multiple key/value pairs to all configured adapters."""
         for adapter in self.adapters.values():
             adapter.save_batch_data(data, **kwargs)
 
     def load_batch_data(self, name: str, keys: list, **kwargs) -> Mapping[str, Optional[Any]]:
-        """
-        Load multiple data items from a specific storage adapter.
+        """Load multiple keys from a named adapter.
 
-        :param name: The name of the adapter to load data from.
-        :param keys: List of keys for the data to be loaded.
-        :return: Dictionary of key-value pairs.
+        Returns a mapping of key -> value. Missing keys map to `None`.
         """
         adapter = self.adapters.get(name)
         if adapter:
@@ -100,35 +91,19 @@ class StorageManager:
         return {}
 
     def delete_batch_data(self, keys: list, **kwargs) -> None:
-        """
-        Delete multiple data items from all configured storage adapters.
-
-        :param keys: List of keys for the data to be deleted.
-        """
+        """Delete multiple keys from all configured adapters."""
         for adapter in self.adapters.values():
             adapter.delete_batch_data(keys, **kwargs)
 
     def exists(self, name: str, key: str, **kwargs) -> bool:
-        """
-        Check if a key exists in a specific storage adapter.
-
-        :param name: The name of the adapter to check.
-        :param key: The key to check for existence.
-        :return: True if the key exists, False otherwise.
-        """
+        """Check for the existence of `key` in the named adapter."""
         adapter = self.adapters.get(name)
         if adapter:
             return adapter.exists(key, **kwargs)
         return False
 
     def list_keys(self, name: str, prefix: str = "", **kwargs) -> list:
-        """
-        List keys in a specific storage adapter matching a prefix.
-
-        :param name: The name of the adapter to list keys from.
-        :param prefix: The prefix to match keys.
-        :return: List of keys.
-        """
+        """List keys in a named adapter that match `prefix`."""
         adapter = self.adapters.get(name)
         if adapter:
             return adapter.list_keys(prefix, **kwargs)
