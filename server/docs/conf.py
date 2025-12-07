@@ -14,6 +14,7 @@ sys.path.insert(0, str(SERVER_DIR))
 project = "Travel Tracker Backend"
 author = "PenHsuan Wang"
 release = os.getenv("BACKEND_VERSION", "0.1.0")
+copyright = f"{datetime.now().year}, {author}"
 
 # See https://www.sphinx-doc.org/en/master/usage/extensions/index.html
 extensions = [
