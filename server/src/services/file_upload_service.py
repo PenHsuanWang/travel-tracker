@@ -13,8 +13,15 @@ from src.events.event_bus import EventBus
 
 
 class FileUploadService:
-    """
-    Service to handle file uploads and metadata persistence.
+    """Service for handling file uploads and persisting metadata.
+
+    This service selects an appropriate data handler based on the uploaded
+    file extension (via ``HandlerFactory``), coordinates storage of file
+    bytes (MinIO) and metadata records (MongoDB), and triggers downstream
+    processing such as GPX analysis and trip auto-fill when applicable.
+
+    Only docstring/comments are modified in this module; no runtime logic
+    is changed by these edits.
     """
     
     def __init__(self):
@@ -39,8 +46,18 @@ class FileUploadService:
     # --- GPX date helpers ---
     @staticmethod
     def _parse_iso_datetime(value: Optional[Any]) -> Optional[datetime]:
-        """
-        Parse an ISO-like timestamp into a datetime. Returns None for invalid inputs.
+        """Parse an ISO-like timestamp into a :class:`datetime`.
+
+        Accepts ISO-formatted strings (with optional ``Z`` timezone suffix)
+        or actual :class:`datetime` objects. Returns ``None`` if the value
+        cannot be parsed.
+
+        Args:
+            value (Optional[Any]): ISO timestamp string or ``datetime``.
+
+        Returns:
+            Optional[datetime]: Parsed :class:`datetime` in local representation
+            or ``None`` when parsing fails.
         """
         if not value:
             return None
@@ -61,9 +78,20 @@ class FileUploadService:
 
     @classmethod
     def _extract_gpx_bounds(cls, track_summary: Optional[Dict[str, Any]]) -> Tuple[Optional[datetime], Optional[datetime], bool]:
-        """
-        Extract start/end timestamps from a track summary produced by GPX analysis.
-        Returns (start, end, metadata_extracted).
+        """Extract start/end datetimes from a GPX track summary.
+
+        The ``track_summary`` is expected to be a mapping potentially containing
+        ``start_time`` and ``end_time`` keys. This helper attempts to parse
+        those fields into :class:`datetime` objects.
+
+        Args:
+            track_summary (Optional[Dict[str, Any]]): GPX track summary produced
+                by the analysis pipeline.
+
+        Returns:
+            Tuple[Optional[datetime], Optional[datetime], bool]: ``(start, end, metadata_extracted)``
+            where ``start`` and ``end`` are parsed datetimes (or ``None``), and
+            ``metadata_extracted`` indicates whether any timestamp was found.
         """
         if not track_summary or not isinstance(track_summary, dict):
             return None, None, False
@@ -86,9 +114,22 @@ class FileUploadService:
         track_summary: Optional[Dict[str, Any]],
         metadata_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        If the trip has no dates set, populate them from GPX timestamps.
-        Returns details for the API response.
+        """Attempt to auto-fill a trip's date range from GPX timestamps.
+
+        When a GPX track provides start/end timestamps, this helper will
+        compute activity start/end dates (floored to midnight) and attempt
+        to update the trip document if its ``start_date`` or ``end_date``
+        are not already set. The function returns a diagnostic payload that
+        can be included in API responses.
+
+        Args:
+            trip_id (str): Trip identifier to update.
+            track_summary (Optional[Dict[str, Any]]): GPX analysis summary.
+            metadata_id (Optional[str]): Optional metadata id used for logging.
+
+        Returns:
+            Dict[str, Any]: Details about whether update was applied, reasons
+            for failure, and any updated trip representation.
         """
         start_dt, end_dt, metadata_extracted = self._extract_gpx_bounds(track_summary)
         result: Dict[str, Any] = {
@@ -152,13 +193,26 @@ class FileUploadService:
     
     @classmethod
     def save_file(cls, file: UploadFile, uploader_id: Optional[str] = None, trip_id: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Save the uploaded file using the appropriate handler and persist metadata.
+        """Save an uploaded file and persist its metadata.
 
-        :param file: The uploaded file.
-        :param uploader_id: Optional ID of the user uploading the file.
-        :param trip_id: Optional ID of the trip this file belongs to.
-        :return: Dictionary containing file info and metadata.
+        The method selects a handler based on the file extension, stores the
+        file contents via the handler (which typically writes to MinIO), and
+        persists a ``file_metadata`` document in MongoDB. For GPX files
+        associated with a ``trip_id``, the method enforces a single GPX per
+        trip, may auto-fill trip dates from track timestamps, and publishes
+        a ``GPX_PROCESSED`` event when analysis is available.
+
+        Args:
+            file (UploadFile): The uploaded file object received from FastAPI.
+            uploader_id (Optional[str]): ID of the uploading user.
+            trip_id (Optional[str]): Trip ID to associate with the upload.
+
+        Returns:
+            Dict[str, Any]: Payload describing saved metadata, analysis results,
+            and any auto-filled trip information.
+
+        Raises:
+            ValueError: If a GPX file is uploaded without a ``trip_id``.
         """
         service = cls()
         file_extension = file.filename.split('.')[-1].lower()
@@ -307,11 +361,14 @@ class FileUploadService:
     
     @classmethod
     def get_file_metadata(cls, metadata_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Retrieve metadata for a file.
-        
-        :param metadata_id: The metadata ID (object key).
-        :return: File metadata or None.
+        """Retrieve persisted metadata for a file by its metadata id.
+
+        Args:
+            metadata_id (str): The metadata document id / object key.
+
+        Returns:
+            Optional[Dict[str, Any]]: The metadata document loaded from MongoDB,
+            or ``None`` if it does not exist.
         """
         service = cls()
         metadata = service.storage_manager.load_data(
@@ -323,12 +380,24 @@ class FileUploadService:
     
     @classmethod
     def delete_file(cls, filename: str, bucket: str = "images") -> Dict[str, Any]:
-        """
-        Delete a file from storage and its metadata from database.
-        
-        :param filename: The filename/object key to delete.
-        :param bucket: The bucket name.
-        :return: Success message with details.
+        """Delete an object from object storage and remove its metadata.
+
+        The method attempts to delete the object from MinIO (if the MinIO
+        adapter is available) and then remove the corresponding
+        ``file_metadata`` document from MongoDB. It returns a summary of
+        deleted items and any warnings encountered. If no deletion succeeded
+        this method raises an HTTPException with status 404.
+
+        Args:
+            filename (str): Object key / metadata document id to delete.
+            bucket (str): MinIO bucket name (default: ``"images"``).
+
+        Returns:
+            Dict[str, Any]: Summary with ``success``, ``deleted``, ``metadata``,
+            and optional ``warnings``.
+
+        Raises:
+            HTTPException: When deletion fails for all backends (404).
         """
         service = cls()
         deleted_items = []

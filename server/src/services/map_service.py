@@ -1,4 +1,15 @@
-# server/src/services/map_service.py
+"""Map service helpers for generating Folium-based HTML maps.
+
+This module provides lightweight helpers used by the backend to construct
+Folium maps (returned as HTML fragments) for embedding in the frontend.
+
+The service provides two main functions: `generate_map` to create a simple
+tiled map, and `generate_gis_map` to build a map with GIS features loaded
+from persistent storage (MinIO).
+
+The implementations intentionally keep map generation synchronous and
+return the raw HTML representation from Folium's `_repr_html_()` method.
+"""
 
 import folium
 import pickle
@@ -20,6 +31,19 @@ MAP_LAYERS = {
 }
 
 def generate_map(layer: str, center=None):
+    """Generate a simple tiled Folium map and return HTML.
+
+    Args:
+        layer (str): Key of the tile layer to use from `MAP_LAYERS`.
+        center (tuple|None): (lat, lon) center for the map. Defaults to
+            Taiwan coordinates (24.7553, 121.2906) when `None`.
+
+    Returns:
+        str: HTML fragment representing the rendered Folium map.
+
+    Raises:
+        Exception: If the requested `layer` is not found in `MAP_LAYERS`.
+    """
     if center is None:
         center = (24.7553, 121.2906)
 
@@ -49,9 +73,25 @@ def generate_map(layer: str, center=None):
     return m._repr_html_()
 
 def generate_gis_map(layer: str, center=None, selected_rivers=None):
-    """
-    If you still want the old approach: 
-    Return a Folium map with selected rivers directly in HTML.
+    """Generate a GIS Folium map populated with river geometries from storage.
+
+    This function loads pre-serialized river geometries from object storage
+    (MinIO) and injects them as GeoJSON layers into a Folium map. It is
+    intended for server-side rendering of GIS previews and returns the HTML
+    representation of the map.
+
+    Args:
+        layer (str): Key of the tile layer to use from `MAP_LAYERS`.
+        center (tuple|None): (lat, lon) center for the map. Defaults to
+            Taiwan coordinates (24.7553, 121.2906) when `None`.
+        selected_rivers (Iterable[str]|None): If provided, only the rivers
+            with names in this iterable will be added to the map.
+
+    Returns:
+        str: HTML fragment representing the rendered Folium map with GIS layers.
+
+    Raises:
+        Exception: If loading or deserializing GIS data fails.
     """
     if center is None:
         center = (24.7553, 121.2906)

@@ -11,10 +11,11 @@ Travel Tracker lets outdoor enthusiasts upload trips, visualize GPX tracks, over
 5. [Configuration](#configuration)
 6. [Database & Storage Setup](#database--storage-setup)
 7. [Testing](#testing)
-8. [Operations Reference](#operations-reference)
-9. [Troubleshooting](#troubleshooting)
-10. [Roadmap](#roadmap)
-11. [Contributing & License](#contributing--license)
+8. [API Documentation](#api-documentation)
+9. [Operations Reference](#operations-reference)
+10. [Troubleshooting](#troubleshooting)
+11. [Roadmap](#roadmap)
+12. [Contributing & License](#contributing--license)
 
 ## Features
 
@@ -222,6 +223,44 @@ When building Docker images, `REACT_APP_API_BASE_URL` is set to `/api` so Nginx 
    ```
 
 - **End-to-end / scripts**: see `verify-setup.sh`, `test_annotation_feature.sh`, `test_search_feature.sh`, `TEST_RESULTS_20251030.md` for curated scenarios.
+
+## API Documentation
+
+The backend API reference is automatically generated from docstrings using [Sphinx](https://www.sphinx-doc.org/). With the provided `Makefile` in `server/docs`, you can easily build and clean the documentation.
+
+### Building the Documentation
+It is recommended to use a virtual environment to build the documentation.
+
+1.  **Create and activate a virtual environment:**
+    ```bash
+    python3 -m venv server/venv
+    source server/venv/bin/activate
+    ```
+
+2.  **Install dependencies:**
+    From the root of the project, run:
+    ```bash
+    pip install -r server/requirements.txt
+    pip install -r server/docs/requirements.txt
+    ```
+
+3.  **Build the HTML site:**
+    From the root of the project, run:
+    ```bash
+    make -C server/docs html
+    ```
+
+The generated documentation will be available in the `server/docs/build/html` directory. You can open `server/docs/build/html/index.html` in your browser to view it.
+
+### Cleaning the Documentation
+
+To remove the generated documentation files, run:
+
+```bash
+make -C server/docs clean
+```
+
+This will delete the `server/docs/build` directory, ensuring your next build is a fresh one.
 
 ## Operations Reference
 

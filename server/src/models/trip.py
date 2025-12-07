@@ -1,12 +1,17 @@
+"""Pydantic models representing trips and related DTOs.
+
+These models are used by the trips API and by internal services that
+manipulate trip documents. They are intentionally lightweight and include
+example schema data for documentation generation.
+"""
+
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 import uuid
-# We use a forward reference or conditional import to avoid circular dependency if user.py ever imports trip.py
-# But for now it seems safe.
-# Actually, to be safe, let's define UserSummary here or use a generic dict, 
-# but importing is better for docs.
-# Let's try importing.
+
+# We use a forward reference or conditional import to avoid circular
+# dependency if `user.py` ever imports `trip.py`.
 try:
     from src.models.user import UserSummary
 except ImportError:
@@ -16,13 +21,24 @@ except ImportError:
         username: str
         avatar_url: Optional[str] = None
 
+
 class TripStats(BaseModel):
+    """Aggregated statistics for a trip."""
     distance_km: float = 0.0
     elevation_gain_m: float = 0.0
     moving_time_sec: float = 0.0
     max_altitude_m: float = 0.0
 
+
 class Trip(BaseModel):
+    """Primary trip model stored in the `trips` collection.
+
+    Fields:
+        id: UUID-like string identifier.
+        name: Human-friendly trip title.
+        start_date/end_date: Optional planning dates for the trip.
+        stats: Aggregated trip metrics (distance, elevation, etc.).
+    """
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     start_date: Optional[datetime] = None
@@ -54,10 +70,14 @@ class Trip(BaseModel):
             }
         }
 
+
 class TripResponse(Trip):
+    """Trip representation returned by the API including related users."""
     owner: Optional[UserSummary] = None
     members: List[UserSummary] = []
 
+
 class TripMembersUpdate(BaseModel):
+    """Payload to update trip member list."""
     member_ids: List[str]
 

@@ -1,4 +1,8 @@
-# utils/minio_adapter.py
+"""MinIO storage adapter implementation for the project's storage facade.
+
+This adapter exposes the `StorageAdapter` interface and performs object
+operations against a MinIO (S3-compatible) server.
+"""
 
 from minio import Minio
 from minio.error import S3Error
@@ -7,25 +11,20 @@ from src.utils.dbbutler.storage_adapter import StorageAdapter
 
 
 class MinIOAdapter(StorageAdapter):
-    def __init__(self, endpoint: str, access_key: str, secret_key: str, secure: bool = True):
-        """
-        Initialize the MinIO client.
+    """StorageAdapter implementation backed by MinIO.
 
-        :param endpoint: MinIO server URL.
-        :param access_key: Access key for MinIO.
-        :param secret_key: Secret key for MinIO.
-        :param secure: Flag to indicate if the connection is secure (HTTPS).
-        """
+    Args:
+        endpoint (str): MinIO server URL (host:port or full URL).
+        access_key (str): MinIO access key.
+        secret_key (str): MinIO secret key.
+        secure (bool): Use HTTPS if True.
+    """
+
+    def __init__(self, endpoint: str, access_key: str, secret_key: str, secure: bool = True):
         self.client = Minio(endpoint, access_key=access_key, secret_key=secret_key, secure=secure)
 
     def save_data(self, key: str, value: bytes, **kwargs) -> None:
-        """
-        Store data in MinIO bucket.
-
-        :param key: The object name under which the data should be stored.
-        :param value: The data to store. It must be bytes.
-        :param kwargs: Additional parameters such as 'bucket'.
-        """
+        """Store `value` bytes in the named MinIO `bucket` under `key`."""
         bucket = kwargs.get('bucket')
         if not bucket:
             raise ValueError("Bucket name is required")
@@ -46,13 +45,7 @@ class MinIOAdapter(StorageAdapter):
             raise
 
     def load_data(self, key: str, **kwargs) -> bytes:
-        """
-        Retrieve data from MinIO bucket.
-
-        :param key: The object name of the data to retrieve.
-        :param kwargs: Additional parameters such as 'bucket'.
-        :return: The data as bytes.
-        """
+        """Retrieve raw bytes for `key` from the provided `bucket`."""
         bucket = kwargs.get('bucket')
         if not bucket:
             raise ValueError("Bucket name is required")
@@ -69,12 +62,7 @@ class MinIOAdapter(StorageAdapter):
             raise
 
     def delete_data(self, key: str, **kwargs) -> None:
-        """
-        Delete data from MinIO bucket.
-
-        :param key: The object name of the data to delete.
-        :param kwargs: Additional parameters such as 'bucket'.
-        """
+        """Remove the object identified by `key` from `bucket`."""
         bucket = kwargs.get('bucket')
         if not bucket:
             raise ValueError("Bucket name is required")
@@ -87,43 +75,21 @@ class MinIOAdapter(StorageAdapter):
             raise
 
     def save_batch_data(self, data: dict, **kwargs) -> None:
-        """
-        Store multiple data items in MinIO bucket.
-
-        :param data: Dictionary of key-value pairs to be stored.
-        :param kwargs: Additional parameters such as 'bucket'.
-        """
+        """Store multiple key->bytes pairs into `bucket`."""
         for key, value in data.items():
             self.save_data(key, value, **kwargs)
 
     def load_batch_data(self, keys: list, **kwargs) -> dict:
-        """
-        Retrieve multiple data items from MinIO bucket.
-
-        :param keys: List of keys for the data to be loaded.
-        :param kwargs: Additional parameters such as 'bucket'.
-        :return: Dictionary of key-value pairs.
-        """
+        """Retrieve multiple objects and return a dict mapping key->bytes."""
         return {key: self.load_data(key, **kwargs) for key in keys}
 
     def delete_batch_data(self, keys: list, **kwargs) -> None:
-        """
-        Delete multiple data items from MinIO bucket.
-
-        :param keys: List of keys for the data to be deleted.
-        :param kwargs: Additional parameters such as 'bucket'.
-        """
+        """Delete multiple keys from `bucket`."""
         for key in keys:
             self.delete_data(key, **kwargs)
 
     def exists(self, key: str, **kwargs) -> bool:
-        """
-        Check if an object exists in MinIO bucket.
-
-        :param key: The object name to check.
-        :param kwargs: Additional parameters such as 'bucket'.
-        :return: True if the object exists, False otherwise.
-        """
+        """Return True if `key` exists in `bucket`, False otherwise."""
         bucket = kwargs.get('bucket')
         if not bucket:
             raise ValueError("Bucket name is required")
@@ -137,13 +103,7 @@ class MinIOAdapter(StorageAdapter):
             return False
 
     def list_keys(self, prefix: str = "", **kwargs) -> list:
-        """
-        Retrieve a list of object names from MinIO bucket matching a prefix.
-
-        :param prefix: The prefix to match.
-        :param kwargs: Additional parameters such as 'bucket'.
-        :return: A list of object names.
-        """
+        """List object names in `bucket` matching `prefix`."""
         bucket = kwargs.get('bucket')
         if not bucket:
             raise ValueError("Bucket name is required")

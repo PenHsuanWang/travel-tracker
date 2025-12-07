@@ -9,8 +9,11 @@ from bson import ObjectId
 import logging
 
 class TripService:
-    """
-    Service to handle trip operations.
+    """Service for managing Trip lifecycle and denormalized stats.
+
+    Responsibilities include creating, updating and deleting trips, updating
+    trip statistics, and notifying downstream systems (via EventBus) when
+    membership or GPX processing events occur.
     """
     
     def __init__(self):
@@ -26,8 +29,13 @@ class TripService:
         self.collection_name = 'trips'
 
     def create_trip(self, trip_data: Trip) -> Trip:
-        """
-        Create a new trip.
+        """Persist a new trip document.
+
+        Args:
+            trip_data (Trip): Trip model to persist.
+
+        Returns:
+            Trip: The persisted trip model.
         """
         self.storage_manager.save_data(
             trip_data.id,
@@ -39,8 +47,14 @@ class TripService:
         return trip_data
 
     def get_trips(self, user_id: Optional[str] = None) -> List[TripResponse]:
-        """
-        Get all trips. Optionally filter by user_id (membership).
+        """Retrieve trips, optionally filtering by membership.
+
+        Args:
+            user_id (Optional[str]): If provided, only trips where the user is
+                a member will be returned.
+
+        Returns:
+            List[TripResponse]: List of trip responses with owner info populated.
         """
         adapter = self.storage_manager.adapters.get('mongodb')
         if not adapter:
@@ -99,8 +113,13 @@ class TripService:
         return result
 
     def get_trip(self, trip_id: str) -> Optional[TripResponse]:
-        """
-        Get a specific trip by ID with owner and members populated.
+        """Load a single trip by id and populate owner/members summaries.
+
+        Args:
+            trip_id (str): Trip identifier.
+
+        Returns:
+            Optional[TripResponse]: TripResponse or ``None`` if not found.
         """
         data = self.storage_manager.load_data(
             'mongodb',
@@ -155,8 +174,14 @@ class TripService:
         return trip_response
 
     def update_trip(self, trip_id: str, update_data: Dict[str, Any]) -> Optional[Trip]:
-        """
-        Update a trip.
+        """Update a trip document with allowed fields.
+
+        Args:
+            trip_id (str): Trip identifier.
+            update_data (Dict[str, Any]): Mapping of fields to update.
+
+        Returns:
+            Optional[Trip]: Updated trip model or ``None`` if not found.
         """
         current_trip = self.get_trip(trip_id)
         if not current_trip:
@@ -183,8 +208,19 @@ class TripService:
         return updated_trip
 
     def update_members(self, trip_id: str, member_ids: List[str], current_user_id: str) -> Optional[Trip]:
-        """
-        Update trip members. Only owner can do this.
+        """Update trip membership list (owner-only operation).
+
+        This method enforces that the owner remains a member, computes newly
+        added members, persists the change and emits a ``MEMBER_ADDED`` event
+        when appropriate.
+
+        Args:
+            trip_id (str): Trip identifier.
+            member_ids (List[str]): New list of member ids.
+            current_user_id (str): Id of the user performing the update (must be owner).
+
+        Returns:
+            Optional[Trip]: Updated trip or ``None`` if trip not found.
         """
         trip = self.get_trip(trip_id)
         if not trip:
@@ -218,7 +254,15 @@ class TripService:
         return updated
 
     def update_trip_stats(self, trip_id: str, stats: Dict[str, Any]) -> Optional[Trip]:
-        """Persist denormalized trip statistics."""
+        """Persist denormalized trip statistics.
+
+        Args:
+            trip_id (str): Trip identifier.
+            stats (Dict[str, Any]): Stats mapping (distance_km, elevation_gain_m, etc.).
+
+        Returns:
+            Optional[Trip]: Updated trip model or ``None`` if not found.
+        """
         trip = self.get_trip(trip_id)
         if not trip:
             return None
@@ -238,8 +282,17 @@ class TripService:
         return updated_trip
 
     def delete_trip(self, trip_id: str) -> bool:
-        """
-        Delete a trip and cascade-delete associated files/metadata.
+        """Delete a trip and cascade-delete associated files and metadata.
+
+        This will attempt to remove related objects from object storage and
+        delete metadata documents. It returns ``True`` when the trip record
+        was deleted from MongoDB. Warnings during deletion are logged.
+
+        Args:
+            trip_id (str): Trip identifier to delete.
+
+        Returns:
+            bool: ``True`` if the trip record was deleted, ``False`` otherwise.
         """
         existing_trip = self.get_trip(trip_id)
         if not existing_trip:

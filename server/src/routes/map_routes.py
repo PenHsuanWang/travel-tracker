@@ -1,4 +1,7 @@
-# server/src/routes/map_routes.py
+"""Map utility routes used by the frontend to request rendered maps and layers.
+
+These endpoints are thin wrappers over :mod:`src.controllers.map_controller`.
+"""
 
 from fastapi import APIRouter
 from src.controllers.map_controller import (

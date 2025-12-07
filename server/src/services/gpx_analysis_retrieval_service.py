@@ -1,3 +1,10 @@
+"""Retrieve persisted GPX analysis artifacts and produce serializable payloads.
+
+This module provides utilities to read serialized analysis objects from
+object storage (MinIO) and to extract Leaflet-friendly payloads used by
+the frontend mapping components.
+"""
+
 import logging
 import pickle
 from typing import Any, Dict, List, Optional
@@ -11,7 +18,12 @@ from src.services.gpx_analysis_service import GpxAnalysisService
 
 
 class GpxAnalysisRetrievalService:
-    """Load persisted GPX analysis artifacts and summaries."""
+    """Load persisted GPX analysis artifacts and summaries.
+
+    The service is responsible for deserializing `AnalyzedTrackObject`
+    instances stored as pickles and returning compact payloads for API
+    consumers.
+    """
 
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
@@ -34,8 +46,15 @@ class GpxAnalysisRetrievalService:
         analysis_object_key: str,
         analysis_bucket: str = "gps-analysis-data"
     ) -> Optional[AnalyzedTrackObject]:
-        """
-        Retrieve and deserialize an analyzed track object from MinIO.
+        """Retrieve and deserialize an analyzed track object from MinIO.
+
+        Args:
+            analysis_object_key (str): Key/path of the serialized analysis object.
+            analysis_bucket (str): MinIO bucket name where analysis objects are stored.
+
+        Returns:
+            Optional[AnalyzedTrackObject]: Deserialized analysis object, or
+                `None` if the object was not found.
         """
         if 'minio' not in self.storage_manager.adapters:
             raise RuntimeError("MinIO adapter not configured")
@@ -51,8 +70,17 @@ class GpxAnalysisRetrievalService:
             raise
 
     def get_track_summary(self, metadata_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Return the stored track summary from metadata without loading the full pickle.
+        """Return the stored track summary from file metadata.
+
+        This avoids loading the full pickled analysis object when a small
+        summary is sufficient for the caller.
+
+        Args:
+            metadata_id (str): Identifier of the `file_metadata` document.
+
+        Returns:
+            Optional[Dict[str, Any]]: The stored `track_summary` dict when
+                available, otherwise `None`.
         """
         mongodb_adapter = self.storage_manager.adapters.get('mongodb')
         if not mongodb_adapter:
@@ -74,7 +102,14 @@ class GpxAnalysisRetrievalService:
 
     @staticmethod
     def extract_coordinates(analyzed_track: AnalyzedTrackObject) -> List[List[float]]:
-        """Convert analyzed track points into Leaflet-friendly [lat, lon] arrays."""
+        """Convert analyzed track points into Leaflet-friendly [lat, lon] arrays.
+
+        Args:
+            analyzed_track (AnalyzedTrackObject): The analysis object to extract points from.
+
+        Returns:
+            List[List[float]]: Sequence of [lat, lon] pairs.
+        """
         try:
             points = analyzed_track.get_main_tracks().get_main_tracks_points_list()  # type: ignore[attr-defined]
         except Exception:
@@ -89,7 +124,11 @@ class GpxAnalysisRetrievalService:
 
     @staticmethod
     def extract_waypoints(analyzed_track: AnalyzedTrackObject) -> List[Dict[str, Any]]:
-        """Extract waypoint information from an analyzed track."""
+        """Extract waypoint information from an analyzed track.
+
+        The returned waypoints are lightweight dicts suitable for JSON
+        serialization and frontend consumption.
+        """
         waypoints = []
         try:
             raw_waypoints = analyzed_track.get_waypoint_list() or []
@@ -112,7 +151,11 @@ class GpxAnalysisRetrievalService:
 
     @staticmethod
     def extract_rest_points(analyzed_track: AnalyzedTrackObject) -> List[Dict[str, Any]]:
-        """Extract rest point information from an analyzed track."""
+        """Extract rest point information from an analyzed track.
+
+        Each rest-point dict contains coordinates, optional elevation and
+        start/end times, and the rest duration when available.
+        """
         rest_points = []
         try:
             raw_rest_points = analyzed_track.get_rest_point_list() or []

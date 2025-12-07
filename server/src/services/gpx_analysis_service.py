@@ -14,22 +14,40 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AnalysisResult:
-    """Container for analysis artifacts returned by GpxAnalysisService."""
+    """Container for analysis artifacts returned by :class:`GpxAnalysisService`."""
     analyzed_track: AnalyzedTrackObject
     serialized_object: bytes
     summary: Dict[str, Any]
 
 
 class GpxAnalysisService:
-    """Service that parses GPX bytes, runs analysis, and prepares artifacts."""
+    """Utilities to analyze GPX byte payloads and extract summary statistics.
+
+    This module depends on the ``gpxana`` library to produce detailed
+    track analysis objects which are then serialized for caching. Public
+    helpers return a small summary dictionary that is safe to persist in
+    MongoDB metadata documents.
+    """
 
     @staticmethod
     def analyze_gpx_data(gpx_bytes: bytes, filename: str) -> AnalysisResult:
-        """
-        Parse and analyze GPX data.
+        """Parse and analyze GPX bytes and return analysis artifacts.
 
-        The underlying gpxana parser requires a filesystem path, so the bytes are
-        written to a temporary file before parsing.
+        The underlying ``gpxana`` parser requires a filesystem path, so the
+        bytes are written to a temporary file before parsing. The returned
+        :class:`AnalysisResult` contains both the in-memory analyzed object
+        and a pickled byte representation suitable for storage.
+
+        Args:
+            gpx_bytes (bytes): Raw GPX file content.
+            filename (str): Original filename (used to determine suffix).
+
+        Returns:
+            AnalysisResult: Container with analyzed track and summary.
+
+        Raises:
+            ValueError: If ``gpx_bytes`` is None.
+            RuntimeError: If the analyzer does not produce an analyzed track.
         """
         if gpx_bytes is None:
             raise ValueError("GPX payload is required")
