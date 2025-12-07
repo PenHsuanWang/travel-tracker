@@ -118,17 +118,14 @@ services:
 
 volumes:
   mongo_data:
-    driver: local
-    labels:
-      - "com.travel-tracker.volume=database"
+    external: true
+    name: travel-tracker-mongo-data
   mongo_config:
-    driver: local
-    labels:
-      - "com.travel-tracker.volume=database-config"
+    external: true
+    name: travel-tracker-mongo-config
   minio_data:
-    driver: local
-    labels:
-      - "com.travel-tracker.volume=storage"
+    external: true
+    name: travel-tracker-minio-data
 
 networks:
   travel-tracker-network:

@@ -136,12 +136,15 @@ services:
       "
 
 volumes:
-  mongo_data:
+  mongodb_data:
     driver: local
+    name: travel-tracker-mongo-data
   mongo_config:
     driver: local
+    name: travel-tracker-mongo-config
   minio_data:
     driver: local
+    name: travel-tracker-minio-data
 
 networks:
   travel-tracker-network:
