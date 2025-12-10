@@ -83,6 +83,20 @@ export const updatePhotoNote = async (metadataId, { note, note_title }) => {
   return response.data;
 };
 
+export const updateWaypointNote = async (metadataId, waypointIndex, payload) => {
+  if (!metadataId || waypointIndex === undefined) {
+    throw new Error(`Invalid waypoint update parameters: metadataId="${metadataId}", waypointIndex="${waypointIndex}"`);
+  }
+  
+  // Use encodeURIComponent for the entire metadata_id, FastAPI will handle :path correctly
+  const encodedId = encodeURIComponent(metadataId);
+  console.log('[API] updateWaypointNote:', { metadataId, encodedId, waypointIndex, payload });
+  
+  const response = await apiClient.patch(`/gpx/metadata/${encodedId}/waypoint/${waypointIndex}`, payload);
+  return response.data;
+};
+
+
 export const updatePhotoOrder = async (metadataId, order_index) => {
   const response = await apiClient.patch(`/photos/${encodeURIComponent(metadataId).replace(/%2F/g, '/')}/order`, {
     order_index,

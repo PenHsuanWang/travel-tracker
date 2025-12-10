@@ -34,20 +34,30 @@ class PhotoNoteService:
             raise RuntimeError("MongoDB adapter not configured")
         return adapter.get_collection('file_metadata')
     def update_note(self, metadata_id: str, note: Optional[str], note_title: Optional[str]) -> Dict[str, Any]:
-        """Update the note and optional title for a photo metadata entry.
+        """Update the note and/or title for a photo metadata entry.
+
+        Only fields that are explicitly provided (not None) will be updated.
+        This allows independent updates of note and note_title.
 
         Args:
             metadata_id (str): The metadata document id to update.
-            note (Optional[str]): Free-form note text.
-            note_title (Optional[str]): Optional short title for the note.
+            note (Optional[str]): Free-form note text. Only updated if not None.
+            note_title (Optional[str]): Optional short title for the note. Only updated if not None.
 
         Returns:
             Dict[str, Any]: The updated metadata document.
         """
         collection = self._get_collection()
-        update_doc: Dict[str, Any] = {"note": note}
+        update_doc: Dict[str, Any] = {}
+        if note is not None:
+            update_doc["note"] = note
         if note_title is not None:
             update_doc["note_title"] = note_title
+
+        if not update_doc:
+            # Nothing to update, just return current state
+            return self._load_metadata(metadata_id)
+
         result = collection.update_one({"_id": metadata_id}, {"$set": update_doc})
         if result.matched_count == 0:
             raise ValueError("Photo metadata not found")
@@ -68,6 +78,34 @@ class PhotoNoteService:
         result = collection.update_one({"_id": metadata_id}, {"$set": {"order_index": order_index}})
         if result.matched_count == 0:
             raise ValueError("Photo metadata not found")
+
+        return self._load_metadata(metadata_id)
+
+    def update_waypoint_note(self, metadata_id: str, waypoint_index: int, note: Optional[str], note_title: Optional[str]) -> Dict[str, Any]:
+        """Update the note for a specific waypoint in a GPX file's metadata.
+
+        Args:
+            metadata_id (str): The metadata document id for the GPX file.
+            waypoint_index (int): The 0-based index of the waypoint.
+            note (Optional[str]): The new note text.
+            note_title (Optional[str]): The new title text.
+
+        Returns:
+            Dict[str, Any]: The updated metadata document.
+        """
+        collection = self._get_collection()
+        update_doc = {}
+        if note is not None:
+            update_doc[f"waypoint_overrides.{waypoint_index}.note"] = note
+        if note_title is not None:
+            update_doc[f"waypoint_overrides.{waypoint_index}.note_title"] = note_title
+
+        if not update_doc:
+            return self._load_metadata(metadata_id)
+
+        result = collection.update_one({"_id": metadata_id}, {"$set": update_doc})
+        if result.matched_count == 0:
+            raise ValueError("GPX metadata not found")
 
         return self._load_metadata(metadata_id)
 

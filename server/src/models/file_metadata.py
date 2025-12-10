@@ -53,6 +53,7 @@ class FileMetadata(BaseModel):
     note: Optional[str] = None
     note_title: Optional[str] = None
     order_index: Optional[int] = None
+    waypoint_overrides: Optional[Dict[str, Any]] = Field(default_factory=dict)
     
     class Config:
         populate_by_name = True

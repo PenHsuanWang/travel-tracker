@@ -8,7 +8,10 @@ import ReactMarkdown from 'react-markdown';
 const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readOnly }) => {
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [isEditingNote, setIsEditingNote] = useState(false);
-    const [titleValue, setTitleValue] = useState(item.title || '');
+
+    const deriveTitle = () => item.noteTitle || item.title || (item.type === 'waypoint' ? 'Waypoint' : 'Untitled Photo');
+
+    const [titleValue, setTitleValue] = useState(deriveTitle());
     const [noteValue, setNoteValue] = useState(item.note || '');
     
     const titleInputRef = useRef(null);
@@ -16,8 +19,8 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readO
 
     // Sync local state with props when they change (e.g. from map update)
     useEffect(() => {
-        setTitleValue(item.title || '');
-    }, [item.title]);
+        setTitleValue(deriveTitle());
+    }, [item.title, item.noteTitle]);
 
     useEffect(() => {
         setNoteValue(item.note || '');
@@ -39,22 +42,52 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readO
     const handleTitleSave = () => {
         setIsEditingTitle(false);
         if (titleValue !== item.title) {
-            onUpdate({
-                photoId: item.id,
+            const payload = {
+                itemType: item.type,
                 noteTitle: titleValue,
-                note: item.note // Preserve existing note
-            });
+                note: item.note, // Preserve existing note
+            };
+            if (item.type === 'waypoint') {
+                payload.waypointId = item.id;
+                payload.gpxMetadataId = item.gpxMetadataId;
+                payload.waypointIndex = item.waypointIndex;
+                console.log('[TimelinePanel] Waypoint title save:', {
+                    waypointId: item.id,
+                    gpxMetadataId: item.gpxMetadataId,
+                    waypointIndex: item.waypointIndex,
+                    itemKeys: Object.keys(item)
+                });
+            } else {
+                payload.photoId = item.id;
+                payload.metadataId = item.metadataId;
+            }
+            onUpdate(payload);
         }
     };
 
     const handleNoteSave = () => {
         setIsEditingNote(false);
         if (noteValue !== item.note) {
-            onUpdate({
-                photoId: item.id,
+            const payload = {
+                itemType: item.type,
                 note: noteValue,
-                noteTitle: item.title // Preserve existing title
-            });
+                noteTitle: item.noteTitle || item.title, // Preserve existing title
+            };
+            if (item.type === 'waypoint') {
+                payload.waypointId = item.id;
+                payload.gpxMetadataId = item.gpxMetadataId;
+                payload.waypointIndex = item.waypointIndex;
+                console.log('[TimelinePanel] Waypoint note save:', {
+                    waypointId: item.id,
+                    gpxMetadataId: item.gpxMetadataId,
+                    waypointIndex: item.waypointIndex,
+                    itemKeys: Object.keys(item)
+                });
+            } else {
+                payload.photoId = item.id;
+                payload.metadataId = item.metadataId;
+            }
+            onUpdate(payload);
         }
     };
 
@@ -114,10 +147,7 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readO
         return 'border-gray-500 text-gray-600';
     };
 
-    const getDefaultTitle = () => {
-        if (item.title) return item.title;
-        return item.type === 'waypoint' ? 'Waypoint' : 'Untitled Photo';
-    };
+    const getDefaultTitle = () => deriveTitle();
 
     return (
         <div

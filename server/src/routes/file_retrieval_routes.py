@@ -15,6 +15,7 @@ from src.services.file_retrieval_service import FileRetrievalService
 from src.services.gpx_analysis_retrieval_service import GpxAnalysisRetrievalService
 from src.services.gpx_analysis_service import GpxAnalysisService
 from src.services.photo_note_service import PhotoNoteService
+from src.services.trip_service import TripService
 from src.models.file_metadata import FileMetadata
 from src.auth import get_current_user
 from src.models.user import User
@@ -70,6 +71,46 @@ class PhotoNotePayload(BaseModel):
 
 class PhotoOrderPayload(BaseModel):
     order_index: int
+
+
+def _load_metadata_doc_or_404(metadata_id: str) -> Tuple[str, Dict[str, Any]]:
+    adapter = photo_note_service.storage_manager.adapters.get('mongodb')
+    if not adapter:
+        raise HTTPException(status_code=500, detail="MongoDB adapter not configured")
+
+    # Primary lookup by _id
+    metadata_doc = adapter.load_data(metadata_id, collection_name='file_metadata')
+    if metadata_doc:
+        return metadata_id, metadata_doc
+
+    # Fallback lookup by object_key for legacy records whose _id differs
+    collection = adapter.get_collection('file_metadata')
+    fallback_doc = collection.find_one({"object_key": metadata_id})
+    if fallback_doc:
+        return str(fallback_doc.get("_id")), fallback_doc
+
+    raise HTTPException(status_code=404, detail="GPX metadata not found")
+
+
+def _assert_waypoint_edit_authorized(metadata_doc: Dict[str, Any], current_user: User):
+    trip_id = metadata_doc.get("trip_id")
+    uploader_id = metadata_doc.get("uploader_id")
+    current_user_id = str(current_user.id)
+
+    if trip_id:
+        trip_service = TripService()
+        trip = trip_service.get_trip(trip_id)
+        if not trip:
+            raise HTTPException(status_code=404, detail="Trip not found")
+
+        owner_ok = bool(trip.owner_id) and str(trip.owner_id) == current_user_id
+        member_ok = any(str(mid) == current_user_id for mid in (trip.member_ids or []))
+        if not (owner_ok or member_ok):
+            raise HTTPException(status_code=403, detail="Not authorized to edit waypoint notes for this trip")
+    else:
+        # Fallback: require uploader ownership when the GPX is not linked to a trip.
+        if uploader_id and str(uploader_id) != current_user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to edit waypoint notes for this file")
 
 @router.get("/list-files", response_model=List[str])
 async def list_files(bucket: str = "gps-data", trip_id: Optional[str] = Query(None)):
@@ -214,6 +255,9 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
         try:
             metadata_doc = mongodb_adapter.load_data(filename, collection_name='file_metadata')
             if metadata_doc:
+                # Add waypoint_overrides to the model if it's not there
+                if 'waypoint_overrides' not in metadata_doc:
+                    metadata_doc['waypoint_overrides'] = {}
                 metadata = FileMetadata(**metadata_doc)
                 if trip_id and metadata.trip_id and metadata.trip_id != trip_id:
                     raise HTTPException(status_code=404, detail="GPX file not found for this trip")
@@ -236,6 +280,20 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
     if trip_id and metadata is None:
         raise HTTPException(status_code=404, detail="GPX file not found for this trip")
 
+    def _apply_waypoint_overrides(waypoints: List[Dict[str, Any]], doc: Optional[Dict[str, Any]]):
+        if not doc or 'waypoint_overrides' not in doc:
+            return waypoints
+        
+        overrides = doc['waypoint_overrides']
+        for i, wp in enumerate(waypoints):
+            override = overrides.get(str(i))
+            if override:
+                if 'note' in override:
+                    wp['note'] = override['note']
+                if 'note_title' in override:
+                    wp['name'] = override['note_title']
+        return waypoints
+
     # Try to load the persisted analyzed track
     if analysis_object_key and analysis_status == 'success':
         try:
@@ -247,6 +305,9 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
                 analyzed_track,
                 metadata_summary=track_summary
             )
+            
+            waypoints = _apply_waypoint_overrides(payload.get("waypoints", []), metadata_doc)
+
             return GpxAnalysisResponse(
                 filename=filename,
                 display_name=display_name,
@@ -255,7 +316,7 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
                 has_gpx_analysis=has_gpx_analysis if has_gpx_analysis is not None else True,
                 track_summary=payload.get("track_summary"),
                 coordinates=payload.get("coordinates", []),
-                waypoints=payload.get("waypoints", []),
+                waypoints=waypoints,
                 rest_points=payload.get("rest_points", [])
             )
         except Exception as exc:
@@ -271,8 +332,6 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
     try:
         analysis_result = GpxAnalysisService.analyze_gpx_data(raw_bytes, filename)
         
-        # Use the fresh summary which includes elevation_profile
-        # Merge with existing track_summary if available to preserve other fields if any
         fresh_summary = analysis_result.summary
         if track_summary:
             fresh_summary = {**track_summary, **fresh_summary}
@@ -282,6 +341,8 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
             metadata_summary=fresh_summary
         )
         
+        waypoints = _apply_waypoint_overrides(payload.get("waypoints", []), metadata_doc)
+
         return GpxAnalysisResponse(
             filename=filename,
             display_name=display_name,
@@ -290,13 +351,15 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
             has_gpx_analysis=True,
             track_summary=payload.get("track_summary"),
             coordinates=payload.get("coordinates", []),
-            waypoints=payload.get("waypoints", []),
+            waypoints=waypoints,
             rest_points=payload.get("rest_points", [])
         )
     except Exception as exc:
         logger.warning("On-the-fly analysis failed for %s: %s. Using simple fallback.", filename, exc)
 
     coordinates, waypoints, track_name = _parse_raw_gpx_bytes(raw_bytes)
+    waypoints = _apply_waypoint_overrides(waypoints, metadata_doc)
+    
     fallback_summary = track_summary or {
         "total_points": len(coordinates),
         "waypoints_count": len(waypoints),
@@ -364,6 +427,33 @@ async def update_photo_order(metadata_id: str, payload: PhotoOrderPayload, curre
     """
     try:
         updated = photo_note_service.update_order(metadata_id, order_index=payload.order_index)
+        return updated
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.patch("/gpx/metadata/{metadata_id:path}/waypoint/{waypoint_index}")
+async def update_waypoint_note(
+    metadata_id: str,
+    waypoint_index: int,
+    payload: PhotoNotePayload,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update the note for a specific waypoint within a GPX file's metadata.
+    """
+    try:
+        resolved_id, metadata_doc = _load_metadata_doc_or_404(metadata_id)
+        _assert_waypoint_edit_authorized(metadata_doc, current_user)
+
+        updated = photo_note_service.update_waypoint_note(
+            resolved_id,
+            waypoint_index,
+            note=payload.note,
+            note_title=payload.note_title,
+        )
         return updated
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
