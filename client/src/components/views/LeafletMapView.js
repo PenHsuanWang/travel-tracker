@@ -77,8 +77,41 @@ function LeafletMapView({
 }) {
   const [riverGeoJSON, setRiverGeoJSON] = useState({});
   const [loading, setLoading] = useState(false);
+  const [localWaypoints, setLocalWaypoints] = useState([]);
   const internalMapRef = useRef(null);
   const mapRef = externalMapRef || internalMapRef;
+
+  // Sync local waypoints state with prop
+  useEffect(() => {
+    setLocalWaypoints(gpxTrack?.waypoints || []);
+  }, [gpxTrack]);
+
+  // Listen for external waypoint updates
+  useEffect(() => {
+    const handleWaypointUpdate = (event) => {
+      const { waypointId, note, noteTitle } = event.detail;
+      setLocalWaypoints(prevWaypoints => {
+        const idToMatch = waypointId;
+        return prevWaypoints.map((wp, idx) => {
+          const currentId = `waypoint-${gpxTrack?.source || 'track'}-${idx}`;
+          if (currentId === idToMatch) {
+            return {
+              ...wp,
+              note: note,
+              name: noteTitle, // The 'name' field is used for the title in the popup
+              title: noteTitle
+            };
+          }
+          return wp;
+        });
+      });
+    };
+
+    window.addEventListener('waypointNoteUpdated', handleWaypointUpdate);
+    return () => {
+      window.removeEventListener('waypointNoteUpdated', handleWaypointUpdate);
+    };
+  }, [gpxTrack?.source]); // Re-run if the track source changes
 
   // Load river GeoJSON data lazily when a river is selected
   useEffect(() => {
@@ -223,7 +256,7 @@ function LeafletMapView({
         {/* Render analyzed waypoints and rest points */}
         {gpxTrack && (
           <React.Fragment>
-            {(gpxTrack.waypoints || []).map((wp, idx) => {
+            {(localWaypoints || []).map((wp, idx) => {
               const waypointTitle = wp.name || wp.title || 'Waypoint';
               const noteRaw = wp.note ?? wp.user_note;
               const noteText = typeof noteRaw === 'string' ? noteRaw.trim() : '';
@@ -233,7 +266,7 @@ function LeafletMapView({
               
               return (
                 <Marker
-                  key={`wp-${idx}`}
+                  key={`wp-${idx}-${waypointTitle}-${noteText}`}
                   position={[wp.lat, wp.lon]}
                   icon={highlightedItemId === id ? highlightIcon : waypointIcon}
                   riseOnHover
@@ -312,5 +345,6 @@ function LeafletMapView({
     </div>
   );
 }
+
 
 export default LeafletMapView;

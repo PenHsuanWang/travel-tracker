@@ -62,3 +62,23 @@ class TestPhotoNoteService:
         with pytest.raises(ValueError):
             note_service.update_order("missing", 1)
 
+    def test_update_waypoint_note_success(self, note_service, mock_mongodb_adapter):
+        meta_id = "gpx_file_1"
+        # A bit more realistic for a GPX file
+        doc = {
+            "_id": meta_id, "object_key": meta_id, "bucket": "gps-data",
+            "filename": meta_id, "original_filename": "track.gpx", "size": 54321,
+            "mime_type": "application/gpx+xml", "file_extension": "gpx",
+            "created_at": datetime.now(timezone.utc)
+        }
+        mock_mongodb_adapter.save_data(meta_id, doc, collection_name='file_metadata')
+
+        result = note_service.update_waypoint_note(meta_id, 0, "New waypoint note", "New waypoint title")
+
+        assert 'waypoint_overrides' in result
+        assert result['waypoint_overrides']['0']['note'] == "New waypoint note"
+        assert result['waypoint_overrides']['0']['note_title'] == "New waypoint title"
+
+        saved = mock_mongodb_adapter.load_data(meta_id, collection_name='file_metadata')
+        assert saved['waypoint_overrides']['0']['note'] == "New waypoint note"
+

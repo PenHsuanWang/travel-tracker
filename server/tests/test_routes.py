@@ -129,3 +129,28 @@ class TestAuthRoutes:
         
         response = client.post("/api/auth/login", data={"username": "testuser", "password": "wrong"})
         assert response.status_code == 401
+
+class TestFileRetrievalRoutes:
+
+    @patch('src.services.photo_note_service.PhotoNoteService.update_waypoint_note')
+    def test_update_waypoint_note(self, mock_update, client, auth_headers):
+        metadata_id = "gpx1"
+        waypoint_index = 0
+        payload = {"note": "New Test Note", "note_title": "Test Title"}
+        
+        mock_update.return_value = {"success": True, **payload}
+
+        response = client.patch(
+            f"/api/gpx/metadata/{metadata_id}/waypoint/{waypoint_index}",
+            json=payload,
+            headers=auth_headers
+        )
+
+        assert response.status_code == 200
+        assert response.json()["note"] == "New Test Note"
+        mock_update.assert_called_once_with(
+            metadata_id,
+            waypoint_index,
+            note=payload["note"],
+            note_title=payload["note_title"]
+        )
