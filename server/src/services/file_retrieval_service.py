@@ -10,7 +10,9 @@ except ImportError:  # pragma: no cover - optional dependency
         """Fallback no-op when python-dotenv is unavailable."""
         return None
 
-from src.models.file_metadata import FileMetadata
+from src.models.file_metadata import FileMetadata, FileMetadataResponse
+from src.models.user import User
+from src.services.trip_service import TripService
 from src.utils.adapter_factory import AdapterFactory
 from src.utils.dbbutler.storage_manager import StorageManager
 
@@ -28,6 +30,7 @@ class FileRetrievalService:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.storage_manager = StorageManager()
+        self.trip_service = TripService()
 
         try:
             minio_adapter = AdapterFactory.create_minio_adapter()
@@ -45,103 +48,79 @@ class FileRetrievalService:
         """List object keys in the given bucket.
 
         Args:
-            bucket_name (str): Name of the MinIO bucket.
-            trip_id (Optional[str]): If provided, list keys under the trip prefix.
+            bucket_name: Name of the MinIO bucket.
+            trip_id: If provided, list keys under the trip prefix.
 
         Returns:
-            List[str]: Object keys in the bucket (possibly filtered by trip).
+            Object keys in the bucket (possibly filtered by trip).
         """
         if 'minio' not in self.storage_manager.adapters:
             raise RuntimeError("MinIO adapter not configured")
         prefix = f"{trip_id}/" if trip_id else ""
         return self.storage_manager.list_keys('minio', prefix=prefix, bucket=bucket_name)
 
-    def list_files_with_metadata(self, bucket_name: str, trip_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List files and merge in metadata when available.
+    def list_files_with_metadata(
+        self, bucket_name: str, current_user: User, trip_id: Optional[str] = None
+    ) -> List[FileMetadataResponse]:
+        """Lists files with metadata, including a computed `can_delete` field.
 
-        When ``trip_id`` is provided, only files explicitly associated with
-        that trip are returned. Objects from other trips (or orphan objects
-        with no metadata) are intentionally hidden to prevent cross-trip leakage.
+        This method fetches file metadata and, based on the `current_user`,
+        determines if they have permission to delete each file.
 
         Args:
-            bucket_name (str): MinIO bucket name.
-            trip_id (Optional[str]): Optional trip id to scope results.
+            bucket_name: The MinIO bucket to query.
+            current_user: The authenticated user making the request.
+            trip_id: The optional trip ID to scope the results.
 
         Returns:
-            List[Dict[str, Any]]: Entries describing object_key, metadata_id,
-            and included metadata where available.
+            A list of `FileMetadataResponse` objects, each with the `can_delete`
+            flag correctly set.
         """
-        if 'minio' not in self.storage_manager.adapters:
-            raise RuntimeError("MinIO adapter not configured")
+        if 'mongodb' not in self.storage_manager.adapters:
+            raise RuntimeError("MongoDB adapter not configured")
 
-        prefix = f"{trip_id}/" if trip_id else ""
-        object_keys = set(self.storage_manager.list_keys('minio', prefix=prefix, bucket=bucket_name))
-        metadata_map: Dict[str, Dict[str, Any]] = {}
+        trip = None
+        if trip_id:
+            try:
+                trip = self.trip_service.get_trip(trip_id)
+            except Exception as e:
+                self.logger.warning(f"Could not fetch trip {trip_id} while listing files: {e}")
 
         mongodb_adapter = self.storage_manager.adapters.get('mongodb')
-        if mongodb_adapter:
+        collection = mongodb_adapter.get_collection('file_metadata')
+        query = {"bucket": bucket_name}
+        if trip_id:
+            query["trip_id"] = trip_id
+
+        cursor = collection.find(query)
+        items: List[FileMetadataResponse] = []
+
+        for document in cursor:
             try:
-                collection = mongodb_adapter.get_collection('file_metadata')
-                query = {"bucket": bucket_name}
-                if trip_id:
-                    query["trip_id"] = trip_id
-                cursor = collection.find(query)
-                for document in cursor:
-                    try:
-                        parsed = FileMetadata(**document)
-                    except Exception as exc:  # pragma: no cover - data hygiene guard
-                        self.logger.warning("Skipping corrupt metadata document %s: %s", document.get('_id'), exc)
-                        continue
+                parsed_metadata = FileMetadata(**document)
+                response_item = FileMetadataResponse(**parsed_metadata.model_dump())
 
-                    metadata_payload = parsed.model_dump()
-                    metadata_payload['created_at'] = parsed.created_at.isoformat()
-                    if parsed.captured_at:
-                        metadata_payload['captured_at'] = parsed.captured_at.isoformat()
-                    metadata_map[parsed.id] = metadata_payload
-            except Exception as exc:  # pragma: no cover - resilience guard
-                self.logger.warning("Failed to load metadata for bucket %s: %s", bucket_name, exc)
+                is_owner = False
+                if trip and trip.owner_id:
+                    is_owner = str(trip.owner_id) == str(current_user.id)
 
-        items: List[Dict[str, Any]] = []
+                is_uploader = False
+                if parsed_metadata.uploader_id:
+                    is_uploader = str(parsed_metadata.uploader_id) == str(current_user.id)
 
-        for metadata_id, metadata in metadata_map.items():
-            object_key = metadata.get('object_key') or metadata_id
-            has_object = object_key in object_keys
-            if has_object:
-                object_keys.remove(object_key)
+                response_item.can_delete = is_owner or is_uploader
+                items.append(response_item)
 
-            items.append(
-                {
-                    'object_key': object_key,
-                    'metadata_id': metadata_id,
-                    'bucket': metadata.get('bucket', bucket_name),
-                    'has_storage_object': has_object,
-                    'has_metadata': True,
-                    'metadata': metadata,
-                    'warnings': [] if has_object else ['storage_missing'],
-                }
-            )
+            except Exception as exc:
+                self.logger.warning(
+                    "Skipping corrupt metadata document %s: %s",
+                    document.get('_id'),
+                    exc,
+                    exc_info=True
+                )
+                continue
 
-        for orphan_key in sorted(object_keys):
-            items.append(
-                {
-                    'object_key': orphan_key,
-                    'metadata_id': orphan_key,
-                    'bucket': bucket_name,
-                    'has_storage_object': True,
-                    'has_metadata': False,
-                    'metadata': None,
-                    'warnings': ['metadata_missing'],
-                }
-            )
-
-        items.sort(
-            key=lambda entry: (
-                entry['metadata'].get('created_at') if entry['metadata'] else '',
-                entry['object_key']
-            ),
-            reverse=True,
-        )
-
+        items.sort(key=lambda item: item.created_at, reverse=True)
         return items
 
     def list_geotagged_images(

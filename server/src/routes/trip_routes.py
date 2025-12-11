@@ -30,7 +30,7 @@ class TripCreateWithGpxResponse(BaseModel):
     gpx_error: Optional[str] = None
     upload_metadata: Optional[Dict[str, Any]] = None
 
-@router.post("/", response_model=Trip, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=Trip, status_code=status.HTTP_201_CREATED, response_model_by_alias=False)
 async def create_trip(trip: Trip, current_user: User = Depends(get_current_user)):
     """
     Create a new trip.
@@ -55,7 +55,7 @@ def _parse_date_field(value: Optional[str]) -> Optional[datetime]:
         return None
 
 
-@router.post("/with-gpx", response_model=TripCreateWithGpxResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/with-gpx", response_model=TripCreateWithGpxResponse, status_code=status.HTTP_201_CREATED, response_model_by_alias=False)
 async def create_trip_with_gpx(
     name: str = Form(...),
     start_date: Optional[str] = Form(None),
@@ -125,7 +125,7 @@ async def create_trip_with_gpx(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/", response_model=List[TripResponse])
+@router.get("/", response_model=List[TripResponse], response_model_by_alias=False)
 async def list_trips(user_id: Optional[str] = None):
     """
     List all trips. Optionally filter by user_id (membership).
@@ -135,7 +135,7 @@ async def list_trips(user_id: Optional[str] = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{trip_id}", response_model=TripResponse)
+@router.get("/{trip_id}", response_model=TripResponse, response_model_by_alias=False)
 async def get_trip(trip_id: str):
     """
     Get a specific trip by ID.
@@ -145,7 +145,7 @@ async def get_trip(trip_id: str):
         raise HTTPException(status_code=404, detail="Trip not found")
     return trip
 
-@router.put("/{trip_id}", response_model=Trip)
+@router.put("/{trip_id}", response_model=Trip, response_model_by_alias=False)
 async def update_trip(trip_id: str, update_data: Dict[str, Any], current_user: User = Depends(get_current_user)):
     """
     Update a trip.
@@ -163,7 +163,7 @@ async def update_trip(trip_id: str, update_data: Dict[str, Any], current_user: U
         raise HTTPException(status_code=404, detail="Trip not found")
     return trip
 
-@router.put("/{trip_id}/members", response_model=Trip)
+@router.put("/{trip_id}/members", response_model=Trip, response_model_by_alias=False)
 async def update_trip_members(trip_id: str, members_update: TripMembersUpdate, current_user: User = Depends(get_current_user)):
     """
     Update trip members.

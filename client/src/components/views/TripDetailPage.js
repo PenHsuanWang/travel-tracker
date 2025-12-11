@@ -74,6 +74,7 @@ const normalizePhoto = (item) => {
         note,
         noteTitle,
         orderIndex: metadata.order_index ?? null,
+        can_delete: item.can_delete || false, // Preserve the can_delete flag
     };
 };
 
@@ -161,17 +162,23 @@ const TripDetailPage = () => {
 
     // Robust check for user ID (handles id vs _id) and type coercion
     const userId = user ? (user.id || user._id) : null;
+
     const isOwner = useMemo(() => {
         if (!userId || !trip) return false;
-        // Check direct owner_id match
-        if (trip.owner_id && String(trip.owner_id) === String(userId)) return true;
-        // Check owner object match (fallback)
-        if (trip.owner && trip.owner.id && String(trip.owner.id) === String(userId)) return true;
-        if (trip.owner && trip.owner.username && user?.username && trip.owner.username === user.username) return true;
-        return false;
-    }, [userId, trip, user?.username]);
+        return String(trip.owner_id) === String(userId);
+    }, [userId, trip]);
 
-    const readOnly = !isOwner;
+    const isMember = useMemo(() => {
+        if (!userId || !trip || !trip.member_ids) return false;
+        return trip.member_ids.some(memberId => String(memberId) === String(userId));
+    }, [userId, trip]);
+
+    const canEditContent = isOwner || isMember;
+    const canManageTrip = isOwner;
+
+    // The `readOnly` prop passed to child components now reflects content editing permissions.
+    const readOnly = !canEditContent;
+
 
     // Lifted GPX State
     // Refactored: Single GPX file per trip
@@ -835,7 +842,7 @@ const TripDetailPage = () => {
                             </option>
                         ))}
                     </select>
-                    {!readOnly && (
+                    {canManageTrip && (
                         <button
                             type="button"
                             className="ghost-button danger-button"
@@ -853,8 +860,8 @@ const TripDetailPage = () => {
                     stats={tripStats}
                     onTripDataChange={handleTripDataChange}
                     notice={tripNotice}
-                    readOnly={readOnly}
-                    isOwner={isOwner}
+                    readOnly={!canManageTrip}
+                    isOwner={canManageTrip}
                 />
                 <div
                     className={`MapAndTimeline ${timelineMode !== 'side' ? 'timeline-floating' : ''} ${timelineMode === 'sheet' ? 'timeline-sheet' : ''}`}
