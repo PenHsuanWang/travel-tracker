@@ -60,16 +60,17 @@ class FileRetrievalService:
         return self.storage_manager.list_keys('minio', prefix=prefix, bucket=bucket_name)
 
     def list_files_with_metadata(
-        self, bucket_name: str, current_user: User, trip_id: Optional[str] = None
+        self, bucket_name: str, current_user: Optional[User], trip_id: Optional[str] = None
     ) -> List[FileMetadataResponse]:
         """Lists files with metadata, including a computed `can_delete` field.
 
         This method fetches file metadata and, based on the `current_user`,
-        determines if they have permission to delete each file.
+        determines if they have permission to delete each file. For unauthenticated
+        users (guests), all files will have `can_delete=False`.
 
         Args:
             bucket_name: The MinIO bucket to query.
-            current_user: The authenticated user making the request.
+            current_user: The authenticated user making the request (None for guests).
             trip_id: The optional trip ID to scope the results.
 
         Returns:
@@ -100,15 +101,20 @@ class FileRetrievalService:
                 parsed_metadata = FileMetadata(**document)
                 response_item = FileMetadataResponse(**parsed_metadata.model_dump())
 
-                is_owner = False
-                if trip and trip.owner_id:
-                    is_owner = str(trip.owner_id) == str(current_user.id)
+                # For unauthenticated users, can_delete is always False
+                if not current_user:
+                    response_item.can_delete = False
+                else:
+                    is_owner = False
+                    if trip and trip.owner_id:
+                        is_owner = str(trip.owner_id) == str(current_user.id)
 
-                is_uploader = False
-                if parsed_metadata.uploader_id:
-                    is_uploader = str(parsed_metadata.uploader_id) == str(current_user.id)
+                    is_uploader = False
+                    if parsed_metadata.uploader_id:
+                        is_uploader = str(parsed_metadata.uploader_id) == str(current_user.id)
 
-                response_item.can_delete = is_owner or is_uploader
+                    response_item.can_delete = is_owner or is_uploader
+                    
                 items.append(response_item)
 
             except Exception as exc:

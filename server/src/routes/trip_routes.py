@@ -13,7 +13,7 @@ from src.models.trip import Trip, TripResponse, TripMembersUpdate
 from src.services.trip_service import TripService
 from src.services.file_upload_service import FileUploadService
 from datetime import datetime
-from src.auth import get_current_user
+from src.auth import get_current_user, get_current_user_optional
 from src.models.user import User
 
 router = APIRouter()
@@ -136,13 +136,39 @@ async def list_trips(user_id: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{trip_id}", response_model=TripResponse, response_model_by_alias=False)
-async def get_trip(trip_id: str):
-    """
-    Get a specific trip by ID.
+async def get_trip(trip_id: str, current_user: Optional[User] = Depends(get_current_user_optional)):
+    """Get a specific trip by ID.
+    
+    Public trips are accessible to everyone (including unauthenticated users).
+    Private trips require authentication and membership.
+    
+    Args:
+        trip_id: The trip identifier.
+        current_user: Optional authenticated user.
+        
+    Returns:
+        TripResponse with trip details.
+        
+    Raises:
+        HTTPException: 404 if trip not found, 403 if private and user not authorized.
     """
     trip = trip_service.get_trip(trip_id)
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")
+    
+    # Check access permissions for private trips
+    if not trip.is_public:
+        if not current_user:
+            raise HTTPException(status_code=403, detail="This trip is private. Please login to view.")
+        
+        # Check if user is owner or member
+        is_owner = str(trip.owner_id) == str(current_user.id)
+        member_ids = [str(m) for m in trip.member_ids] if trip.member_ids else []
+        is_member = str(current_user.id) in member_ids
+        
+        if not (is_owner or is_member):
+            raise HTTPException(status_code=403, detail="You don't have permission to view this private trip")
+    
     return trip
 
 @router.put("/{trip_id}", response_model=Trip, response_model_by_alias=False)

@@ -17,7 +17,7 @@ from src.services.gpx_analysis_service import GpxAnalysisService
 from src.services.photo_note_service import PhotoNoteService
 from src.services.trip_service import TripService
 from src.models.file_metadata import FileMetadata, FileMetadataResponse
-from src.auth import get_current_user
+from src.auth import get_current_user, get_current_user_optional
 from src.models.user import User
 
 router = APIRouter()
@@ -120,9 +120,41 @@ async def list_files(bucket: str = "gps-data", trip_id: Optional[str] = Query(No
 async def list_files_with_metadata(
     bucket: str = "images",
     trip_id: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """List files with metadata, including computed `can_delete` permission."""
+    """List files with metadata, including computed `can_delete` permission.
+    
+    Public trips are accessible without authentication. For public trips,
+    all files will have `can_delete=False` for unauthenticated users.
+    Private trips require authentication and membership.
+    
+    Args:
+        bucket: The storage bucket name (images or gps-data).
+        trip_id: Optional trip ID to filter files.
+        current_user: Optional authenticated user.
+        
+    Returns:
+        List of FileMetadataResponse objects with can_delete flags.
+        
+    Raises:
+        HTTPException: 403 if accessing private trip without permission.
+    """
+    # Check trip access permissions if trip_id is specified
+    if trip_id:
+        trip_service = TripService()
+        trip = trip_service.get_trip(trip_id)
+        
+        if trip and not trip.is_public:
+            if not current_user:
+                raise HTTPException(status_code=403, detail="This trip is private. Please login to view.")
+            
+            is_owner = str(trip.owner_id) == str(current_user.id)
+            member_ids = [str(m) for m in trip.member_ids] if trip.member_ids else []
+            is_member = str(current_user.id) in member_ids
+            
+            if not (is_owner or is_member):
+                raise HTTPException(status_code=403, detail="You don't have permission to view this private trip")
+    
     try:
         return retrieval_service.list_files_with_metadata(
             bucket_name=bucket, trip_id=trip_id, current_user=current_user
@@ -234,11 +266,43 @@ async def get_geotagged_images(
 
 
 @router.get("/gpx/{filename:path}/analysis", response_model=GpxAnalysisResponse)
-async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
-    """
-    Retrieve analyzed GPX data (coordinates, summary, waypoints, rest points).
+async def get_gpx_analysis(
+    filename: str, 
+    trip_id: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Retrieve analyzed GPX data (coordinates, summary, waypoints, rest points).
+    
     Falls back to parsing the raw GPX when no analysis artifact is available.
+    Public trips are accessible without authentication.
+    
+    Args:
+        filename: The GPX file object key.
+        trip_id: Optional trip ID for scoping.
+        current_user: Optional authenticated user.
+        
+    Returns:
+        GpxAnalysisResponse with track data.
+        
+    Raises:
+        HTTPException: 403 if accessing private trip without permission.
     """
+    # Check trip access permissions if trip_id is specified
+    if trip_id:
+        trip_service = TripService()
+        trip = trip_service.get_trip(trip_id)
+        
+        if trip and not trip.is_public:
+            if not current_user:
+                raise HTTPException(status_code=403, detail="This trip is private. Please login to view.")
+            
+            is_owner = str(trip.owner_id) == str(current_user.id)
+            member_ids = [str(m) for m in trip.member_ids] if trip.member_ids else []
+            is_member = str(current_user.id) in member_ids
+            
+            if not (is_owner or is_member):
+                raise HTTPException(status_code=403, detail="You don't have permission to view this private trip")
+    
     metadata_doc = None
     metadata: Optional[FileMetadata] = None
     analysis_status: Optional[str] = None
