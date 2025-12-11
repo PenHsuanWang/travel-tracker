@@ -623,31 +623,41 @@ const TripDetailPage = () => {
     const handleNoteSave = useCallback(
         async ({ itemType = 'photo', photoId, waypointId, gpxMetadataId, waypointIndex, metadataId, note, noteTitle, timestamp }) => {
             if (itemType === 'waypoint' && waypointId) {
+                const previousTrack = gpxTrack; // Store previous state for rollback
                 // Optimistic update
                 applyNoteToWaypointState(waypointId, { note, noteTitle, timestamp });
 
                 try {
-                    console.log('[Waypoint Update] Attempting to save:', {
-                        waypointId,
-                        gpxMetadataId,
-                        waypointIndex,
-                        note,
-                        noteTitle,
-                    });
-                    
                     if (!gpxMetadataId) {
                         throw new Error(`Missing GPX metadata ID for waypoint update. waypointId: ${waypointId}`);
                     }
-                    
                     if (waypointIndex === undefined || waypointIndex === null) {
                         throw new Error(`Missing waypoint index for update. waypointId: ${waypointId}`);
                     }
+
+                    const result = await updateWaypointNote(gpxMetadataId, waypointIndex, { note, note_title: noteTitle });
                     
-                    await updateWaypointNote(gpxMetadataId, waypointIndex, { note, note_title: noteTitle });
-                    console.log('[Waypoint Update] Success!');
+                    // Final update with server response
+                    const updatedNote = result.note ?? note;
+                    const updatedTitle = result.note_title ?? noteTitle;
+                    applyNoteToWaypointState(waypointId, { note: updatedNote, noteTitle: updatedTitle, timestamp });
+
+                    // Dispatch event for map to listen to
+                    window.dispatchEvent(new CustomEvent('waypointNoteUpdated', {
+                        detail: {
+                            waypointId: waypointId,
+                            note: updatedNote,
+                            noteTitle: updatedTitle
+                        }
+                    }));
+
                 } catch (error) {
                     console.error('Failed to save waypoint note:', error);
                     alert(`Failed to save waypoint note: ${error.message || 'Unknown error'}`);
+                    // Rollback on error
+                    if (previousTrack) {
+                        setGpxTrack(previousTrack);
+                    }
                 }
                 return;
             }
@@ -683,7 +693,7 @@ const TripDetailPage = () => {
                 alert('Failed to save note. Please try again.');
             }
         },
-        [applyNoteToPhotoState, applyNoteToWaypointState, photos]
+        [applyNoteToPhotoState, applyNoteToWaypointState, photos, gpxTrack]
     );
 
     const handleMapPhotoUpdate = useCallback((photoId, note, save = false) => {

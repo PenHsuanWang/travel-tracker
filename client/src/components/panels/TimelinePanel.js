@@ -314,9 +314,9 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readO
                             onClick={() => !readOnly && setIsEditingNote(true)}
                             title={!readOnly ? "Click to edit note" : ""}
                         >
-                            {item.note ? (
+                            {noteValue ? (
                                 <div className="text-green-600 font-medium">
-                                    <ReactMarkdown>{item.note}</ReactMarkdown>
+                                    <ReactMarkdown>{noteValue}</ReactMarkdown>
                                 </div>
                             ) : (
                                 <span className="italic text-slate-400 text-xs">
