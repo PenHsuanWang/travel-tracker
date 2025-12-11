@@ -33,7 +33,10 @@ The application's primary navigation is defined in `App.js`, which sets up the f
     -   **Layout Management:** Serves as the main container integrating `TripSidebar`, `LeafletMapView`, and `TimelinePanel`
     -   **Trip Selector:** Header with quick-switch dropdown to navigate between trips and "Back to My Trips" link
     -   **State Management:** Manages photos, waypoints, GPX tracks, and timeline data with chronological sorting
-    -   **Access Control:** Determines `readOnly` status based on authentication. Propagates this state to child components (`TripSidebar`, `LeafletMapView`, `TimelinePanel`) to disable editing features for guest users.
+    -   **Access Control:** Implements a role-based permission model:
+        -   **Owner:** Full control (edit trip, manage members, upload/delete any content).
+        -   **Member (Contributor):** Can upload photos/GPX, edit notes, and delete their own content.
+        -   **Guest:** Read-only access.
     -   **Responsive Timeline:** Adaptive timeline display with three modes:
         -   **Side mode** (>1180px): Fixed-width resizable side panel
         -   **Overlay mode** (1024-1180px): Floating overlay on the right
@@ -177,7 +180,8 @@ These components provide the primary features of the application, mostly within 
             -   Clicking thumbnail scrolls to and highlights the photo
             -   "View on Map" centers map on photo location
             -   Clicking map marker scrolls gallery to corresponding thumbnail
-        7.  **Deletion:** Click delete button to remove photo (with confirmation)
+        7.  **Deletion:** Click delete button to remove photo (with confirmation).
+            -   **Permission-Based Display:** Delete button only appears if `can_delete` flag is `true` (Owner or Uploader).
     -   **Expected Experience:** Professional photo management interface similar to Google Photos or Lightroom, with seamless map integration for geotagged photos
 
 -   **`TimelinePanel.js`** (Replaces `PhotoTimelinePanel.js`):
@@ -208,7 +212,7 @@ These components provide the primary features of the application, mostly within 
 This directory contains reusable UI elements shared across the application.
 
 -   **`CreateTripModal.js`**: Modal dialog for creating a new trip. Contains a form capturing trip name, start date, end date, region, and notes. Calls the `createTrip` API to save the new trip record.
--   **`ManageMembersModal.js`**: Modal dialog for managing trip members. Allows the trip owner to search for users by name and add/remove them from the trip.
+-   **`ManageMembersModal.js`**: Modal dialog for managing trip members. Allows the trip owner to search for users by name and add/remove them from the trip. Displays helper text: "Contributors can upload photos and edit journal notes. Only the Owner can delete the trip or manage members."
 -   **`ActivityHeatmap.js`**: Calendar-style heatmap component that consumes normalized `{ date, value, metadata[] }` entries. Supports highlighting and `onCellClick` callbacks so parent components can jump to related content.
 -   **`TripTimeline.js`** & **`TripTimelineCard.js`**: Compact timeline used on the profile page to summarize recent trips. Accepts hover callbacks for cross-highlighting with the heatmap and exposes `registerRef` hooks so parents can scroll to individual cards.
 -   **`BadgeIcon.js`**: Renders earned achievement icons and tooltips based on `badgeInfoMap`; used on the profile page and ready for reuse elsewhere.
@@ -251,7 +255,11 @@ The application uses a combination of:
 2.  **Login:**
     -   User navigates to `/login`.
     -   Enters credentials.
-    -   Upon success, is redirected to `/trips` with "Edit Mode" enabled.
+    -   Upon success, is redirected to `/trips`.
+    -   **Role-Based Access:**
+        -   **Trip Owner:** Full administrative control - can edit trip details, manage members, upload content, and delete any file.
+        -   **Trip Member (Contributor):** Can upload their own photos/GPX files, edit shared notes, and delete only their own uploads.
+        -   **Non-Member:** Read-only access to public trips.
 3.  **Registration:**
     -   User navigates to `/register`.
     -   Enters details and the required registration key.
