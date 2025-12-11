@@ -233,7 +233,7 @@ function LeafletMapView({
               
               return (
                 <Marker
-                  key={`wp-${idx}`}
+                  key={`wp-${idx}-${waypointTitle}-${noteText}`}
                   position={[wp.lat, wp.lon]}
                   icon={highlightedItemId === id ? highlightIcon : waypointIcon}
                   riseOnHover

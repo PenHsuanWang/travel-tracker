@@ -253,12 +253,26 @@ async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
     mongodb_adapter = retrieval_service.storage_manager.adapters.get('mongodb')
     if mongodb_adapter:
         try:
+            # Try loading by _id first
             metadata_doc = mongodb_adapter.load_data(filename, collection_name='file_metadata')
+            if not metadata_doc:
+                # Fallback to loading by object_key
+                collection = mongodb_adapter.get_collection('file_metadata')
+                metadata_doc = collection.find_one({"object_key": filename})
+
             if metadata_doc:
+                logger.info("Found metadata for %s. Checking for overrides.", filename)
+                if 'waypoint_overrides' in metadata_doc and metadata_doc['waypoint_overrides']:
+                    logger.info("Waypoint overrides found for %s: %s", filename, metadata_doc['waypoint_overrides'])
+                else:
+                    logger.info("No waypoint overrides found for %s.", filename)
+
                 # Add waypoint_overrides to the model if it's not there
                 if 'waypoint_overrides' not in metadata_doc:
                     metadata_doc['waypoint_overrides'] = {}
                 metadata = FileMetadata(**metadata_doc)
+            else:
+                logger.info("No metadata document found for %s. Proceeding without.", filename)
                 if trip_id and metadata.trip_id and metadata.trip_id != trip_id:
                     raise HTTPException(status_code=404, detail="GPX file not found for this trip")
                 if trip_id and not metadata.trip_id:
@@ -444,8 +458,15 @@ async def update_waypoint_note(
     """
     Update the note for a specific waypoint within a GPX file's metadata.
     """
+    logger.info(
+        "Attempting to update waypoint note for metadata_id: %s, index: %s",
+        metadata_id,
+        waypoint_index
+    )
+    logger.debug("Payload: %s", payload.model_dump_json())
     try:
         resolved_id, metadata_doc = _load_metadata_doc_or_404(metadata_id)
+        logger.info("Resolved metadata_id %s to _id %s", metadata_id, resolved_id)
         _assert_waypoint_edit_authorized(metadata_doc, current_user)
 
         updated = photo_note_service.update_waypoint_note(
@@ -454,8 +475,15 @@ async def update_waypoint_note(
             note=payload.note,
             note_title=payload.note_title,
         )
+        logger.info(
+            "Successfully updated waypoint note for _id: %s, index: %s",
+            resolved_id,
+            waypoint_index
+        )
         return updated
     except ValueError as exc:
+        logger.error("ValueError in update_waypoint_note: %s", exc)
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
+        logger.error("Exception in update_waypoint_note: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))

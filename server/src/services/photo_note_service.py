@@ -103,7 +103,18 @@ class PhotoNoteService:
         if not update_doc:
             return self._load_metadata(metadata_id)
 
+        self.logger.debug(
+            "Updating waypoint_overrides for _id %s with doc: %s",
+            metadata_id,
+            update_doc
+        )
         result = collection.update_one({"_id": metadata_id}, {"$set": update_doc})
+        self.logger.info(
+            "MongoDB update result for _id %s: matched=%s, modified=%s",
+            metadata_id,
+            result.matched_count,
+            result.modified_count
+        )
         if result.matched_count == 0:
             raise ValueError("GPX metadata not found")
 
