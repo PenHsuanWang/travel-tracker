@@ -290,7 +290,7 @@ async def search_users(q: str = Query(..., min_length=2), current_user: User = D
     users = []
     for user_data in cursor:
         if "_id" in user_data:
-            user_data["_id"] = str(user_data["_id"])
+            user_data["id"] = str(user_data.pop("_id"))
         # Don't return sensitive info like hashed_password (User model excludes it by default)
         users.append(User(**user_data))
         
