@@ -483,7 +483,7 @@ async def get_file(filename: str, bucket: str = "gps-data"):
 async def update_photo_note(metadata_id: str, payload: PhotoNotePayload, current_user: User = Depends(get_current_user)):
     """Update the note/note_title for a photo metadata entry."""
     # First, get the metadata for the file
-    metadata = retrieval_service.storage_manager.load_data(metadata_id, collection_name='file_metadata')
+    metadata = retrieval_service.storage_manager.load_data('mongodb', metadata_id, collection_name='file_metadata')
     if not metadata:
         raise HTTPException(status_code=404, detail="File metadata not found")
 
