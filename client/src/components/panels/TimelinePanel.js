@@ -189,8 +189,8 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readO
                 </span>
                 
                 {/* Delete Button (Visible on Hover) */}
-                {!readOnly && onDelete && (
-                    <button 
+                {item.can_delete && onDelete && (
+                    <button
                         onClick={handleDelete}
                         className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-red-500 rounded-full hover:bg-red-50"
                         title="Delete item"
@@ -341,6 +341,7 @@ TimelineItem.propTypes = {
         imageUrl: PropTypes.string,
         thumbnailUrl: PropTypes.string,
         note: PropTypes.string,
+        can_delete: PropTypes.bool,
     }).isRequired,
     index: PropTypes.number.isRequired,
     onUpdate: PropTypes.func.isRequired,

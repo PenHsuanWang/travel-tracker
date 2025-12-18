@@ -202,7 +202,7 @@ This section details which services interact with the storage layer and for what
 -   **Functions & Storage Interaction:**
     -   `save_file()`:
         -   **MinIO:** The appropriate `data_io_handler` (e.g., `ImageHandler`) saves the file content to a MinIO bucket (the repo uses `images` for photos and `gps-data` for raw GPX). For GPX files, it also saves a serialized analysis object to the `gps-analysis-data` bucket.
-        -   **MongoDB:** Saves a comprehensive `FileMetadata` document to the `file_metadata` collection, containing details about the file, EXIF data, GPS coordinates, and analysis summaries.
+        -   **MongoDB:** Saves a comprehensive `FileMetadata` document to the `file_metadata` collection, containing details about the file, EXIF data, GPS coordinates, analysis summaries, and the `uploader_id` of the user who performed the upload.
         -   **GPX Handling:** Manages the 1:1 relationship between a trip and a GPX file. When a new GPX file is uploaded for a trip, it replaces any existing GPX file and its associated metadata.
         -   **Event Hooks:** When GPX analysis completes the service updates the trip's denormalized stats via `TripService.update_trip_stats(...)` and publishes a `GPX_PROCESSED` event on the internal `EventBus`. This keeps the `UserStatsService`/`AchievementEngine` pipeline informed about new distance and elevation data.
     -   `get_file_metadata()`:
@@ -210,6 +210,7 @@ This section details which services interact with the storage layer and for what
     -   `delete_file()`:
         -   **MinIO:** Deletes the file object from its bucket.
         -   **MongoDB:** Deletes the corresponding `FileMetadata` document from the `file_metadata` collection.
+        -   **Permissions:** Enforces that only the Trip Owner or the original Uploader can delete a file.
 
 ### `trip_service.py`
 
@@ -239,7 +240,8 @@ This section details which services interact with the storage layer and for what
         -   **MinIO:** Lists object keys from a specified bucket, optionally filtered by a prefix (like a `trip_id`).
     -   `list_files_with_metadata()`:
         -   **MinIO:** Lists all object keys in a bucket.
-        -   **MongoDB:** Fetches all corresponding documents from the `file_metadata` collection and merges the information, returning a comprehensive list of files with their metadata.
+        -   **MongoDB:** Fetches all corresponding documents from the `file_metadata` collection and merges the information.
+        -   **Permissions:** Computes a `can_delete` boolean flag for each file based on the requesting user's identity (True if Owner or Uploader), which is returned in the response but not stored.
     -   `list_geotagged_images()`:
         -   **MongoDB:** Performs a geospatial query on the `file_metadata` collection to find images with GPS data, optionally within a specific bounding box.
     -   `get_file_bytes()`:

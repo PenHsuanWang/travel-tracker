@@ -66,9 +66,15 @@ async def upload_file(
         trip_service = TripService()
         trip = trip_service.get_trip(trip_id)
         if not trip:
-             raise HTTPException(status_code=404, detail="Trip not found")
-        if trip.owner_id and trip.owner_id != current_user.id:
-             raise HTTPException(status_code=403, detail="Not authorized to upload to this trip")
+            raise HTTPException(status_code=404, detail="Trip not found")
+
+        is_owner = str(trip.owner_id) == str(current_user.id)
+        # Ensure member_ids is not None before list comprehension
+        member_ids = [str(m) for m in trip.member_ids] if trip.member_ids else []
+        is_member = str(current_user.id) in member_ids
+
+        if not (is_owner or is_member):
+            raise HTTPException(status_code=403, detail="Not authorized to upload to this trip")
 
     try:
         result = FileUploadController.upload_file(file, uploader_id, trip_id)
@@ -141,25 +147,30 @@ async def delete_file(filename: str, bucket: str = Query(default="images"), curr
     :return: Success message.
     :raises HTTPException: If deletion fails.
     """
-    # Check ownership before deletion
+    # --- Permission Check ---
+    # Get file metadata to check ownership and uploader ID
     metadata = FileUploadController.get_file_metadata(filename)
-    if metadata:
-        # Check uploader
-        if metadata.get("uploader_id") and metadata.get("uploader_id") != current_user.id:
-             # If not uploader, check if owner of the trip
-             trip_id = metadata.get("trip_id")
-             if trip_id:
-                 trip_service = TripService()
-                 trip = trip_service.get_trip(trip_id)
-                 if trip and trip.owner_id != current_user.id:
-                      raise HTTPException(status_code=403, detail="Not authorized to delete this file")
-                 elif not trip:
-                      # Trip not found, but file exists. Only uploader can delete.
-                      raise HTTPException(status_code=403, detail="Not authorized to delete this file")
-             else:
-                 # No trip associated, and not uploader
-                 raise HTTPException(status_code=403, detail="Not authorized to delete this file")
+    if not metadata:
+        # If metadata is not found, the file effectively does not exist from a user perspective.
+        # The subsequent delete action will fail, but we raise a clear 404 here.
+        raise HTTPException(status_code=404, detail="File not found")
 
+    trip_id = metadata.get("trip_id")
+    trip = None
+    is_owner = False
+
+    if trip_id:
+        trip_service = TripService()
+        trip = trip_service.get_trip(trip_id)
+        if trip and str(trip.owner_id) == str(current_user.id):
+            is_owner = True
+
+    is_uploader = str(metadata.get("uploader_id")) == str(current_user.id)
+
+    if not (is_owner or is_uploader):
+        raise HTTPException(status_code=403, detail="Not authorized to delete this file")
+
+    # --- Deletion ---
     try:
         result = FileUploadController.delete_file(filename, bucket)
         return result

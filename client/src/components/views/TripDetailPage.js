@@ -48,32 +48,34 @@ const deriveNoteTitleValue = (providedTitle, noteValue) => {
 
 const normalizePhoto = (item) => {
     if (!item) return null;
-    const metadata = item.metadata || {};
-    const note = metadata.note || metadata.caption || metadata.notes || null;
-    const noteTitle = deriveNoteTitleValue(metadata.note_title, note);
-    const capturedDate = parseDateSafe(metadata.captured_at || metadata.date_taken || metadata.created_at);
-    const lat = Number(metadata?.gps?.latitude ?? metadata?.gps?.lat ?? item.lat);
-    const lon = Number(metadata?.gps?.longitude ?? metadata?.gps?.lon ?? item.lon);
+    const note = item.note || item.caption || item.notes || null;
+    const noteTitle = deriveNoteTitleValue(item.note_title, note);
+    const capturedDate = parseDateSafe(item.captured_at || item.date_taken || item.created_at);
+    const lat = Number(item?.gps?.latitude ?? item?.gps?.lat ?? item.lat);
+    const lon = Number(item?.gps?.longitude ?? item?.gps?.lon ?? item.lon);
     const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
 
     return {
         type: 'photo',
         id: item.object_key,
         objectKey: item.object_key,
-        fileName: metadata.original_filename || item.object_key,
-        thumbnailUrl: metadata.thumb_url || metadata.thumbnail_url || item.thumb_url || getImageUrl(item.object_key),
+        fileName: item.original_filename || item.object_key,
+        thumbnailUrl: item.thumb_url || item.thumbnail_url || item.thumb_url || getImageUrl(item.object_key),
         imageUrl: getImageUrl(item.object_key),
         capturedAt: capturedDate ? capturedDate.toISOString() : null,
         capturedDate,
         timestamp: capturedDate ? capturedDate.getTime() : 0,
-        capturedSource: metadata.captured_source || (metadata.date_taken ? 'exif' : metadata.created_at ? 'fallback' : 'unknown'),
+        capturedSource: item.captured_source || (item.date_taken ? 'exif' : item.created_at ? 'fallback' : 'unknown'),
         lat: hasCoords ? lat : null,
         lon: hasCoords ? lon : null,
-        metadataId: item.metadata_id || null,
-        caption: metadata.caption || metadata.notes || null,
+        // Prefer stable metadata id; accept _id or legacy fields to stay robust against alias changes
+        metadataId: item.id || item._id || item.metadata_id || null,
+        caption: item.caption || item.notes || null,
         note,
         noteTitle,
-        orderIndex: metadata.order_index ?? null,
+        orderIndex: item.order_index ?? null,
+        can_delete: item.can_delete || false, // Preserve the can_delete flag
+        exif: item.exif || null,
     };
 };
 
@@ -161,17 +163,23 @@ const TripDetailPage = () => {
 
     // Robust check for user ID (handles id vs _id) and type coercion
     const userId = user ? (user.id || user._id) : null;
+
     const isOwner = useMemo(() => {
         if (!userId || !trip) return false;
-        // Check direct owner_id match
-        if (trip.owner_id && String(trip.owner_id) === String(userId)) return true;
-        // Check owner object match (fallback)
-        if (trip.owner && trip.owner.id && String(trip.owner.id) === String(userId)) return true;
-        if (trip.owner && trip.owner.username && user?.username && trip.owner.username === user.username) return true;
-        return false;
-    }, [userId, trip, user?.username]);
+        return String(trip.owner_id) === String(userId);
+    }, [userId, trip]);
 
-    const readOnly = !isOwner;
+    const isMember = useMemo(() => {
+        if (!userId || !trip || !trip.member_ids) return false;
+        return trip.member_ids.some(memberId => String(memberId) === String(userId));
+    }, [userId, trip]);
+
+    const canEditContent = isOwner || isMember;
+    const canManageTrip = isOwner;
+
+    // The `readOnly` prop passed to child components now reflects content editing permissions.
+    const readOnly = !canEditContent;
+
 
     // Lifted GPX State
     // Refactored: Single GPX file per trip
@@ -662,24 +670,47 @@ const TripDetailPage = () => {
                 return;
             }
 
-            if (!photoId && !metadataId) return;
-            const targetId = metadataId || photoId;
-            const previous = photos.find((p) => p.id === photoId);
-            applyNoteToPhotoState(photoId, { note, noteTitle });
+            // --- Photo Note Logic ---
+            const stateLookupKey = photoId || (metadataId ? photos.find(p => p.metadataId === metadataId)?.id : null);
+
+            if (!stateLookupKey) {
+                console.error("Could not identify photo for UI update.", { photoId, metadataId });
+                alert("Failed to save note: Could not identify the photo to update.");
+                return;
+            }
+
+            // The ID for the database API call must be the metadataId (_id).
+            const matchingPhoto = photos.find(p => p.id === stateLookupKey);
+            const dbId = metadataId || matchingPhoto?.metadataId;
+
+            if (!dbId) {
+                console.error("Failed to save note: Database ID for the photo could not be determined.", {
+                    originalPhotoId: photoId,
+                    stateLookupKey,
+                    matchingPhoto,
+                });
+                alert('Error: Could not save note because the photo reference was lost.');
+                return;
+            }
+
+            // Proceed with optimistic update and API call.
+            const previous = matchingPhoto;
+            applyNoteToPhotoState(stateLookupKey, { note, noteTitle });
+
             try {
-                const result = await updatePhotoNote(targetId, {
+                const result = await updatePhotoNote(dbId, {
                     note,
                     note_title: noteTitle,
                 });
                 const updatedNote = result.note ?? note;
                 const updatedTitle = result.note_title ?? noteTitle;
-                applyNoteToPhotoState(photoId, { note: updatedNote, noteTitle: updatedTitle });
-                // notify other listeners (e.g., map layer)
+                applyNoteToPhotoState(stateLookupKey, { note: updatedNote, noteTitle: updatedTitle });
+                
                 window.dispatchEvent(
                     new CustomEvent('photoNoteUpdated', {
                         detail: {
-                            object_key: photoId,
-                            metadata_id: targetId,
+                            object_key: stateLookupKey,
+                            metadata_id: dbId,
                             note: updatedNote,
                             note_title: updatedTitle,
                         },
@@ -688,7 +719,7 @@ const TripDetailPage = () => {
             } catch (error) {
                 console.error('Failed to save note', error);
                 if (previous) {
-                    applyNoteToPhotoState(photoId, { note: previous.note, noteTitle: previous.noteTitle });
+                    applyNoteToPhotoState(stateLookupKey, { note: previous.note, noteTitle: previous.noteTitle });
                 }
                 alert('Failed to save note. Please try again.');
             }
@@ -835,7 +866,7 @@ const TripDetailPage = () => {
                             </option>
                         ))}
                     </select>
-                    {!readOnly && (
+                    {canManageTrip && (
                         <button
                             type="button"
                             className="ghost-button danger-button"
@@ -853,8 +884,8 @@ const TripDetailPage = () => {
                     stats={tripStats}
                     onTripDataChange={handleTripDataChange}
                     notice={tripNotice}
-                    readOnly={readOnly}
-                    isOwner={isOwner}
+                    readOnly={!canManageTrip}
+                    isOwner={canManageTrip}
                 />
                 <div
                     className={`MapAndTimeline ${timelineMode !== 'side' ? 'timeline-floating' : ''} ${timelineMode === 'sheet' ? 'timeline-sheet' : ''}`}

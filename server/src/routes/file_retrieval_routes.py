@@ -16,8 +16,8 @@ from src.services.gpx_analysis_retrieval_service import GpxAnalysisRetrievalServ
 from src.services.gpx_analysis_service import GpxAnalysisService
 from src.services.photo_note_service import PhotoNoteService
 from src.services.trip_service import TripService
-from src.models.file_metadata import FileMetadata
-from src.auth import get_current_user
+from src.models.file_metadata import FileMetadata, FileMetadataResponse
+from src.auth import get_current_user, get_current_user_optional
 from src.models.user import User
 
 router = APIRouter()
@@ -28,15 +28,6 @@ photo_note_service = PhotoNoteService()
 
 logger = logging.getLogger(__name__)
 
-
-class FileListItem(BaseModel):
-    object_key: str
-    metadata_id: str
-    bucket: str
-    has_storage_object: bool
-    has_metadata: bool
-    metadata: Optional[Dict[str, Any]] = None
-    warnings: List[str] = []
 
 class GeotaggedImage(BaseModel):
     object_key: str
@@ -125,13 +116,53 @@ async def list_files(bucket: str = "gps-data", trip_id: Optional[str] = Query(No
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/list-files/detail", response_model=List[FileListItem])
-async def list_files_with_metadata(bucket: str = "images", trip_id: Optional[str] = Query(None)):
-    """List files alongside any metadata captured during upload."""
+@router.get("/list-files/detail", response_model=List[FileMetadataResponse])
+async def list_files_with_metadata(
+    bucket: str = "images",
+    trip_id: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """List files with metadata, including computed `can_delete` permission.
+    
+    Public trips are accessible without authentication. For public trips,
+    all files will have `can_delete=False` for unauthenticated users.
+    Private trips require authentication and membership.
+    
+    Args:
+        bucket: The storage bucket name (images or gps-data).
+        trip_id: Optional trip ID to filter files.
+        current_user: Optional authenticated user.
+        
+    Returns:
+        List of FileMetadataResponse objects with can_delete flags.
+        
+    Raises:
+        HTTPException: 403 if accessing private trip without permission.
+    """
+    # Check trip access permissions if trip_id is specified
+    if trip_id:
+        trip_service = TripService()
+        trip = trip_service.get_trip(trip_id)
+        
+        if trip and not trip.is_public:
+            if not current_user:
+                raise HTTPException(status_code=403, detail="This trip is private. Please login to view.")
+            
+            is_owner = str(trip.owner_id) == str(current_user.id)
+            member_ids = [str(m) for m in trip.member_ids] if trip.member_ids else []
+            is_member = str(current_user.id) in member_ids
+            
+            if not (is_owner or is_member):
+                raise HTTPException(status_code=403, detail="You don't have permission to view this private trip")
+    
     try:
-        return retrieval_service.list_files_with_metadata(bucket, trip_id)
+        return retrieval_service.list_files_with_metadata(
+            bucket_name=bucket, trip_id=trip_id, current_user=current_user
+        )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Failed to list files with metadata: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve file list.")
+
 
 
 def _parse_raw_gpx_bytes(gpx_bytes: bytes) -> Tuple[List[List[float]], List[Dict[str, Any]], Optional[str]]:
@@ -235,11 +266,43 @@ async def get_geotagged_images(
 
 
 @router.get("/gpx/{filename:path}/analysis", response_model=GpxAnalysisResponse)
-async def get_gpx_analysis(filename: str, trip_id: Optional[str] = Query(None)):
-    """
-    Retrieve analyzed GPX data (coordinates, summary, waypoints, rest points).
+async def get_gpx_analysis(
+    filename: str, 
+    trip_id: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Retrieve analyzed GPX data (coordinates, summary, waypoints, rest points).
+    
     Falls back to parsing the raw GPX when no analysis artifact is available.
+    Public trips are accessible without authentication.
+    
+    Args:
+        filename: The GPX file object key.
+        trip_id: Optional trip ID for scoping.
+        current_user: Optional authenticated user.
+        
+    Returns:
+        GpxAnalysisResponse with track data.
+        
+    Raises:
+        HTTPException: 403 if accessing private trip without permission.
     """
+    # Check trip access permissions if trip_id is specified
+    if trip_id:
+        trip_service = TripService()
+        trip = trip_service.get_trip(trip_id)
+        
+        if trip and not trip.is_public:
+            if not current_user:
+                raise HTTPException(status_code=403, detail="This trip is private. Please login to view.")
+            
+            is_owner = str(trip.owner_id) == str(current_user.id)
+            member_ids = [str(m) for m in trip.member_ids] if trip.member_ids else []
+            is_member = str(current_user.id) in member_ids
+            
+            if not (is_owner or is_member):
+                raise HTTPException(status_code=403, detail="You don't have permission to view this private trip")
+    
     metadata_doc = None
     metadata: Optional[FileMetadata] = None
     analysis_status: Optional[str] = None
@@ -418,9 +481,31 @@ async def get_file(filename: str, bucket: str = "gps-data"):
 
 @router.patch("/photos/{metadata_id:path}/note")
 async def update_photo_note(metadata_id: str, payload: PhotoNotePayload, current_user: User = Depends(get_current_user)):
-    """
-    Update the note/note_title for a photo metadata entry.
-    """
+    """Update the note/note_title for a photo metadata entry."""
+    # First, get the metadata for the file
+    metadata = retrieval_service.storage_manager.load_data('mongodb', metadata_id, collection_name='file_metadata')
+    if not metadata:
+        raise HTTPException(status_code=404, detail="File metadata not found")
+
+    # Now, check for permissions
+    trip_id = metadata.get("trip_id")
+    if trip_id:
+        trip_service = TripService()
+        trip = trip_service.get_trip(trip_id)
+        if not trip:
+            raise HTTPException(status_code=404, detail="Associated trip not found")
+
+        is_owner = str(trip.owner_id) == str(current_user.id)
+        member_ids = [str(m) for m in trip.member_ids] if trip.member_ids else []
+        is_member = str(current_user.id) in member_ids
+
+        if not (is_owner or is_member):
+            raise HTTPException(status_code=403, detail="Not authorized to edit notes for this trip")
+    else:
+        # If no trip is associated, only the original uploader can edit.
+        if str(metadata.get("uploader_id")) != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Not authorized to edit this file's notes")
+
     try:
         updated = photo_note_service.update_note(
             metadata_id,

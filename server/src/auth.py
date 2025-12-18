@@ -60,3 +60,39 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         user_data["id"] = str(user_data.pop("_id"))
         
     return UserInDB(**user_data)
+
+
+async def get_current_user_optional(token: Optional[str] = Depends(OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False))) -> Optional[User]:
+    """Get the current user if authenticated, otherwise return None.
+    
+    This dependency allows endpoints to be accessed by both authenticated
+    and unauthenticated users, useful for public content with optional
+    personalization.
+    
+    Returns:
+        Optional[User]: The authenticated user or None for guests.
+    """
+    if not token:
+        return None
+    
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        
+        # Fetch user from DB
+        mongo_adapter = AdapterFactory.create_mongodb_adapter()
+        users_collection = mongo_adapter.get_collection("users")
+        user_data = users_collection.find_one({"username": username})
+        
+        if user_data is None:
+            return None
+        
+        # Convert ObjectId to string for Pydantic compatibility
+        if "_id" in user_data:
+            user_data["id"] = str(user_data.pop("_id"))
+            
+        return UserInDB(**user_data)
+    except JWTError:
+        return None
