@@ -16,8 +16,8 @@ from dotenv import load_dotenv
 import os
 from pathlib import Path
 
-# Ensure .env is loaded from the server directory, regardless of working directory
-env_path = Path(__file__).parent.parent / '.env'
+# Load .env file from the project root
+env_path = Path(__file__).resolve().parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)  # Load environment variables from .env file
 
 from fastapi import FastAPI

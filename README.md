@@ -165,51 +165,43 @@ For CI/CD or server deployments:
 
 ## Configuration
 
-### Security Warning ⚠️
+All configuration for local development, including Docker Compose and the backend server, is managed through a single `.env` file in the project root.
 
-**CRITICAL**: Never deploy the default configuration to a public server. The default `docker-compose.dbonly.yml` and `docker-compose.build.yml` are for **local development only**.
+To get started, copy the template:
 
-For production:
-1.  Use `docker-compose.prod.yml`.
-2.  Create a `.env.production` file (copy from `.env.production.example`).
-3.  Set strong, unique passwords for `MONGODB_PASSWORD` and `MINIO_SECRET_KEY`.
-4.  Ensure database ports (27017, 9000, 9001) are **NOT** exposed to the public internet. The production compose file keeps them internal to the Docker network.
-
-### Backend (`server/.env`)
-
-```env
-MINIO_ENDPOINT=localhost:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_SECURE=false
-MONGODB_HOST=localhost
-MONGODB_PORT=27017
-MONGODB_DATABASE=travel_tracker
-MONGODB_USERNAME=admin
-MONGODB_PASSWORD=password
-SECRET_KEY=change_me
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REGISTRATION_KEY=admin_secret_key
-ALLOWED_ORIGINS=*
+```bash
+cp .env.example .env
 ```
 
-`AdapterFactory` consumes these values to configure MongoDB and MinIO clients. Override via env vars when running in Docker.
+Then, open the `.env` file and customize the values as needed. All variables are now mandatory; the application will not start with default credentials.
+
+### Security Warning ⚠️
+
+**CRITICAL**: The values in `.env.example` are for convenience, not for production. Before deploying to a public server, you must:
+
+1.  Create a secure `.env` file (or `.env.production` for the production workflow) with strong, unique passwords for `MONGODB_PASSWORD` and `MINIO_SECRET_KEY`.
+2.  Use `docker-compose.prod.yml`, which is designed for production.
+3.  Ensure database ports (27017, 9000, 9001) are **NOT** exposed to the public internet. The production compose file keeps them internal to the Docker network by default.
 
 ### Frontend (`client/.env`)
+
+The React application has its own, separate `.env` file located at `client/.env`. This is standard for `create-react-app` and is used for build-time variables.
 
 ```env
 REACT_APP_API_BASE_URL=http://localhost:5002/api
 REACT_APP_MAPBOX_TOKEN=your_optional_token
 ```
 
-When building Docker images, `REACT_APP_API_BASE_URL` is set to `/api` so Nginx can reverse-proxy to FastAPI internally.
+When building Docker images, `REACT_APP_API_BASE_URL` is set to `/api` so Nginx can reverse-proxy to the backend container.
 
 ### Compose Overrides
 
+The root `.env` file also controls variables used by Docker Compose:
+
 - `FRONTEND_PORT` → host port for Nginx (defaults to 80).
-- `MINIO_CONSOLE_PORT` → host port for MinIO console (defaults to 9001 in build file, disabled in prod).
+- `MINIO_CONSOLE_PORT` → host port for MinIO console.
 - `MONGODB_USERNAME/MONGODB_PASSWORD` → seeded admin credentials for MongoDB container.
+- `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY` → credentials for the MinIO container.
 
 ## Database & Storage Setup
 
