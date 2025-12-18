@@ -44,7 +44,7 @@ services:
       # MongoDB Configuration
       - MONGODB_HOST=database
       - MONGODB_PORT=27017
-      - MONGODB_DATABASE=${MONGODB_DATABASE:-travel_tracker}
+      - MONGODB_DATABASE=${MONGODB_DATABASE}
       - MONGODB_USERNAME=${MONGODB_USERNAME}
       - MONGODB_PASSWORD=${MONGODB_PASSWORD}
     depends_on:
@@ -72,7 +72,7 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USERNAME}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD}
-      - MONGO_INITDB_DATABASE=${MONGODB_DATABASE:-travel_tracker}
+      - MONGO_INITDB_DATABASE=${MONGODB_DATABASE}
     volumes:
       - mongo_data:/data/db
       - mongo_config:/data/configdb
