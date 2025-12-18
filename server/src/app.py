@@ -14,7 +14,11 @@ Run as a script to start with Uvicorn in development:
 
 from dotenv import load_dotenv
 import os
-load_dotenv()  # Load environment variables from .env file
+from pathlib import Path
+
+# Ensure .env is loaded from the server directory, regardless of working directory
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)  # Load environment variables from .env file
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

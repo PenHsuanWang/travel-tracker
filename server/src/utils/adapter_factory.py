@@ -14,11 +14,14 @@ to be added to the project's `StorageManager` or used directly.
 """
 
 import os
+from pathlib import Path
 from src.utils.dbbutler.minio_adapter import MinIOAdapter
 from src.utils.dbbutler.mongodb_adapter import MongoDBAdapter
 from dotenv import load_dotenv
 
-load_dotenv()
+# Ensure .env is loaded from the server directory
+env_path = Path(__file__).parent.parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 
 class AdapterFactory:
