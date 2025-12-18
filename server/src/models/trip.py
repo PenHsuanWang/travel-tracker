@@ -39,7 +39,7 @@ class Trip(BaseModel):
         start_date/end_date: Optional planning dates for the trip.
         stats: Aggregated trip metrics (distance, elevation, etc.).
     """
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), alias='_id')
     name: str
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None

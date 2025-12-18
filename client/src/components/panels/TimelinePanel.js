@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { Camera, MapPin, Link as LinkIcon, Trash2 } from 'lucide-react';
+import { Camera, MapPin, Link as LinkIcon, Trash2, Check, X, Loader } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 // --- TimelineItem Sub-component ---
@@ -8,7 +8,11 @@ import ReactMarkdown from 'react-markdown';
 const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readOnly }) => {
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [isEditingNote, setIsEditingNote] = useState(false);
-    const [titleValue, setTitleValue] = useState(item.title || '');
+    const [isSaving, setIsSaving] = useState(false);
+
+    const deriveTitle = () => item.noteTitle || item.title || (item.type === 'waypoint' ? 'Waypoint' : 'Untitled Photo');
+
+    const [titleValue, setTitleValue] = useState(deriveTitle());
     const [noteValue, setNoteValue] = useState(item.note || '');
     
     const titleInputRef = useRef(null);
@@ -16,8 +20,8 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readO
 
     // Sync local state with props when they change (e.g. from map update)
     useEffect(() => {
-        setTitleValue(item.title || '');
-    }, [item.title]);
+        setTitleValue(deriveTitle());
+    }, [item.title, item.noteTitle]);
 
     useEffect(() => {
         setNoteValue(item.note || '');
@@ -36,44 +40,92 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readO
         }
     }, [isEditingNote]);
 
-    const handleTitleSave = () => {
-        setIsEditingTitle(false);
-        if (titleValue !== item.title) {
-            onUpdate({
-                photoId: item.id,
-                noteTitle: titleValue,
-                note: item.note // Preserve existing note
-            });
+    const handleTitleSave = async () => {
+        if (isSaving) return;
+        
+        const trimmedTitle = titleValue.trim();
+        if (trimmedTitle !== (item.title || '')) {
+            setIsSaving(true);
+            try {
+                const payload = {
+                    itemType: item.type,
+                    noteTitle: trimmedTitle,
+                    note: item.note, // Preserve existing note
+                };
+                if (item.type === 'waypoint') {
+                    payload.waypointId = item.id;
+                    payload.gpxMetadataId = item.gpxMetadataId;
+                    payload.waypointIndex = item.waypointIndex;
+                } else {
+                    payload.photoId = item.id;
+                    payload.metadataId = item.metadataId;
+                }
+                await onUpdate(payload);
+            } catch (error) {
+                console.error("Failed to save title:", error);
+                // Optionally revert or show error
+                setTitleValue(item.title || '');
+            } finally {
+                setIsSaving(false);
+            }
         }
+        setIsEditingTitle(false);
+    };
+    
+    const handleTitleCancel = () => {
+        setTitleValue(deriveTitle());
+        setIsEditingTitle(false);
     };
 
-    const handleNoteSave = () => {
-        setIsEditingNote(false);
-        if (noteValue !== item.note) {
-            onUpdate({
-                photoId: item.id,
-                note: noteValue,
-                noteTitle: item.title // Preserve existing title
-            });
+    const handleNoteSave = async () => {
+        if (isSaving) return;
+        
+        if (noteValue !== (item.note || '')) {
+            setIsSaving(true);
+            try {
+                const payload = {
+                    itemType: item.type,
+                    note: noteValue,
+                    noteTitle: item.noteTitle || item.title, // Preserve existing title
+                };
+                if (item.type === 'waypoint') {
+                    payload.waypointId = item.id;
+                    payload.gpxMetadataId = item.gpxMetadataId;
+                    payload.waypointIndex = item.waypointIndex;
+                } else {
+                    payload.photoId = item.id;
+                    payload.metadataId = item.metadataId;
+                }
+                await onUpdate(payload);
+            } catch (error) {
+                console.error("Failed to save note:", error);
+                setNoteValue(item.note || '');
+            } finally {
+                setIsSaving(false);
+            }
         }
+        setIsEditingNote(false);
+    };
+
+    const handleNoteCancel = () => {
+        setNoteValue(item.note || '');
+        setIsEditingNote(false);
     };
 
     const handleTitleKeyDown = (e) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Escape') {
+            handleTitleCancel();
+        } else if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
             handleTitleSave();
-        } else if (e.key === 'Escape') {
-            setTitleValue(item.title || '');
-            setIsEditingTitle(false);
         }
     };
 
     const handleNoteKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault(); // Prevent newline if desired, or allow it
+        if (e.key === 'Escape') {
+            handleNoteCancel();
+        } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
+            e.preventDefault();
             handleNoteSave();
-        } else if (e.key === 'Escape') {
-            setNoteValue(item.note || '');
-            setIsEditingNote(false);
         }
     };
 
@@ -114,10 +166,7 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readO
         return 'border-gray-500 text-gray-600';
     };
 
-    const getDefaultTitle = () => {
-        if (item.title) return item.title;
-        return item.type === 'waypoint' ? 'Waypoint' : 'Untitled Photo';
-    };
+    const getDefaultTitle = () => deriveTitle();
 
     return (
         <div
@@ -140,8 +189,8 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readO
                 </span>
                 
                 {/* Delete Button (Visible on Hover) */}
-                {!readOnly && onDelete && (
-                    <button 
+                {item.can_delete && onDelete && (
+                    <button
                         onClick={handleDelete}
                         className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-red-500 rounded-full hover:bg-red-50"
                         title="Delete item"
@@ -157,16 +206,36 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readO
                 {/* Title Section */}
                 <div className="mb-1 min-h-[24px]">
                     {!readOnly && isEditingTitle ? (
-                        <input
-                            ref={titleInputRef}
-                            type="text"
-                            value={titleValue}
-                            onChange={(e) => setTitleValue(e.target.value)}
-                            onBlur={handleTitleSave}
-                            onKeyDown={handleTitleKeyDown}
-                            className="w-full px-2 py-1 text-base font-semibold text-slate-800 border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                            placeholder="Title"
-                        />
+                        <div>
+                            <input
+                                ref={titleInputRef}
+                                type="text"
+                                value={titleValue}
+                                onChange={(e) => setTitleValue(e.target.value)}
+                                onKeyDown={handleTitleKeyDown}
+                                className="w-full px-2 py-1 text-base font-semibold text-slate-800 border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                                placeholder="Title"
+                            />
+                            <div className="flex items-center justify-end mt-2 space-x-2">
+                                <button
+                                    onClick={handleTitleCancel}
+                                    className="px-3 py-1 text-sm font-medium text-slate-600 rounded-md hover:bg-slate-100"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleTitleSave}
+                                    disabled={isSaving}
+                                    className="px-3 py-1 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 flex items-center"
+                                >
+                                    {isSaving ? (
+                                        <><Loader size={14} className="animate-spin mr-2" /> Saving...</>
+                                    ) : (
+                                        'Save'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
                     ) : (
                         <h3 
                             className={`font-semibold text-slate-800 ${!readOnly ? 'cursor-text hover:text-indigo-600' : ''}`}
@@ -209,25 +278,45 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readO
                 {/* Note Body */}
                 <div className="text-sm mt-2 min-h-[20px]">
                     {!readOnly && isEditingNote ? (
-                        <textarea
-                            ref={noteInputRef}
-                            value={noteValue}
-                            onChange={(e) => setNoteValue(e.target.value)}
-                            onBlur={handleNoteSave}
-                            onKeyDown={handleNoteKeyDown}
-                            rows={3}
-                            className="w-full px-3 py-2 text-sm border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none bg-white"
-                            placeholder="Add a note..."
-                        />
+                        <div>
+                            <textarea
+                                ref={noteInputRef}
+                                value={noteValue}
+                                onChange={(e) => setNoteValue(e.target.value)}
+                                onKeyDown={handleNoteKeyDown}
+                                rows={4}
+                                className="w-full px-3 py-2 text-sm border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y bg-white"
+                                placeholder="Add a note..."
+                            />
+                            <div className="flex items-center justify-end mt-2 space-x-2">
+                                <button
+                                    onClick={handleNoteCancel}
+                                    className="px-3 py-1 text-sm font-medium text-slate-600 rounded-md hover:bg-slate-100"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleNoteSave}
+                                    disabled={isSaving}
+                                    className="px-3 py-1 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 flex items-center"
+                                >
+                                    {isSaving ? (
+                                        <><Loader size={14} className="animate-spin mr-2" /> Saving...</>
+                                    ) : (
+                                        'Save'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
                     ) : (
                         <div 
                             className={`prose prose-sm max-w-none ${!readOnly ? 'cursor-text hover:bg-slate-50 rounded p-1 -m-1 transition-colors' : ''}`}
                             onClick={() => !readOnly && setIsEditingNote(true)}
                             title={!readOnly ? "Click to edit note" : ""}
                         >
-                            {item.note ? (
+                            {noteValue ? (
                                 <div className="text-green-600 font-medium">
-                                    <ReactMarkdown>{item.note}</ReactMarkdown>
+                                    <ReactMarkdown>{noteValue}</ReactMarkdown>
                                 </div>
                             ) : (
                                 <span className="italic text-slate-400 text-xs">
@@ -252,6 +341,7 @@ TimelineItem.propTypes = {
         imageUrl: PropTypes.string,
         thumbnailUrl: PropTypes.string,
         note: PropTypes.string,
+        can_delete: PropTypes.bool,
     }).isRequired,
     index: PropTypes.number.isRequired,
     onUpdate: PropTypes.func.isRequired,

@@ -177,15 +177,21 @@ class TripService:
         """Update a trip document with allowed fields.
 
         Args:
-            trip_id (str): Trip identifier.
-            update_data (Dict[str, Any]): Mapping of fields to update.
+            trip_id: Trip identifier.
+            update_data: Mapping of fields to update.
 
         Returns:
-            Optional[Trip]: Updated trip model or ``None`` if not found.
+            Updated trip model or ``None`` if not found.
         """
-        current_trip = self.get_trip(trip_id)
-        if not current_trip:
+        raw_data = self.storage_manager.load_data(
+            'mongodb',
+            trip_id,
+            collection_name=self.collection_name
+        )
+        if not raw_data:
             return None
+
+        current_trip = Trip(**raw_data)
             
         # Update fields
         trip_dict = current_trip.model_dump()
@@ -210,48 +216,69 @@ class TripService:
     def update_members(self, trip_id: str, member_ids: List[str], current_user_id: str) -> Optional[Trip]:
         """Update trip membership list (owner-only operation).
 
-        This method enforces that the owner remains a member, computes newly
-        added members, persists the change and emits a ``MEMBER_ADDED`` event
-        when appropriate.
+        This method performs a direct database update to set the `member_ids`
+        field, ensuring atomicity and preventing data corruption from complex
+        model parsing cycles. It also ensures the owner remains a member.
 
         Args:
-            trip_id (str): Trip identifier.
-            member_ids (List[str]): New list of member ids.
-            current_user_id (str): Id of the user performing the update (must be owner).
+            trip_id: Trip identifier.
+            member_ids: The complete new list of member ids.
+            current_user_id: ID of the user performing the update.
 
         Returns:
-            Optional[Trip]: Updated trip or ``None`` if trip not found.
-        """
-        trip = self.get_trip(trip_id)
-        if not trip:
-            return None
+            The updated trip DTO, or ``None`` if the trip was not found.
         
+        Raises:
+            PermissionError: If the `current_user_id` is not the trip owner.
+        """
+        # 1. Load raw data for permission check
+        raw_data = self.storage_manager.load_data('mongodb', trip_id, collection_name=self.collection_name)
+        if not raw_data:
+            return None
+        trip = Trip(**raw_data)
+
+        # 2. Perform permission check
         if trip.owner_id != current_user_id:
-            # We'll let the controller handle the exception or return None/False
             raise PermissionError("Only the owner can manage members.")
             
-        # Ensure owner is always a member
-        if trip.owner_id not in member_ids:
-            member_ids.append(trip.owner_id)
-
+        # 3. Ensure owner is always a member and remove duplicates
+        new_member_set = set(member_ids)
+        if trip.owner_id:
+            new_member_set.add(trip.owner_id)
+        
+        final_member_ids = list(new_member_set)
         existing_members = set(trip.member_ids or [])
-        new_members = [mid for mid in member_ids if mid not in existing_members]
-        updated = self.update_trip(trip_id, {"member_ids": member_ids})
 
-        if updated:
-            affected_users = set(existing_members) | set(member_ids)
-            if trip.owner_id:
-                affected_users.add(trip.owner_id)
-            user_stats_service.sync_multiple_users(affected_users)
+        # 4. Perform a direct, surgical update using the adapter
+        adapter = self.storage_manager.adapters.get('mongodb')
+        if not adapter:
+            raise RuntimeError("MongoDB adapter not configured")
+        
+        collection = adapter.get_collection(self.collection_name)
+        result = collection.update_one(
+            {"_id": trip_id},
+            {"$set": {"member_ids": final_member_ids}}
+        )
 
-        if updated and new_members and getattr(trip, "stats", None):
+        if result.matched_count == 0:
+            return None
+
+        # 5. Sync user stats for all affected users (old and new)
+        affected_users = existing_members.union(final_member_ids)
+        if affected_users:
+            user_stats_service.sync_multiple_users(list(affected_users))
+
+        # 6. Fire event for newly added members
+        newly_added_members = [mid for mid in final_member_ids if mid not in existing_members]
+        if newly_added_members and getattr(trip, "stats", None):
             EventBus.publish("MEMBER_ADDED", {
                 "trip_id": trip_id,
-                "member_ids": new_members,
+                "member_ids": newly_added_members,
                 "stats": trip.stats.model_dump() if hasattr(trip, "stats") else {}
             })
 
-        return updated
+        # 7. Return the fully updated trip by calling get_trip
+        return self.get_trip(trip_id)
 
     def update_trip_stats(self, trip_id: str, stats: Dict[str, Any]) -> Optional[Trip]:
         """Persist denormalized trip statistics.

@@ -100,7 +100,7 @@ The following sections detail the API endpoints exposed by the backend and consu
 | `GET`  | `/`                         | `getTrips(params?)`       | Retrieves trips. Supports optional query params like `user_id` to return only trips where the user is a member (used by the profile page). |
 | `GET`  | `/{trip_id}`                | `getTrip(tripId)`         | Retrieves a single `Trip` object by its ID.                                                                        |
 | `PUT`  | `/{trip_id}`                | `updateTrip(id, data)`    | Updates an existing trip's details. Expects a JSON body with the fields to update.                                   |
-| `PUT`  | `/{trip_id}/members`        | `updateTripMembers(id, memberIds)` | Updates the list of members for a trip. Only accessible by the trip owner.                                   |
+| `PUT`  | `/{trip_id}/members`        | `updateTripMembers(id, memberIds)` | Updates the list of members for a trip. Only accessible by the trip owner. Returns updated `Trip` object. The backend ensures the owner is always included in `member_ids` and publishes `MEMBER_ADDED` events for stats synchronization. |
 | `DELETE` | `/{trip_id}`                | `deleteTrip(tripId)`      | Deletes a trip and all its associated files (from MinIO) and metadata (from MongoDB).                              |
 
 ### File and Data API
@@ -429,6 +429,7 @@ This covers file uploads, metadata management, and raw file retrieval.
   "content_type": "image/jpeg",
   "size_bytes": 2456789,
   "uploaded_at": "2025-01-15T10:30:00",
+  "uploader_id": "user-uuid-123",
   "metadata": {
     "gps": {
       "latitude": 24.12345,
@@ -449,6 +450,22 @@ This covers file uploads, metadata management, and raw file retrieval.
   }
 }
 ```
+
+> **Note on FileMetadata:** The `uploader_id` field tracks who uploaded the file. This is used for permission enforcement - only the trip owner or the original uploader can delete a file.
+
+### FileMetadataResponse Model (API Response)
+```json
+{
+  "_id": "mongodb-object-id",
+  "object_key": "unique-filename.jpg",
+  "bucket": "images",
+  "uploader_id": "user-uuid-123",
+  "can_delete": true,
+  ...
+}
+```
+
+> **Note:** The `can_delete` field is computed on-the-fly based on the requesting user. It is `true` if the user is the trip owner or the original uploader, `false` otherwise. This field is **not stored** in the database.
 
 ### GeotaggedImage Model (API Response)
 ```json

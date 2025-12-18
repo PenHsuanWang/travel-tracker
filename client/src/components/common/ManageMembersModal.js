@@ -123,6 +123,9 @@ const ManageMembersModal = ({ isOpen, onClose, trip, onTripUpdated }) => {
                                 </div>
                             )}
                         </div>
+                        <p className="helper-text" style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>
+                            Contributors can upload photos and edit journal notes. Only the Owner can delete the trip or manage members.
+                        </p>
                         
                         <div className="selected-members-list">
                             {selectedMembers.length === 0 && <p className="no-members-text">No members yet.</p>}

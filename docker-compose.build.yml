@@ -98,9 +98,9 @@ services:
     networks:
       - travel-tracker-network
     restart: unless-stopped
-    # Expose MinIO console for local development
+    # Expose MinIO console for local development (bound to localhost only)
     ports:
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s

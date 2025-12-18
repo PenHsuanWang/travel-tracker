@@ -33,9 +33,11 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
       const normalizedFiles = Array.isArray(files) ? files : [];
       console.log('[ImageGalleryPanel] Loaded images:', normalizedFiles);
 
+      // Backend now returns a flat FileMetadataResponse. Keep backward compatibility by
+      // storing the full item as metadata when nested metadata is absent.
       const preloadedMetadata = normalizedFiles.reduce((acc, item) => {
-        if (item?.object_key && item.metadata) {
-          acc[item.object_key] = item.metadata;
+        if (item?.object_key) {
+          acc[item.object_key] = item.metadata || item;
         }
         return acc;
       }, {});
@@ -93,6 +95,7 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
     return (
       imageMetadata[filename] ||
       imageFiles.find((item) => item?.object_key === filename)?.metadata ||
+      imageFiles.find((item) => item?.object_key === filename) ||
       null
     );
   }, [imageMetadata, imageFiles]);

@@ -43,6 +43,12 @@ Travel Tracker lets outdoor enthusiasts upload trips, visualize GPX tracks, over
 - Manage notes, metadata, and ordering with inline edits.
 - Fullscreen viewer with keyboard navigation and map syncing.
 
+### Collaborative Journaling
+
+- **Contributor Role**: Invited members can upload their own photos and GPX tracks to shared trips.
+- **Permission Model**: Owners retain administrative control (delete trip, manage members), while contributors can manage their own content and edit shared notes.
+- **Data Lineage**: All uploads track the original `uploader_id` to enforce deletion rights.
+
 ### Status & Health
 
 - Swagger docs exposed at `/docs` with <100 ms response times for most endpoints.
@@ -158,6 +164,16 @@ For CI/CD or server deployments:
 
 ## Configuration
 
+### Security Warning ⚠️
+
+**CRITICAL**: Never deploy the default configuration to a public server. The default `docker-compose.dbonly.yml` and `docker-compose.build.yml` are for **local development only**.
+
+For production:
+1.  Use `docker-compose.prod.yml`.
+2.  Create a `.env.production` file (copy from `.env.production.example`).
+3.  Set strong, unique passwords for `MONGODB_PASSWORD` and `MINIO_SECRET_KEY`.
+4.  Ensure database ports (27017, 9000, 9001) are **NOT** exposed to the public internet. The production compose file keeps them internal to the Docker network.
+
 ### Backend (`server/.env`)
 
 ```env
@@ -168,6 +184,8 @@ MINIO_SECURE=false
 MONGODB_HOST=localhost
 MONGODB_PORT=27017
 MONGODB_DATABASE=travel_tracker
+MONGODB_USERNAME=admin
+MONGODB_PASSWORD=password
 SECRET_KEY=change_me
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
@@ -302,6 +320,7 @@ This will delete the `server/docs/build` directory, ensuring your next build is 
 - ✅ Docker-based infrastructure & health guards.
 - ✅ MinIO adapters + MongoDB storage pattern.
 - ✅ GPX upload + EXIF parsing.
+- ✅ Collaborative journaling (Member/Contributor roles).
 - ⚙ Photo markers + gallery revamp.
 - ⚙ GPX editing tools and export pipelines.
 - 🔐 Authentication and user limits.

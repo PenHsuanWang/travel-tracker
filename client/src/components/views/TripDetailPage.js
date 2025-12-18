@@ -6,7 +6,7 @@ import TripSidebar from '../layout/TripSidebar';
 import TimelinePanel from '../panels/TimelinePanel';
 import TripStatsHUD from '../panels/TripStatsHUD';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
-import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile } from '../../services/api';
+import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile, updateWaypointNote } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
 
@@ -48,36 +48,38 @@ const deriveNoteTitleValue = (providedTitle, noteValue) => {
 
 const normalizePhoto = (item) => {
     if (!item) return null;
-    const metadata = item.metadata || {};
-    const note = metadata.note || metadata.caption || metadata.notes || null;
-    const noteTitle = deriveNoteTitleValue(metadata.note_title, note);
-    const capturedDate = parseDateSafe(metadata.captured_at || metadata.date_taken || metadata.created_at);
-    const lat = Number(metadata?.gps?.latitude ?? metadata?.gps?.lat ?? item.lat);
-    const lon = Number(metadata?.gps?.longitude ?? metadata?.gps?.lon ?? item.lon);
+    const note = item.note || item.caption || item.notes || null;
+    const noteTitle = deriveNoteTitleValue(item.note_title, note);
+    const capturedDate = parseDateSafe(item.captured_at || item.date_taken || item.created_at);
+    const lat = Number(item?.gps?.latitude ?? item?.gps?.lat ?? item.lat);
+    const lon = Number(item?.gps?.longitude ?? item?.gps?.lon ?? item.lon);
     const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
 
     return {
         type: 'photo',
         id: item.object_key,
         objectKey: item.object_key,
-        fileName: metadata.original_filename || item.object_key,
-        thumbnailUrl: metadata.thumb_url || metadata.thumbnail_url || item.thumb_url || getImageUrl(item.object_key),
+        fileName: item.original_filename || item.object_key,
+        thumbnailUrl: item.thumb_url || item.thumbnail_url || item.thumb_url || getImageUrl(item.object_key),
         imageUrl: getImageUrl(item.object_key),
         capturedAt: capturedDate ? capturedDate.toISOString() : null,
         capturedDate,
         timestamp: capturedDate ? capturedDate.getTime() : 0,
-        capturedSource: metadata.captured_source || (metadata.date_taken ? 'exif' : metadata.created_at ? 'fallback' : 'unknown'),
+        capturedSource: item.captured_source || (item.date_taken ? 'exif' : item.created_at ? 'fallback' : 'unknown'),
         lat: hasCoords ? lat : null,
         lon: hasCoords ? lon : null,
-        metadataId: item.metadata_id || null,
-        caption: metadata.caption || metadata.notes || null,
+        // Prefer stable metadata id; accept _id or legacy fields to stay robust against alias changes
+        metadataId: item.id || item._id || item.metadata_id || null,
+        caption: item.caption || item.notes || null,
         note,
         noteTitle,
-        orderIndex: metadata.order_index ?? null,
+        orderIndex: item.order_index ?? null,
+        can_delete: item.can_delete || false, // Preserve the can_delete flag
+        exif: item.exif || null,
     };
 };
 
-const normalizeWaypoint = (waypoint, gpxFileName, index) => {
+const normalizeWaypoint = (waypoint, gpxFileName, index, gpxMetadataId = null) => {
     if (!waypoint) return null;
     const capturedDate = parseDateSafe(waypoint.time);
     const lat = Number(waypoint.lat);
@@ -92,6 +94,8 @@ const normalizeWaypoint = (waypoint, gpxFileName, index) => {
         type: 'waypoint',
         id: `waypoint-${gpxFileName}-${index}`,
         gpxSource: gpxFileName,
+        gpxMetadataId,
+        waypointIndex: index,
         fileName: `Waypoint ${index + 1}`,
         capturedAt: capturedDate ? capturedDate.toISOString() : null,
         capturedDate,
@@ -159,17 +163,23 @@ const TripDetailPage = () => {
 
     // Robust check for user ID (handles id vs _id) and type coercion
     const userId = user ? (user.id || user._id) : null;
+
     const isOwner = useMemo(() => {
         if (!userId || !trip) return false;
-        // Check direct owner_id match
-        if (trip.owner_id && String(trip.owner_id) === String(userId)) return true;
-        // Check owner object match (fallback)
-        if (trip.owner && trip.owner.id && String(trip.owner.id) === String(userId)) return true;
-        if (trip.owner && trip.owner.username && user?.username && trip.owner.username === user.username) return true;
-        return false;
-    }, [userId, trip, user?.username]);
+        return String(trip.owner_id) === String(userId);
+    }, [userId, trip]);
 
-    const readOnly = !isOwner;
+    const isMember = useMemo(() => {
+        if (!userId || !trip || !trip.member_ids) return false;
+        return trip.member_ids.some(memberId => String(memberId) === String(userId));
+    }, [userId, trip]);
+
+    const canEditContent = isOwner || isMember;
+    const canManageTrip = isOwner;
+
+    // The `readOnly` prop passed to child components now reflects content editing permissions.
+    const readOnly = !canEditContent;
+
 
     // Lifted GPX State
     // Refactored: Single GPX file per trip
@@ -279,6 +289,12 @@ const TripDetailPage = () => {
             if (files && files.length > 0) {
                 // Take the first one (backend enforces single, but frontend should be robust)
                 const file = files[0];
+                console.log('[RefreshGpxTrack] GPX file loaded:', {
+                    objectKey: file.object_key,
+                    metadataId: file.metadata_id,
+                    bucket: file.bucket,
+                    hasMetadata: file.has_metadata
+                });
                 setGpxFile(file);
                 
                 // Auto-load analysis
@@ -294,7 +310,7 @@ const TripDetailPage = () => {
                             waypoints: trackData.waypoints || [],
                             rest_points: trackData.rest_points || []
                         });
-                        console.log(`GPX track loaded: ${objectKey}`);
+                        console.log(`GPX track loaded: ${objectKey}, waypoints: ${(trackData.waypoints || []).length}`);
                     }
                 } catch (err) {
                     console.error('Error fetching analyzed GPX data:', err);
@@ -315,9 +331,45 @@ const TripDetailPage = () => {
     // Compute waypoints from loaded track
     const trackWaypoints = useMemo(() => {
         if (!gpxTrack) return [];
-        return (gpxTrack.waypoints || [])
-            .map((wp, idx) => normalizeWaypoint(wp, gpxFile?.object_key || 'track', idx))
+        
+        // Determine metadata_id - use explicit metadata_id if available, otherwise use object_key as fallback
+        const gpxMetadataId = gpxFile?.metadata_id || gpxFile?.object_key;
+        
+        if (!gpxMetadataId) {
+            console.warn('[TrackWaypoints] No metadata ID available for waypoint updates', {
+                gpxFile: gpxFile ? { object_key: gpxFile.object_key, metadata_id: gpxFile.metadata_id } : null
+            });
+        }
+        
+        const waypoints = (gpxTrack.waypoints || [])
+            .map((wp, idx) => {
+                const normalized = normalizeWaypoint(wp, gpxFile?.object_key || 'track', idx, gpxMetadataId);
+                if (normalized && !normalized.gpxMetadataId) {
+                    console.warn('[TrackWaypoints] Waypoint missing gpxMetadataId:', {
+                        index: idx,
+                        gpxFileMetadataId: gpxFile?.metadata_id,
+                        gpxFileObjectKey: gpxFile?.object_key,
+                        gpxMetadataId: gpxMetadataId,
+                        normalized
+                    });
+                }
+                return normalized;
+            })
             .filter(Boolean);
+        
+        if (waypoints.length > 0) {
+            console.log('[TrackWaypoints] Waypoints computed:', {
+                count: waypoints.length,
+                gpxMetadataId: gpxMetadataId,
+                sample: {
+                    id: waypoints[0].id,
+                    title: waypoints[0].noteTitle,
+                    note: waypoints[0].note ? waypoints[0].note.substring(0, 50) : null
+                }
+            });
+        }
+        
+        return waypoints;
     }, [gpxTrack, gpxFile]);
 
     // Merge photos and waypoints into unified timeline
@@ -537,6 +589,13 @@ const TripDetailPage = () => {
 
     const applyNoteToWaypointState = useCallback((waypointId, { note, noteTitle, timestamp }) => {
         // We need to update gpxTrack state because that's the source of truth for waypoints now
+        console.log('[applyNoteToWaypointState] Updating waypoint state:', {
+            waypointId,
+            note,
+            noteTitle,
+            timestamp
+        });
+        
         setGpxTrack((prevTrack) => {
             if (!prevTrack) return prevTrack;
             
@@ -547,12 +606,17 @@ const TripDetailPage = () => {
                 const id = `waypoint-${filename}-${idx}`;
                 
                 if (id === waypointId) {
-                    return {
+                    const updated = {
                         ...wp,
                         note: note !== undefined ? note : wp.note,
-                        title: noteTitle !== undefined ? noteTitle : (wp.title || wp.name),
+                        name: noteTitle !== undefined ? noteTitle : (wp.name || wp.title),
                         time: timestamp ? new Date(timestamp).toISOString() : wp.time
                     };
+                    console.log('[applyNoteToWaypointState] Updated waypoint at index', idx, ':', {
+                        before: { note: wp.note, name: wp.name, title: wp.title },
+                        after: { note: updated.note, name: updated.name, title: updated.title }
+                    });
+                    return updated;
                 }
                 return wp;
             });
@@ -565,31 +629,88 @@ const TripDetailPage = () => {
     }, [gpxFile]);
 
     const handleNoteSave = useCallback(
-        async ({ itemType = 'photo', photoId, waypointId, metadataId, note, noteTitle, timestamp }) => {
+        async ({ itemType = 'photo', photoId, waypointId, gpxMetadataId, waypointIndex, metadataId, note, noteTitle, timestamp }) => {
             if (itemType === 'waypoint' && waypointId) {
+                const previousTrack = gpxTrack; // Store previous state for rollback
+                // Optimistic update
                 applyNoteToWaypointState(waypointId, { note, noteTitle, timestamp });
-                // TODO: Persist waypoint changes to backend (not yet implemented in API)
+
+                try {
+                    if (!gpxMetadataId) {
+                        throw new Error(`Missing GPX metadata ID for waypoint update. waypointId: ${waypointId}`);
+                    }
+                    if (waypointIndex === undefined || waypointIndex === null) {
+                        throw new Error(`Missing waypoint index for update. waypointId: ${waypointId}`);
+                    }
+
+                    const result = await updateWaypointNote(gpxMetadataId, waypointIndex, { note, note_title: noteTitle });
+                    
+                    // Final update with server response
+                    const updatedNote = result.note ?? note;
+                    const updatedTitle = result.note_title ?? noteTitle;
+                    applyNoteToWaypointState(waypointId, { note: updatedNote, noteTitle: updatedTitle, timestamp });
+
+                    // Dispatch event for map to listen to
+                    window.dispatchEvent(new CustomEvent('waypointNoteUpdated', {
+                        detail: {
+                            waypointId: waypointId,
+                            note: updatedNote,
+                            noteTitle: updatedTitle
+                        }
+                    }));
+
+                } catch (error) {
+                    console.error('Failed to save waypoint note:', error);
+                    alert(`Failed to save waypoint note: ${error.message || 'Unknown error'}`);
+                    // Rollback on error
+                    if (previousTrack) {
+                        setGpxTrack(previousTrack);
+                    }
+                }
                 return;
             }
 
-            if (!photoId && !metadataId) return;
-            const targetId = metadataId || photoId;
-            const previous = photos.find((p) => p.id === photoId);
-            applyNoteToPhotoState(photoId, { note, noteTitle });
+            // --- Photo Note Logic ---
+            const stateLookupKey = photoId || (metadataId ? photos.find(p => p.metadataId === metadataId)?.id : null);
+
+            if (!stateLookupKey) {
+                console.error("Could not identify photo for UI update.", { photoId, metadataId });
+                alert("Failed to save note: Could not identify the photo to update.");
+                return;
+            }
+
+            // The ID for the database API call must be the metadataId (_id).
+            const matchingPhoto = photos.find(p => p.id === stateLookupKey);
+            const dbId = metadataId || matchingPhoto?.metadataId;
+
+            if (!dbId) {
+                console.error("Failed to save note: Database ID for the photo could not be determined.", {
+                    originalPhotoId: photoId,
+                    stateLookupKey,
+                    matchingPhoto,
+                });
+                alert('Error: Could not save note because the photo reference was lost.');
+                return;
+            }
+
+            // Proceed with optimistic update and API call.
+            const previous = matchingPhoto;
+            applyNoteToPhotoState(stateLookupKey, { note, noteTitle });
+
             try {
-                const result = await updatePhotoNote(targetId, {
+                const result = await updatePhotoNote(dbId, {
                     note,
                     note_title: noteTitle,
                 });
                 const updatedNote = result.note ?? note;
                 const updatedTitle = result.note_title ?? noteTitle;
-                applyNoteToPhotoState(photoId, { note: updatedNote, noteTitle: updatedTitle });
-                // notify other listeners (e.g., map layer)
+                applyNoteToPhotoState(stateLookupKey, { note: updatedNote, noteTitle: updatedTitle });
+                
                 window.dispatchEvent(
                     new CustomEvent('photoNoteUpdated', {
                         detail: {
-                            object_key: photoId,
-                            metadata_id: targetId,
+                            object_key: stateLookupKey,
+                            metadata_id: dbId,
                             note: updatedNote,
                             note_title: updatedTitle,
                         },
@@ -598,12 +719,12 @@ const TripDetailPage = () => {
             } catch (error) {
                 console.error('Failed to save note', error);
                 if (previous) {
-                    applyNoteToPhotoState(photoId, { note: previous.note, noteTitle: previous.noteTitle });
+                    applyNoteToPhotoState(stateLookupKey, { note: previous.note, noteTitle: previous.noteTitle });
                 }
                 alert('Failed to save note. Please try again.');
             }
         },
-        [applyNoteToPhotoState, applyNoteToWaypointState, photos]
+        [applyNoteToPhotoState, applyNoteToWaypointState, photos, gpxTrack]
     );
 
     const handleMapPhotoUpdate = useCallback((photoId, note, save = false) => {
@@ -745,7 +866,7 @@ const TripDetailPage = () => {
                             </option>
                         ))}
                     </select>
-                    {!readOnly && (
+                    {canManageTrip && (
                         <button
                             type="button"
                             className="ghost-button danger-button"
@@ -763,8 +884,8 @@ const TripDetailPage = () => {
                     stats={tripStats}
                     onTripDataChange={handleTripDataChange}
                     notice={tripNotice}
-                    readOnly={readOnly}
-                    isOwner={isOwner}
+                    readOnly={!canManageTrip}
+                    isOwner={canManageTrip}
                 />
                 <div
                     className={`MapAndTimeline ${timelineMode !== 'side' ? 'timeline-floating' : ''} ${timelineMode === 'sheet' ? 'timeline-sheet' : ''}`}
