@@ -47,6 +47,7 @@ Travel Tracker lets outdoor enthusiasts upload trips, visualize GPX tracks, over
 
 - **Contributor Role**: Invited members can upload their own photos and GPX tracks to shared trips.
 - **Permission Model**: Owners retain administrative control (delete trip, manage members), while contributors can manage their own content and edit shared notes.
+- **Deletion Rules**: Backend enforces that only the trip owner or the original uploader can delete a file; API responses include a computed `can_delete` flag consumed by the frontend.
 - **Data Lineage**: All uploads track the original `uploader_id` to enforce deletion rights.
 
 ### Status & Health
@@ -220,6 +221,8 @@ When building Docker images, `REACT_APP_API_BASE_URL` is set to `/api` so Nginx 
    curl http://localhost:9000/minio/health/live
    docker exec -it mongodb mongosh --eval "db.adminCommand('ping')"
    ```
+
+3. **Legacy Backfill (if upgrading)**: run `python server/scripts/migrate_uploader_ownership.py` to populate `uploader_id` for existing file metadata so deletion permissions (`can_delete`) are computed correctly.
 
 3. **Backend config**: ensure `.env` points at `localhost` endpoints when running outside Docker or `storage:9000`/`database:27017` in containers.
 

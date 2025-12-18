@@ -91,6 +91,11 @@ retrieved = sm.load_data('mongodb', trip_id, collection_name=collection)
 
 These are the bucket names used by the handlers and services in the `server/` codebase; you may change them in deployment but update the code or environment accordingly.
 
+**Uploader lineage & permissions**
+- Each file metadata document tracks `uploader_id` (set by the server from the authenticated user).
+- File listing responses compute `can_delete` per requester (true for trip owner or original uploader) so the frontend can hide controls without trusting client logic.
+- If upgrading an existing database, run `python server/scripts/migrate_uploader_ownership.py` once to backfill `uploader_id` on older documents before relying on `can_delete`.
+
 **Usage Example (within a service):**
 
 ```python
@@ -202,9 +207,10 @@ This section details which services interact with the storage layer and for what
 -   **Functions & Storage Interaction:**
     -   `save_file()`:
         -   **MinIO:** The appropriate `data_io_handler` (e.g., `ImageHandler`) saves the file content to a MinIO bucket (the repo uses `images` for photos and `gps-data` for raw GPX). For GPX files, it also saves a serialized analysis object to the `gps-analysis-data` bucket.
-        -   **MongoDB:** Saves a comprehensive `FileMetadata` document to the `file_metadata` collection, containing details about the file, EXIF data, GPS coordinates, analysis summaries, and the `uploader_id` of the user who performed the upload.
+        -   **MongoDB:** Saves a comprehensive `FileMetadata` document to the `file_metadata` collection, containing details about the file, EXIF data, GPS coordinates, analysis summaries, and the `uploader_id` of the user who performed the upload (enforced server-side; client values are ignored).
         -   **GPX Handling:** Manages the 1:1 relationship between a trip and a GPX file. When a new GPX file is uploaded for a trip, it replaces any existing GPX file and its associated metadata.
         -   **Event Hooks:** When GPX analysis completes the service updates the trip's denormalized stats via `TripService.update_trip_stats(...)` and publishes a `GPX_PROCESSED` event on the internal `EventBus`. This keeps the `UserStatsService`/`AchievementEngine` pipeline informed about new distance and elevation data.
+        -   **Authorization:** Uploads require the requester to be the trip owner or a listed member; otherwise the route returns 403.
     -   `get_file_metadata()`:
         -   **MongoDB:** Loads a specific `FileMetadata` document from the `file_metadata` collection.
     -   `delete_file()`:
@@ -241,7 +247,7 @@ This section details which services interact with the storage layer and for what
     -   `list_files_with_metadata()`:
         -   **MinIO:** Lists all object keys in a bucket.
         -   **MongoDB:** Fetches all corresponding documents from the `file_metadata` collection and merges the information.
-        -   **Permissions:** Computes a `can_delete` boolean flag for each file based on the requesting user's identity (True if Owner or Uploader), which is returned in the response but not stored.
+        -   **Permissions:** Computes a `can_delete` boolean flag for each file based on the requesting user's identity (true if trip owner or original uploader); the field is returned in responses but never stored.
     -   `list_geotagged_images()`:
         -   **MongoDB:** Performs a geospatial query on the `file_metadata` collection to find images with GPS data, optionally within a specific bounding box.
     -   `get_file_bytes()`:

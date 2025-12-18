@@ -37,6 +37,7 @@ The application's primary navigation is defined in `App.js`, which sets up the f
         -   **Owner:** Full control (edit trip, manage members, upload/delete any content).
         -   **Member (Contributor):** Can upload photos/GPX, edit notes, and delete their own content.
         -   **Guest:** Read-only access.
+    -   **Delete Controls:** The UI reads `can_delete` from file metadata responses to show/hide delete buttons; backend enforcement remains the source of truth.
     -   **Responsive Timeline:** Adaptive timeline display with three modes:
         -   **Side mode** (>1180px): Fixed-width resizable side panel
         -   **Overlay mode** (1024-1180px): Floating overlay on the right
