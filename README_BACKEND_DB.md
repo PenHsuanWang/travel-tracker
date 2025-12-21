@@ -207,7 +207,8 @@ This section details which services interact with the storage layer and for what
 -   **Functions & Storage Interaction:**
     -   `save_file()`:
         -   **MinIO:** The appropriate `data_io_handler` (e.g., `ImageHandler`) saves the file content to a MinIO bucket (the repo uses `images` for photos and `gps-data` for raw GPX). For GPX files, it also saves a serialized analysis object to the `gps-analysis-data` bucket.
-        -   **MongoDB:** Saves a comprehensive `FileMetadata` document to the `file_metadata` collection, containing details about the file, EXIF data, GPS coordinates, analysis summaries, and the `uploader_id` of the user who performed the upload (enforced server-side; client values are ignored).
+        -   **Image Variants:** Invokes `ImageVariantService` to generate and persist optimized variants (thumbnail: 400px, preview: 800px) in modern formats (AVIF, WebP, JPEG) if enabled.
+        -   **MongoDB:** Saves a comprehensive `FileMetadata` document to the `file_metadata` collection, containing details about the file, EXIF data, GPS coordinates, analysis summaries, variant keys (`thumb_keys`, `preview_keys`), and the `uploader_id`.
         -   **GPX Handling:** Manages the 1:1 relationship between a trip and a GPX file. When a new GPX file is uploaded for a trip, it replaces any existing GPX file and its associated metadata.
         -   **Event Hooks:** When GPX analysis completes the service updates the trip's denormalized stats via `TripService.update_trip_stats(...)` and publishes a `GPX_PROCESSED` event on the internal `EventBus`. This keeps the `UserStatsService`/`AchievementEngine` pipeline informed about new distance and elevation data.
         -   **Authorization:** Uploads require the requester to be the trip owner or a listed member; otherwise the route returns 403.
@@ -217,6 +218,16 @@ This section details which services interact with the storage layer and for what
         -   **MinIO:** Deletes the file object from its bucket.
         -   **MongoDB:** Deletes the corresponding `FileMetadata` document from the `file_metadata` collection.
         -   **Permissions:** Enforces that only the Trip Owner or the original Uploader can delete a file.
+
+### `image_variant_service.py`
+
+-   **Class:** `ImageVariantService`
+-   **Purpose:** Best-effort generation of optimized image variants to improve frontend performance and reduce bandwidth.
+-   **Functions & Storage Interaction:**
+    -   `generate_variants(object_key)`:
+        -   **Processing:** Uses Pillow (with optional `pillow-avif`) to generate `thumb` (max 400px) and `preview` (max 800px) versions. Attempts formats in order: AVIF → WebP → JPEG.
+        -   **MinIO:** Saves variants to the same bucket as the original, using suffixed keys (e.g., `path/photo.jpg` -> `path/photo.jpg.__thumb.webp`).
+        -   **Return:** Returns a dictionary of generated keys and formats to be stored in MongoDB `FileMetadata`.
 
 ### `trip_service.py`
 
@@ -247,11 +258,13 @@ This section details which services interact with the storage layer and for what
     -   `list_files_with_metadata()`:
         -   **MinIO:** Lists all object keys in a bucket.
         -   **MongoDB:** Fetches all corresponding documents from the `file_metadata` collection and merges the information.
-        -   **Permissions:** Computes a `can_delete` boolean flag for each file based on the requesting user's identity (true if trip owner or original uploader); the field is returned in responses but never stored.
+        -   **Response Enrichment:** Populates `thumb_url` and `preview_url` fields in the response using variant logic.
+        -   **Permissions:** Computes a `can_delete` boolean flag for each file based on the requesting user's identity.
     -   `list_geotagged_images()`:
         -   **MongoDB:** Performs a geospatial query on the `file_metadata` collection to find images with GPS data, optionally within a specific bounding box.
-    -   `get_file_bytes()`:
-        -   **MinIO:** Loads the raw byte content of a specific file object from a bucket.
+    -   `get_file_bytes()` / `resolve_serving_key()`:
+        -   **Variant Selection:** Resolves the appropriate object key based on the requested `variant` (`thumb`, `preview`, `original`) and the client's `Accept` header (serving AVIF/WebP if supported).
+        -   **MinIO:** Loads the raw byte content of the selected file object (variant or original) from a bucket. Transparently falls back to the original file if the requested variant does not exist.
 
 ### `gpx_analysis_retrieval_service.py`
 
