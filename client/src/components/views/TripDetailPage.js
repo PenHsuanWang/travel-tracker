@@ -46,6 +46,8 @@ const deriveNoteTitleValue = (providedTitle, noteValue) => {
     return null;
 };
 
+const hasValidCoords = (lat, lon) => Number.isFinite(lat) && Number.isFinite(lon) && !(lat === 0 && lon === 0);
+
 const normalizePhoto = (item) => {
     if (!item) return null;
     const note = item.note || item.caption || item.notes || null;
@@ -53,7 +55,7 @@ const normalizePhoto = (item) => {
     const capturedDate = parseDateSafe(item.captured_at || item.date_taken || item.created_at);
     const lat = Number(item?.gps?.latitude ?? item?.gps?.lat ?? item.lat);
     const lon = Number(item?.gps?.longitude ?? item?.gps?.lon ?? item.lon);
-    const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+    const hasCoords = hasValidCoords(lat, lon);
 
     const thumbUrl = normalizeImageUrl(item.thumb_url || item.thumbnail_url || item.thumb_url, 'thumb')
         || getImageVariantUrl(item.object_key, 'thumb');
@@ -491,11 +493,11 @@ const TripDetailPage = () => {
                 object_key: photo.objectKey,
                 source: 'trip-photo-timeline',
             };
-            if (photo.lat !== null && photo.lon !== null) {
+            if (hasValidCoords(photo.lat, photo.lon)) {
                 detail.lat = photo.lat;
                 detail.lng = photo.lon;
+                window.dispatchEvent(new CustomEvent('centerMapOnLocation', { detail }));
             }
-            window.dispatchEvent(new CustomEvent('centerMapOnLocation', { detail }));
         }
     }, [orderedPhotos, timelineMode]);
 

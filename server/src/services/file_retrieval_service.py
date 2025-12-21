@@ -1,6 +1,7 @@
 # src/services/file_retrieval_service.py
 
 import hashlib
+import math
 import logging
 import mimetypes
 import os
@@ -247,8 +248,9 @@ class FileRetrievalService:
             # Build query for images with GPS
             query: Dict[str, Any] = {
                 "gps": {"$exists": True, "$ne": None},
-                "gps.latitude": {"$exists": True, "$ne": None},
-                "gps.longitude": {"$exists": True, "$ne": None},
+                # Exclude missing and zero coordinates to prevent Null Island artifacts
+                "gps.latitude": {"$exists": True, "$nin": [None, 0]},
+                "gps.longitude": {"$exists": True, "$nin": [None, 0]},
                 "bucket": bucket_name
             }
             
@@ -280,10 +282,21 @@ class FileRetrievalService:
                 try:
                     parsed = FileMetadata(**document)
                     
-                    # Validate GPS coordinates
-                    if not (parsed.gps and 
-                            parsed.gps.latitude is not None and 
-                            parsed.gps.longitude is not None):
+                    # Validate GPS coordinates and drop missing/zero/NaN entries
+                    if not (parsed.gps and parsed.gps.latitude is not None and parsed.gps.longitude is not None):
+                        continue
+
+                    try:
+                        lat_val = float(parsed.gps.latitude)
+                        lon_val = float(parsed.gps.longitude)
+                    except (TypeError, ValueError):
+                        continue
+
+                    if not (math.isfinite(lat_val) and math.isfinite(lon_val)):
+                        continue
+
+                    # Avoid Null Island (0,0) when EXIF is missing
+                    if lat_val == 0 and lon_val == 0:
                         continue
                     
                     # Generate thumbnail URL (use object_key for now)
@@ -298,8 +311,8 @@ class FileRetrievalService:
                     items.append({
                         'object_key': parsed.object_key,
                         'original_filename': parsed.filename or parsed.id,
-                        'lat': float(parsed.gps.latitude),
-                        'lon': float(parsed.gps.longitude),
+                        'lat': lat_val,
+                        'lon': lon_val,
                         'thumb_url': thumb_url,
                         'preview_url': preview_url,
                         'metadata_id': parsed.id,

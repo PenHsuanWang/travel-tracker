@@ -56,6 +56,14 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
     }
   }, [tripId]);
 
+  const hasValidGps = (gps) => {
+    if (!gps) return false;
+    const lat = Number(gps.latitude);
+    const lon = Number(gps.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+    return !(lat === 0 && lon === 0);
+  };
+
   // Listen for image upload events
   useEffect(() => {
     const handleImageUpload = () => {
@@ -115,12 +123,7 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
     const cached = getMetadataForImage(filename);
 
     // Only skip refetch if GPS is already present and valid
-    const hasValidGps =
-      cached?.gps &&
-      Number.isFinite(Number(cached.gps.latitude)) &&
-      Number.isFinite(Number(cached.gps.longitude));
-
-    if (hasValidGps) return cached; // Only skip when GPS is good
+    if (hasValidGps(cached?.gps)) return cached; // Only skip when GPS is good
 
     try {
       const metadata = await getFileMetadata(filename);
@@ -162,7 +165,7 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
     const gps = metadata?.gps;
     const lat = Number(gps?.latitude);
     const lon = Number(gps?.longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    if (!hasValidGps(gps)) {
       alert('This image does not have GPS coordinates to show on the map.');
       return;
     }
@@ -449,11 +452,7 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
               {imageFiles.map((item, idx) => {
                 const filename = item?.object_key || `image-${idx}`;
                 const metadata = getMetadataForImage(filename);
-                const hasValidGps =
-                  metadata?.gps &&
-                  Number.isFinite(Number(metadata.gps.latitude)) &&
-                  Number.isFinite(Number(metadata.gps.longitude));
-                const disableViewButton = Boolean(metadata) && !hasValidGps;
+                const hasValidGpsFlag = hasValidGps(metadata?.gps);
 
                 return (
                   <div
@@ -491,16 +490,17 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
                       <span className="image-name-text">
                         {metadata?.original_filename || filename}
                       </span>
-                      <button
-                        className="view-on-map-chip"
-                        onClick={(event) => handleViewOnMap(filename, event, metadata)}
-                        disabled={disableViewButton}
-                        title={disableViewButton ? 'No GPS location available' : 'View this image on the map'}
-                      >
-                        View on map
-                      </button>
+                      {hasValidGpsFlag && (
+                        <button
+                          className="view-on-map-chip"
+                          onClick={(event) => handleViewOnMap(filename, event, metadata)}
+                          title="View this image on the map"
+                        >
+                          View on map
+                        </button>
+                      )}
                     </div>
-                    {metadata?.gps && (
+                    {metadata?.gps && hasValidGpsFlag && (
                       <div className="gps-indicator" title="Has GPS location">📍</div>
                     )}
                     {!readOnly && (
