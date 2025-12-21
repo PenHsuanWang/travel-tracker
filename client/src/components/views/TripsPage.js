@@ -5,6 +5,7 @@ import {
     deleteTrip,
     getTrips,
     getImageUrl,
+    getImageVariantUrl,
     listImageFiles,
     updateTrip,
     uploadFile,
@@ -70,7 +71,7 @@ const TripCard = ({
 
     const coverUrl =
         trip.cover_image_url ||
-        (trip.cover_photo_id ? getImageUrl(trip.cover_photo_id) : null);
+        (trip.cover_photo_id ? getImageVariantUrl(trip.cover_photo_id, 'preview') : null);
     const hasCover = Boolean(coverUrl);
     const distanceLabel = trip.distance_km ? `${trip.distance_km} km` : '—';
     const difficulty = normalizeDifficulty(trip.difficulty);

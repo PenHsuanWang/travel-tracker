@@ -6,7 +6,7 @@ import TripSidebar from '../layout/TripSidebar';
 import TimelinePanel from '../panels/TimelinePanel';
 import TripStatsHUD from '../panels/TripStatsHUD';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
-import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, getImageVariantUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile, updateWaypointNote } from '../../services/api';
+import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, getImageVariantUrl, normalizeImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile, updateWaypointNote } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
 
@@ -55,9 +55,11 @@ const normalizePhoto = (item) => {
     const lon = Number(item?.gps?.longitude ?? item?.gps?.lon ?? item.lon);
     const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
 
-    const thumbUrl = item.thumb_url || item.thumbnail_url || getImageVariantUrl(item.object_key, 'thumb');
-    const previewUrl = item.preview_url || getImageVariantUrl(item.object_key, 'preview');
-    const originalUrl = getImageUrl(item.object_key, 'original');
+    const thumbUrl = normalizeImageUrl(item.thumb_url || item.thumbnail_url || item.thumb_url, 'thumb')
+        || getImageVariantUrl(item.object_key, 'thumb');
+    const previewUrl = normalizeImageUrl(item.preview_url, 'preview')
+        || getImageVariantUrl(item.object_key, 'preview');
+    const originalUrl = normalizeImageUrl(item.original_url, 'original') || getImageUrl(item.object_key, 'original');
 
     return {
         type: 'photo',

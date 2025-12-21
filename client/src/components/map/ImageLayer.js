@@ -408,8 +408,18 @@ function resolveThumbUrl(url) {
   }
 
   const baseCandidate =
-    process.env.REACT_APP_API_BASE_URL ||
-    (typeof window !== 'undefined' ? window.location.origin : '');
+    (() => {
+      const raw = process.env.REACT_APP_API_BASE_URL;
+      if (raw) {
+        try {
+          // Normalize to origin to avoid double "/api" when URLs are already absolute paths.
+          return new URL(raw).origin;
+        } catch (err) {
+          console.warn('[ImageLayer] Invalid REACT_APP_API_BASE_URL, falling back to window origin', err);
+        }
+      }
+      return typeof window !== 'undefined' ? window.location.origin : '';
+    })();
 
   if (!baseCandidate) {
     return url;

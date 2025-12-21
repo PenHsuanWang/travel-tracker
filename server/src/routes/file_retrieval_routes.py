@@ -471,6 +471,12 @@ async def get_file(
     pre-generated variant that best matches the Accept header. On variant miss
     it transparently falls back to the original without raising.
     """
+    if not retrieval_service.minio_ready:
+        detail = "MinIO storage backend is not configured"
+        if retrieval_service.minio_init_error:
+            detail = f"{detail}: {retrieval_service.minio_init_error}"
+        raise HTTPException(status_code=503, detail=detail)
+
     selected_key, media_type, is_variant = retrieval_service.resolve_serving_key(
         filename,
         bucket,

@@ -37,12 +37,16 @@ class FileRetrievalService:
         self.trip_service = TripService()
         self.image_variants_enabled = os.getenv("IMAGE_VARIANTS_ENABLED", "true").lower() != "false"
         self.format_priority = ["avif", "webp", "jpeg", "jpg"]
+        self.minio_ready = False
+        self.minio_init_error: Optional[str] = None
 
         try:
             minio_adapter = AdapterFactory.create_minio_adapter()
             self.storage_manager.add_adapter('minio', minio_adapter)
+            self.minio_ready = True
         except Exception as exc:  # pragma: no cover - defensive guard
-            self.logger.warning("MinIO adapter not initialized: %s", exc)
+            self.minio_init_error = str(exc)
+            self.logger.error("MinIO adapter not initialized: %s", exc)
 
         try:
             mongodb_adapter = AdapterFactory.create_mongodb_adapter()
@@ -126,8 +130,9 @@ class FileRetrievalService:
         Returns:
             Object keys in the bucket (possibly filtered by trip).
         """
-        if 'minio' not in self.storage_manager.adapters:
-            raise RuntimeError("MinIO adapter not configured")
+        if not self.minio_ready:
+            error = self.minio_init_error or "MinIO adapter not configured"
+            raise RuntimeError(error)
         prefix = f"{trip_id}/" if trip_id else ""
         return self.storage_manager.list_keys('minio', prefix=prefix, bucket=bucket_name)
 
@@ -349,6 +354,9 @@ class FileRetrievalService:
         Returns:
             Optional[bytes]: Raw bytes or ``None`` if not found.
         """
+        if not self.minio_ready:
+            self.logger.error("MinIO adapter not configured; cannot fetch %s from %s", filename, bucket_name)
+            return None
         # Check if the file exists in the bucket.
         exists = self.storage_manager.exists('minio', filename, bucket=bucket_name)
         if not exists:
@@ -388,6 +396,8 @@ class FileRetrievalService:
 
         selected_key = self._pick_best_variant_key(variant_map, accept_header)
         if not selected_key:
+            # Fallback to original
+            self.logger.debug("Variant %s requested for %s but not found. Falling back.", normalized_variant, filename)
             media_type = self._guess_media_type(filename, default="image/jpeg")
             return filename, media_type, False
 

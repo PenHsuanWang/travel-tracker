@@ -11,7 +11,11 @@ from datetime import datetime, timezone
 from io import BytesIO
 from typing import Dict, Optional, Tuple
 
-from PIL import Image, ImageOps  # type: ignore[import-not-found]
+from PIL import Image, ImageOps, features  # type: ignore[import-not-found]
+try:
+    import pillow_avif  # type: ignore[import-not-found]
+except ImportError:
+    pass
 
 from src.utils.adapter_factory import AdapterFactory
 from src.utils.dbbutler.storage_manager import StorageManager
@@ -30,7 +34,10 @@ class ImageVariantService:
         self.logger = logging.getLogger(__name__)
         self.enabled = os.getenv("IMAGE_VARIANTS_ENABLED", "true").lower() != "false"
         self.storage_manager = storage_manager or StorageManager()
-        self.format_priority = ["avif", "webp", "jpeg"]
+
+        # dynamic codec detection with defensive fallbacks
+        self.format_priority = self._detect_format_priority()
+        
         self.target_widths = {"thumb": 400, "preview": 800}
 
         if "minio" not in self.storage_manager.adapters:
@@ -39,6 +46,24 @@ class ImageVariantService:
                 self.storage_manager.add_adapter("minio", minio_adapter)
             except Exception as exc:  # pragma: no cover - defensive guard
                 self.logger.warning("MinIO adapter not initialized for variants: %s", exc)
+
+    def _detect_format_priority(self):
+        priority = []
+        try:
+            if features.check_codec("avif"):
+                priority.append("avif")
+        except Exception as exc:
+            self.logger.warning("AVIF codec check failed: %s", exc)
+
+        try:
+            if features.check_codec("webp"):
+                priority.append("webp")
+        except Exception as exc:
+            self.logger.warning("WEBP codec check failed: %s", exc)
+
+        priority.append("jpeg")
+        self.logger.info("Image variant codecs enabled: %s", ", ".join(priority))
+        return priority
 
     def generate_variants(self, object_key: str, bucket: str = "images") -> Dict[str, object]:
         """Generate variants for an existing object.

@@ -1,6 +1,6 @@
 // client/src/components/panels/ImageGalleryPanel.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { listImageFiles, getImageUrl, getImageVariantUrl, getFileMetadata, deleteImage } from '../../services/api';
+import { listImageFiles, getImageUrl, getImageVariantUrl, normalizeImageUrl, getFileMetadata, deleteImage } from '../../services/api';
 import '../../styles/ImageGalleryPanel.css';
 
 function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
@@ -472,8 +472,8 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
                     onMouseMove={(e) => setTooltipPosition({ x: e.clientX, y: e.clientY })}
                   >
                     {(() => {
-                      const thumbSrc = item?.thumb_url || getImageVariantUrl(filename, 'thumb');
-                      const previewSrc = item?.preview_url || getImageVariantUrl(filename, 'preview');
+                      const thumbSrc = normalizeImageUrl(item?.thumb_url, 'thumb') || getImageVariantUrl(filename, 'thumb');
+                      const previewSrc = normalizeImageUrl(item?.preview_url, 'preview') || getImageVariantUrl(filename, 'preview');
                       return (
                         <img
                           src={thumbSrc}
