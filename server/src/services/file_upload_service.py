@@ -2,6 +2,7 @@
 
 from fastapi import HTTPException, UploadFile  # type: ignore[import-not-found]
 from src.services.data_io_handlers.handler_factory import HandlerFactory
+from src.services.image_variant_service import ImageVariantService
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
 from src.models.file_metadata import HandlerResult, FileMetadata
@@ -42,6 +43,7 @@ class FileUploadService:
 
         # Trip service is used for downstream updates (e.g., auto-filling trip dates from GPX)
         self.trip_service = TripService()
+        self.image_variant_service = ImageVariantService(self.storage_manager)
 
     # --- GPX date helpers ---
     @staticmethod
@@ -190,6 +192,12 @@ class FileUploadService:
         else:
             result["reason"] = "trip_update_failed"
         return result
+
+    @staticmethod
+    def _is_image_extension(file_extension: Optional[str]) -> bool:
+        if not file_extension:
+            return False
+        return file_extension.lower() in {"jpg", "jpeg", "png", "gif", "webp", "avif"}
     
     @classmethod
     def save_file(cls, file: UploadFile, uploader_id: Optional[str] = None, trip_id: Optional[str] = None) -> Dict[str, Any]:
@@ -253,6 +261,25 @@ class FileUploadService:
         
         # Handle new HandlerResult with metadata
         if isinstance(result, HandlerResult):
+            variant_payload = {
+                "status": "not_applicable",
+                "thumb_keys": {},
+                "preview_keys": {},
+                "formats": [],
+                "generated_at": None,
+            }
+
+            if cls._is_image_extension(result.file_extension):
+                try:
+                    variant_payload = service.image_variant_service.generate_variants(
+                        result.object_key,
+                        bucket=result.bucket,
+                    )
+                except Exception as exc:
+                    logging.getLogger(__name__).warning(
+                        "Image variant generation failed for %s: %s", result.object_key, exc
+                    )
+
             # Save metadata to MongoDB
             metadata_id = result.object_key
             metadata = FileMetadata(
@@ -280,7 +307,12 @@ class FileUploadService:
                 analysis_status=result.analysis_status,
                 analysis_error=result.analysis_error,
                 track_summary=result.track_summary,
-                status=result.status
+                status=result.status,
+                thumb_keys=variant_payload.get("thumb_keys") or {},
+                preview_keys=variant_payload.get("preview_keys") or {},
+                formats=variant_payload.get("formats") or [],
+                variants_status=variant_payload.get("status"),
+                variants_generated_at=variant_payload.get("generated_at"),
             )
             
             # Save to MongoDB
@@ -312,6 +344,11 @@ class FileUploadService:
                 "analysis_object_key": result.analysis_object_key,
                 "analysis_error": result.analysis_error,
                 "track_summary": result.track_summary,
+                "thumb_keys": variant_payload.get("thumb_keys") or {},
+                "preview_keys": variant_payload.get("preview_keys") or {},
+                "variants_status": variant_payload.get("status"),
+                "formats": variant_payload.get("formats") or [],
+                "variants_generated_at": variant_payload.get("generated_at").isoformat() if variant_payload.get("generated_at") else None,
             }
 
             if getattr(result, "file_extension", "") and result.file_extension.lower() == "gpx" and trip_id:

@@ -268,6 +268,9 @@ const TimelineItem = ({ item, index, onUpdate, onDelete, onClick, onHover, readO
                             src={item.thumbnailUrl || item.imageUrl}
                             alt={item.title || 'Memory'}
                             className="w-full h-auto object-cover transition-transform duration-300 group-hover/image:scale-105"
+                            loading="lazy"
+                            decoding="async"
+                            style={{ aspectRatio: '4 / 3' }}
                         />
                         <div className="absolute inset-0 bg-black bg-opacity-0 group-hover/image:bg-opacity-10 transition-opacity flex items-center justify-center">
                             {/* Optional: Add a zoom icon on hover if desired */}

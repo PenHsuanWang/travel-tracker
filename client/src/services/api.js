@@ -280,7 +280,15 @@ export const getGeotaggedImages = async (minLon, minLat, maxLon, maxLat, bucket 
 };
 
 export const getImageUrl = (filename) => {
-  return `${apiClient.defaults.baseURL}/files/${encodeURIComponent(filename).replace(/%2F/g, '/')}?bucket=images`;
+export const getImageVariantUrl = (filename, variant = 'thumb') => {
+  if (!filename) return '';
+  const encoded = encodeURIComponent(filename).replace(/%2F/g, '/');
+  const safeVariant = variant || 'original';
+  return `${apiClient.defaults.baseURL}/files/${encoded}?bucket=images&variant=${safeVariant}`;
+};
+
+export const getImageUrl = (filename, variant = 'original') => {
+  return getImageVariantUrl(filename, variant);
 };
 
 export default apiClient;

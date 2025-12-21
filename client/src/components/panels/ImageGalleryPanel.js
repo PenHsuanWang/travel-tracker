@@ -1,6 +1,6 @@
 // client/src/components/panels/ImageGalleryPanel.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { listImageFiles, getImageUrl, getFileMetadata, deleteImage } from '../../services/api';
+import { listImageFiles, getImageUrl, getImageVariantUrl, getFileMetadata, deleteImage } from '../../services/api';
 import '../../styles/ImageGalleryPanel.css';
 
 function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
@@ -471,11 +471,22 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
                     onMouseLeave={handleImageLeave}
                     onMouseMove={(e) => setTooltipPosition({ x: e.clientX, y: e.clientY })}
                   >
-                    <img
-                      src={getImageUrl(filename)}
-                      alt={filename}
-                      title={filename}
-                    />
+                    {(() => {
+                      const thumbSrc = item?.thumb_url || getImageVariantUrl(filename, 'thumb');
+                      const previewSrc = item?.preview_url || getImageVariantUrl(filename, 'preview');
+                      return (
+                        <img
+                          src={thumbSrc}
+                          srcSet={`${thumbSrc} 400w, ${previewSrc} 800w`}
+                          sizes="(min-width: 1024px) 200px, 50vw"
+                          alt={filename}
+                          title={filename}
+                          loading="lazy"
+                          decoding="async"
+                          style={{ aspectRatio: '4 / 3', objectFit: 'cover' }}
+                        />
+                      );
+                    })()}
                     <div className="image-name">
                       <span className="image-name-text">
                         {metadata?.original_filename || filename}
@@ -531,9 +542,24 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
             <div className="modal-layout">
               <div className="modal-image">
                 <img
-                  src={getImageUrl(selectedImage)}
+                  src={getImageVariantUrl(selectedImage, 'preview')}
+                  srcSet={`${getImageVariantUrl(selectedImage, 'preview')} 800w, ${getImageUrl(selectedImage, 'original')} 1600w`}
+                  sizes="(min-width: 1024px) 70vw, 90vw"
                   alt={selectedImage}
+                  loading="lazy"
+                  decoding="async"
+                  style={{ maxHeight: '70vh', objectFit: 'contain' }}
                 />
+                <div className="modal-actions">
+                  <a
+                    href={getImageUrl(selectedImage, 'original')}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="download-original"
+                  >
+                    Download original
+                  </a>
+                </div>
               </div>
               <div className="modal-sidebar">
                 {renderImageInfo(selectedImage)}

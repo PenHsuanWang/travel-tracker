@@ -5,7 +5,7 @@ payload returned by file handler implementations.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
 
 
@@ -85,6 +85,11 @@ class FileMetadata(BaseModel):
     note_title: Optional[str] = None
     order_index: Optional[int] = None
     waypoint_overrides: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    thumb_keys: Dict[str, str] = Field(default_factory=dict)
+    preview_keys: Dict[str, str] = Field(default_factory=dict)
+    formats: List[str] = Field(default_factory=list)
+    variants_status: Optional[str] = None
+    variants_generated_at: Optional[datetime] = None
 
     class Config:
         populate_by_name = True
@@ -103,6 +108,8 @@ class FileMetadataResponse(FileMetadata):
                     not stored in the database.
     """
     can_delete: bool = False
+    thumb_url: Optional[str] = None
+    preview_url: Optional[str] = None
 
 
 

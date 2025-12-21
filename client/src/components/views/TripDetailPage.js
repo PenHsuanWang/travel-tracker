@@ -6,7 +6,7 @@ import TripSidebar from '../layout/TripSidebar';
 import TimelinePanel from '../panels/TimelinePanel';
 import TripStatsHUD from '../panels/TripStatsHUD';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
-import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile, updateWaypointNote } from '../../services/api';
+import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, getImageVariantUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile, updateWaypointNote } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
 
@@ -55,13 +55,18 @@ const normalizePhoto = (item) => {
     const lon = Number(item?.gps?.longitude ?? item?.gps?.lon ?? item.lon);
     const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
 
+    const thumbUrl = item.thumb_url || item.thumbnail_url || getImageVariantUrl(item.object_key, 'thumb');
+    const previewUrl = item.preview_url || getImageVariantUrl(item.object_key, 'preview');
+    const originalUrl = getImageUrl(item.object_key, 'original');
+
     return {
         type: 'photo',
         id: item.object_key,
         objectKey: item.object_key,
         fileName: item.original_filename || item.object_key,
-        thumbnailUrl: item.thumb_url || item.thumbnail_url || item.thumb_url || getImageUrl(item.object_key),
-        imageUrl: getImageUrl(item.object_key),
+        thumbnailUrl: thumbUrl,
+        imageUrl: previewUrl,
+        originalUrl,
         capturedAt: capturedDate ? capturedDate.toISOString() : null,
         capturedDate,
         timestamp: capturedDate ? capturedDate.getTime() : 0,

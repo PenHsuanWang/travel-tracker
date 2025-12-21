@@ -276,6 +276,8 @@ function createPopupContent(image, onMarkerSelected, readOnly, onPhotoUpdate) {
   const imageEl = document.createElement('img');
   imageEl.alt = displayName;
   imageEl.src = resolvedThumbUrl || FALLBACK_THUMBNAIL;
+  imageEl.loading = 'lazy';
+  imageEl.decoding = 'async';
   imageEl.style.display = 'none';
   imageEl.onload = () => { imageEl.style.display = 'block'; };
   imageEl.onerror = () => {

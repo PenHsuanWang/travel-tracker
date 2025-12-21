@@ -53,8 +53,21 @@ function PhotoViewerOverlay({
         </div>
 
         <div className="viewer-image">
-          <img src={photo.imageUrl} alt={photo.fileName || 'Trip photo'} />
+          <img
+            src={photo.imageUrl}
+            alt={photo.fileName || 'Trip photo'}
+            loading="lazy"
+            decoding="async"
+          />
         </div>
+
+        {photo.originalUrl && (
+          <div className="viewer-actions">
+            <a href={photo.originalUrl} target="_blank" rel="noreferrer">
+              Download original
+            </a>
+          </div>
+        )}
 
         <div className="viewer-nav">
           <button type="button" onClick={onPrev} disabled={index <= 0}>
