@@ -487,8 +487,8 @@ const normalizePhoto = (item) => {
     if (typeof item === 'string') {
         return {
             key: item,
-            thumb: getImageUrl(item),
-            url: getImageUrl(item),
+            thumb: getImageVariantUrl(item, 'preview'), // Use preview variant
+            url: getImageVariantUrl(item, 'preview'), // Use preview variant
             orientation: 'unknown',
             isCover: false,
         };
@@ -498,9 +498,12 @@ const normalizePhoto = (item) => {
     const objectKey = item.object_key || item.key || item.id || '';
     if (!objectKey) return null;
 
-    const thumb = metadata.thumb_url || metadata.thumbnail_url || getImageUrl(objectKey);
+    // Prioritize explicit metadata URLs first, then fall back to generated variant URLs
+    const thumb = metadata.thumb_url || metadata.thumbnail_url || getImageVariantUrl(objectKey, 'preview');
+    const url = metadata.preview_url || getImageVariantUrl(objectKey, 'preview'); // Use preview variant for main image URL if available
+    
     const width = metadata.width || metadata.image_width || null;
-    const height = metadata.height || metadata.image_height || null;
+    const height = metadata.image_height || null;
     let orientation = 'unknown';
     if (width && height) {
         orientation = width >= height ? 'landscape' : 'portrait';
