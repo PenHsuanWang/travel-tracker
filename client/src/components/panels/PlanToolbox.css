@@ -1,0 +1,175 @@
+/* client/src/components/panels/PlanToolbox.css */
+
+.plan-toolbox {
+  position: absolute;
+  top: 60px;
+  left: 10px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.toolbox-section {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.toolbox-section:first-child {
+  border-radius: 4px 4px 0 0;
+  border-bottom: none;
+}
+
+.toolbox-section:last-of-type {
+  border-radius: 0 0 4px 4px;
+  border-top: 1px solid #ccc;
+}
+
+.toolbox-divider {
+  height: 0;
+}
+
+.toolbox-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: #fff;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  color: #333;
+}
+
+.toolbox-btn:hover:not(:disabled) {
+  background: #f4f4f4;
+}
+
+.toolbox-btn.active {
+  background: #e8e8e8;
+  color: #000;
+}
+
+.toolbox-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolbox-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Action buttons panel - appears next to active tool */
+.toolbox-actions {
+  position: absolute;
+  left: 44px;
+  top: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+  background: transparent;
+}
+
+.action-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, opacity 0.15s;
+  background: #555;
+  color: #fff;
+  border-right: 1px solid #444;
+}
+
+.action-btn:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.action-btn:last-child {
+  border-radius: 0 4px 4px 0;
+  border-right: none;
+}
+
+.action-btn:only-child {
+  border-radius: 4px;
+}
+
+.action-btn:hover {
+  background: #666;
+}
+
+.action-btn.action-finish {
+  background: #555;
+}
+
+.action-btn.action-finish:hover {
+  background: #666;
+}
+
+.action-btn.action-undo {
+  background: #555;
+}
+
+.action-btn.action-undo:hover {
+  background: #666;
+}
+
+.action-btn.action-cancel {
+  background: #555;
+}
+
+.action-btn.action-cancel:hover {
+  background: #666;
+}
+
+/* Tool hint tooltip */
+.toolbox-hint {
+  position: absolute;
+  left: 44px;
+  top: 0;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #333;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .plan-toolbox {
+    top: 50px;
+    left: 6px;
+  }
+
+  .toolbox-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .toolbox-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .toolbox-actions {
+    left: 38px;
+  }
+
+  .action-btn {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+}

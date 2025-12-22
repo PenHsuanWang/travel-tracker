@@ -36,6 +36,14 @@ function Header() {
           >
             Trips
           </NavLink>
+          {isAuthenticated && (
+            <NavLink
+              to="/plans"
+              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            >
+              Plans
+            </NavLink>
+          )}
           <NavLink
             to="/community"
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}

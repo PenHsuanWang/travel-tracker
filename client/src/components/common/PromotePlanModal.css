@@ -1,0 +1,162 @@
+/* client/src/components/common/PromotePlanModal.css */
+
+.promote-plan-modal {
+  max-width: 480px;
+}
+
+.promote-intro {
+  margin: 0;
+  font-size: 15px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.promote-intro strong {
+  color: #1f2937;
+}
+
+/* Summary */
+.promote-summary {
+  display: flex;
+  gap: 20px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 10px;
+  margin-top: 16px;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.summary-icon {
+  font-size: 20px;
+}
+
+.summary-item strong {
+  font-size: 18px;
+  color: #1f2937;
+}
+
+.summary-item div {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* Options */
+.promote-options {
+  margin-top: 20px;
+}
+
+.promote-options h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.option-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  margin-bottom: 8px;
+}
+
+.option-item:hover {
+  border-color: #d1d5db;
+  background: #fafafa;
+}
+
+.option-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.option-item input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.option-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.option-desc {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Note */
+.promote-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  margin-top: 16px;
+}
+
+.note-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.promote-note span:last-child {
+  font-size: 13px;
+  color: #065f46;
+  line-height: 1.5;
+}
+
+/* Promote button */
+.btn-promote {
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-promote:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.btn-promote:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Error */
+.form-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}

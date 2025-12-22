@@ -1,0 +1,178 @@
+/* client/src/components/views/PlanMapView.css */
+
+.plan-map-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.plan-map-container {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Layer switcher */
+.layer-switcher {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+}
+
+.layer-switcher-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.layer-switcher-btn:hover {
+  background: #f4f4f4;
+}
+
+.layer-switcher-btn svg {
+  color: #333;
+}
+
+.layer-menu {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  min-width: 150px;
+}
+
+.layer-option {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.layer-option:hover {
+  background: #f0f0f0;
+}
+
+.layer-option.active {
+  background: #e8f4fc;
+  color: #0066cc;
+  font-weight: 500;
+}
+
+.layer-option + .layer-option {
+  border-top: 1px solid #eee;
+}
+
+/* Plan markers - blue teardrop style */
+.plan-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.plan-marker svg {
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+  transition: transform 0.15s ease;
+}
+
+.plan-marker.selected svg {
+  transform: scale(1.1);
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.4));
+}
+
+.plan-marker.highlighted svg {
+  transform: scale(1.15);
+}
+
+/* Feature popup */
+.feature-popup {
+  min-width: 120px;
+}
+
+.feature-popup strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.feature-popup p {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* Drawing mode cursor */
+.leaflet-container[style*="crosshair"] {
+  cursor: crosshair !important;
+}
+
+/* Fix leaflet popup styles */
+.leaflet-popup-content-wrapper {
+  border-radius: 6px;
+  padding: 0;
+}
+
+.leaflet-popup-content {
+  margin: 10px 12px;
+}
+
+.leaflet-popup-close-button {
+  font-size: 18px !important;
+  padding: 4px 6px 0 0 !important;
+}
+
+/* Leaflet controls positioning - move zoom below layer switcher */
+.leaflet-top.leaflet-left {
+  top: 10px;
+}
+
+.leaflet-control-zoom {
+  border: 2px solid rgba(0, 0, 0, 0.2) !important;
+  border-radius: 4px !important;
+}
+
+.leaflet-control-zoom a {
+  width: 30px !important;
+  height: 30px !important;
+  line-height: 30px !important;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .layer-switcher {
+    top: 6px;
+    right: 6px;
+  }
+
+  .layer-switcher-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .layer-menu {
+    min-width: 130px;
+  }
+
+  .layer-option {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
