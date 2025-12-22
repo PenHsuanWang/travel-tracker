@@ -8,7 +8,7 @@ import logging
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException, Response, Query, Depends  # type: ignore[import-not-found]
+from fastapi import APIRouter, HTTPException, Response, Query, Depends, Header  # type: ignore[import-not-found]
 from pydantic import BaseModel  # type: ignore[import-not-found]
 
 from src.services.file_retrieval_service import FileRetrievalService
@@ -35,6 +35,7 @@ class GeotaggedImage(BaseModel):
     lat: float
     lon: float
     thumb_url: str
+    preview_url: Optional[str] = None
     metadata_id: Optional[str] = None
     captured_at: Optional[str] = None
     captured_source: Optional[str] = None
@@ -458,25 +459,50 @@ async def get_gpx_analysis(
     )
 
 @router.get("/files/{filename:path}")
-async def get_file(filename: str, bucket: str = "gps-data"):
+async def get_file(
+    filename: str,
+    bucket: str = "gps-data",
+    variant: str = Query("original"),
+    accept: Optional[str] = Header(None),
+):
+    """Retrieve a file (or variant) from MinIO by filename.
+
+    When `variant` is `thumb` or `preview`, the service attempts to serve a
+    pre-generated variant that best matches the Accept header. On variant miss
+    it transparently falls back to the original without raising.
     """
-    Retrieve a file from MinIO by filename.
-    Returns raw bytes with appropriate media type based on file extension.
-    """
-    file_bytes = retrieval_service.get_file_bytes(bucket, filename)
+    if not retrieval_service.minio_ready:
+        detail = "MinIO storage backend is not configured"
+        if retrieval_service.minio_init_error:
+            detail = f"{detail}: {retrieval_service.minio_init_error}"
+        raise HTTPException(status_code=503, detail=detail)
+
+    selected_key, media_type, is_variant = retrieval_service.resolve_serving_key(
+        filename,
+        bucket,
+        variant,
+        accept_header=accept,
+    )
+
+    file_bytes = retrieval_service.get_file_bytes(bucket, selected_key)
+
+    # Fallback to original when variant is missing
+    if file_bytes is None and selected_key != filename:
+        file_bytes = retrieval_service.get_file_bytes(bucket, filename)
+        selected_key = filename
+        media_type = retrieval_service._guess_media_type(filename)
+        is_variant = False
+
     if file_bytes is None:
         raise HTTPException(status_code=404, detail="File not found in MinIO")
 
-    # Detect media type from filename extension
-    import mimetypes
-    media_type, _ = mimetypes.guess_type(filename)
-    
-    # Default to octet-stream if type cannot be determined
-    if not media_type:
-        media_type = "application/octet-stream"
-    
-    # Return raw bytes with proper media type
-    return Response(content=file_bytes, media_type=media_type)
+    headers = {
+        "Cache-Control": retrieval_service._cache_control_for_variant(is_variant),
+        "Content-Length": str(len(file_bytes)),
+        "ETag": retrieval_service.compute_etag(file_bytes),
+    }
+
+    return Response(content=file_bytes, media_type=media_type, headers=headers)
 
 
 @router.patch("/photos/{metadata_id:path}/note")

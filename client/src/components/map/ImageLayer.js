@@ -7,6 +7,9 @@ import '../../styles/ImageLayer.css';
 
 const FALLBACK_THUMBNAIL = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="160" height="160"%3E%3Crect fill="%23f1f5f9" width="160" height="160" rx="12"/%3E%3Cpath fill="%23cbd5f5" d="M30 110l26-32 26 20 30-38 28 50z"/%3E%3Ccircle cx="52" cy="54" r="14" fill="%23dbeafe"/%3E%3C/svg%3E';
 
+const hasValidCoords = (lat, lon) =>
+  Number.isFinite(lat) && Number.isFinite(lon) && !(lat === 0 && lon === 0);
+
 export async function fetchGeotaggedImagesForTrip(fetcher = getGeotaggedImages, tripId = null) {
   const images = await fetcher(undefined, undefined, undefined, undefined, 'images', tripId);
   return Array.isArray(images) ? images : [];
@@ -97,19 +100,21 @@ function ImageLayer({ onImageSelected = null, tripId = null, readOnly = false, p
         processedKeys.add(key);
 
         // Normalize photo data for ImageLayer
-        const image = {
-            object_key: key,
-            original_filename: photo.fileName,
-            lat: Number(photo.lat),
-            lon: Number(photo.lon),
-            thumb_url: photo.thumbnailUrl,
-            note: photo.note,
-            metadata_id: photo.metadataId
-        };
-
-        if (!Number.isFinite(image.lat) || !Number.isFinite(image.lon)) {
-            return;
+        const lat = Number(photo.lat);
+        const lon = Number(photo.lon);
+        if (!hasValidCoords(lat, lon)) {
+          return;
         }
+
+        const image = {
+          object_key: key,
+          original_filename: photo.fileName,
+          lat,
+          lon,
+          thumb_url: photo.thumbnailUrl,
+          note: photo.note,
+          metadata_id: photo.metadataId
+        };
 
         if (currentMarkers[key]) {
             // Update existing marker
@@ -201,8 +206,10 @@ function ImageLayer({ onImageSelected = null, tripId = null, readOnly = false, p
 
       const latValue = detail.lat ?? detail.latitude;
       const lngValue = detail.lng ?? detail.lon ?? detail.longitude;
-      const hasCoords = Number.isFinite(Number(latValue)) && Number.isFinite(Number(lngValue));
-      const fallbackLatLng = hasCoords ? L.latLng(Number(latValue), Number(lngValue)) : null;
+      const latNum = Number(latValue);
+      const lngNum = Number(lngValue);
+      const hasCoords = hasValidCoords(latNum, lngNum);
+      const fallbackLatLng = hasCoords ? L.latLng(latNum, lngNum) : null;
 
       const targetLatLng = entry ? entry.marker.getLatLng() : fallbackLatLng;
       if (!targetLatLng) {
@@ -276,6 +283,8 @@ function createPopupContent(image, onMarkerSelected, readOnly, onPhotoUpdate) {
   const imageEl = document.createElement('img');
   imageEl.alt = displayName;
   imageEl.src = resolvedThumbUrl || FALLBACK_THUMBNAIL;
+  imageEl.loading = 'lazy';
+  imageEl.decoding = 'async';
   imageEl.style.display = 'none';
   imageEl.onload = () => { imageEl.style.display = 'block'; };
   imageEl.onerror = () => {
@@ -406,8 +415,18 @@ function resolveThumbUrl(url) {
   }
 
   const baseCandidate =
-    process.env.REACT_APP_API_BASE_URL ||
-    (typeof window !== 'undefined' ? window.location.origin : '');
+    (() => {
+      const raw = process.env.REACT_APP_API_BASE_URL;
+      if (raw) {
+        try {
+          // Normalize to origin to avoid double "/api" when URLs are already absolute paths.
+          return new URL(raw).origin;
+        } catch (err) {
+          console.warn('[ImageLayer] Invalid REACT_APP_API_BASE_URL, falling back to window origin', err);
+        }
+      }
+      return typeof window !== 'undefined' ? window.location.origin : '';
+    })();
 
   if (!baseCandidate) {
     return url;

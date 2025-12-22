@@ -75,6 +75,19 @@ export const updateTripMembers = async (tripId, memberIds) => {
 
 // --- File API ---
 
+const resolveApiUrl = (pathOrUrl) => {
+  if (!pathOrUrl) return '';
+  // Already absolute
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  try {
+    const base = apiClient.defaults.baseURL || (typeof window !== 'undefined' ? window.location.origin : '');
+    return new URL(pathOrUrl, base).toString();
+  } catch (err) {
+    console.warn('[api] Failed to resolve API URL', { pathOrUrl, err });
+    return pathOrUrl;
+  }
+};
+
 export const updatePhotoNote = async (metadataId, { note, note_title }) => {
   const response = await apiClient.patch(`/photos/${encodeURIComponent(metadataId).replace(/%2F/g, '/')}/note`, {
     note,
@@ -279,8 +292,28 @@ export const getGeotaggedImages = async (minLon, minLat, maxLon, maxLat, bucket 
   return response.data;
 };
 
-export const getImageUrl = (filename) => {
-  return `${apiClient.defaults.baseURL}/files/${encodeURIComponent(filename).replace(/%2F/g, '/')}?bucket=images`;
+export const getImageVariantUrl = (filename, variant = 'thumb') => {
+  if (!filename) return '';
+  // If the backend already returned a URL or path, resolve it instead of re-encoding.
+  if (filename.startsWith('/')) {
+    return resolveApiUrl(filename);
+  }
+  if (/^https?:\/\//i.test(filename)) {
+    return filename;
+  }
+  const encoded = encodeURIComponent(filename).replace(/%2F/g, '/');
+  const safeVariant = variant || 'original';
+  return `${apiClient.defaults.baseURL}/files/${encoded}?bucket=images&variant=${safeVariant}`;
+};
+
+export const getImageUrl = (filename, variant = 'original') => getImageVariantUrl(filename, variant);
+
+export const normalizeImageUrl = (value, variant = 'original') => {
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value) || value.startsWith('/')) {
+    return resolveApiUrl(value);
+  }
+  return getImageVariantUrl(value, variant);
 };
 
 export default apiClient;

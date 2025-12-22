@@ -1,7 +1,12 @@
 # src/services/file_retrieval_service.py
 
+import hashlib
+import math
 import logging
-from typing import Any, Dict, List, Optional
+import mimetypes
+import os
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 try:
     from dotenv import load_dotenv  # type: ignore[import-not-found]
@@ -31,18 +36,90 @@ class FileRetrievalService:
         self.logger = logging.getLogger(__name__)
         self.storage_manager = StorageManager()
         self.trip_service = TripService()
+        self.image_variants_enabled = os.getenv("IMAGE_VARIANTS_ENABLED", "true").lower() != "false"
+        self.format_priority = ["avif", "webp", "jpeg", "jpg"]
+        self.minio_ready = False
+        self.minio_init_error: Optional[str] = None
 
         try:
             minio_adapter = AdapterFactory.create_minio_adapter()
             self.storage_manager.add_adapter('minio', minio_adapter)
+            self.minio_ready = True
         except Exception as exc:  # pragma: no cover - defensive guard
-            self.logger.warning("MinIO adapter not initialized: %s", exc)
+            self.minio_init_error = str(exc)
+            self.logger.error("MinIO adapter not initialized: %s", exc)
 
         try:
             mongodb_adapter = AdapterFactory.create_mongodb_adapter()
             self.storage_manager.add_adapter('mongodb', mongodb_adapter)
         except Exception as exc:  # pragma: no cover - defensive guard
             self.logger.warning("MongoDB adapter not initialized: %s", exc)
+
+    def build_file_url(self, object_key: str, bucket_name: str, variant: Optional[str] = None) -> str:
+        suffix = f"&variant={variant}" if variant else ""
+        return f"/api/files/{quote(object_key, safe='/')}?bucket={bucket_name}{suffix}"
+
+    def _load_metadata(self, object_key: str) -> Optional[FileMetadata]:
+        mongodb_adapter = self.storage_manager.adapters.get('mongodb')
+        if not mongodb_adapter:
+            return None
+        raw = None
+        try:
+            raw = mongodb_adapter.load_data(object_key, collection_name='file_metadata')
+        except Exception:
+            raw = None
+        if not raw:
+            return None
+        try:
+            return FileMetadata(**raw)
+        except Exception as exc:
+            self.logger.debug("Failed to parse metadata for %s: %s", object_key, exc)
+            return None
+
+    def _pick_best_variant_key(
+        self,
+        variant_map: Dict[str, str],
+        accept_header: Optional[str]
+    ) -> Optional[str]:
+        if not variant_map:
+            return None
+
+        accept = (accept_header or "").lower()
+        ordered_candidates: List[str] = []
+        if "image/avif" in accept:
+            ordered_candidates.append("avif")
+        if "image/webp" in accept:
+            ordered_candidates.append("webp")
+        if "image/jpeg" in accept or "image/jpg" in accept:
+            ordered_candidates.append("jpeg")
+        ordered_candidates.extend(self.format_priority)
+
+        for fmt in ordered_candidates:
+            key = variant_map.get(fmt) or variant_map.get(self._canonical_format(fmt))
+            if key:
+                return key
+
+        # Fallback to first available
+        return next(iter(variant_map.values()), None)
+
+    @staticmethod
+    def _canonical_format(fmt: str) -> str:
+        return "jpeg" if fmt.lower() == "jpg" else fmt.lower()
+
+    @staticmethod
+    def _guess_media_type(filename: str, default: str = "application/octet-stream") -> str:
+        media_type, _ = mimetypes.guess_type(filename)
+        return media_type or default
+
+    @staticmethod
+    def _cache_control_for_variant(is_variant: bool) -> str:
+        if is_variant:
+            return "public, max-age=31536000, immutable"
+        return "public, max-age=86400"
+
+    @staticmethod
+    def compute_etag(content: bytes) -> str:
+        return hashlib.sha256(content).hexdigest()
 
     def list_files(self, bucket_name: str, trip_id: Optional[str] = None) -> List[str]:
         """List object keys in the given bucket.
@@ -54,8 +131,9 @@ class FileRetrievalService:
         Returns:
             Object keys in the bucket (possibly filtered by trip).
         """
-        if 'minio' not in self.storage_manager.adapters:
-            raise RuntimeError("MinIO adapter not configured")
+        if not self.minio_ready:
+            error = self.minio_init_error or "MinIO adapter not configured"
+            raise RuntimeError(error)
         prefix = f"{trip_id}/" if trip_id else ""
         return self.storage_manager.list_keys('minio', prefix=prefix, bucket=bucket_name)
 
@@ -114,6 +192,18 @@ class FileRetrievalService:
                         is_uploader = str(parsed_metadata.uploader_id) == str(current_user.id)
 
                     response_item.can_delete = is_owner or is_uploader
+
+                # Add computed variant URLs (fall back to original when variants are disabled)
+                response_item.thumb_url = self.build_file_url(
+                    parsed_metadata.object_key,
+                    parsed_metadata.bucket or bucket_name,
+                    variant="thumb" if self.image_variants_enabled else None,
+                )
+                response_item.preview_url = self.build_file_url(
+                    parsed_metadata.object_key,
+                    parsed_metadata.bucket or bucket_name,
+                    variant="preview" if self.image_variants_enabled else None,
+                )
                     
                 items.append(response_item)
 
@@ -158,8 +248,9 @@ class FileRetrievalService:
             # Build query for images with GPS
             query: Dict[str, Any] = {
                 "gps": {"$exists": True, "$ne": None},
-                "gps.latitude": {"$exists": True, "$ne": None},
-                "gps.longitude": {"$exists": True, "$ne": None},
+                # Exclude missing and zero coordinates to prevent Null Island artifacts
+                "gps.latitude": {"$exists": True, "$nin": [None, 0]},
+                "gps.longitude": {"$exists": True, "$nin": [None, 0]},
                 "bucket": bucket_name
             }
             
@@ -191,22 +282,39 @@ class FileRetrievalService:
                 try:
                     parsed = FileMetadata(**document)
                     
-                    # Validate GPS coordinates
-                    if not (parsed.gps and 
-                            parsed.gps.latitude is not None and 
-                            parsed.gps.longitude is not None):
+                    # Validate GPS coordinates and drop missing/zero/NaN entries
+                    if not (parsed.gps and parsed.gps.latitude is not None and parsed.gps.longitude is not None):
+                        continue
+
+                    try:
+                        lat_val = float(parsed.gps.latitude)
+                        lon_val = float(parsed.gps.longitude)
+                    except (TypeError, ValueError):
+                        continue
+
+                    if not (math.isfinite(lat_val) and math.isfinite(lon_val)):
+                        continue
+
+                    # Avoid Null Island (0,0) when EXIF is missing
+                    if lat_val == 0 and lon_val == 0:
                         continue
                     
                     # Generate thumbnail URL (use object_key for now)
                     # In production, this could use a thumbnail service or presigned URL
                     thumb_url = self._generate_thumbnail_url(parsed.object_key, parsed.bucket or bucket_name)
+                    preview_url = self.build_file_url(
+                        parsed.object_key,
+                        parsed.bucket or bucket_name,
+                        variant="preview" if self.image_variants_enabled else None,
+                    )
                     
                     items.append({
                         'object_key': parsed.object_key,
                         'original_filename': parsed.filename or parsed.id,
-                        'lat': float(parsed.gps.latitude),
-                        'lon': float(parsed.gps.longitude),
+                        'lat': lat_val,
+                        'lon': lon_val,
                         'thumb_url': thumb_url,
+                        'preview_url': preview_url,
                         'metadata_id': parsed.id,
                         'captured_at': parsed.captured_at.isoformat() if parsed.captured_at else None,
                         'captured_source': parsed.captured_source,
@@ -243,18 +351,11 @@ class FileRetrievalService:
         try:
             from urllib.parse import quote
             
-            minio_adapter = self.storage_manager.adapters.get('minio')
-            if not minio_adapter:
-                return f"/api/files/{quote(object_key, safe='/')}?bucket={bucket_name}"
-            
-            # Try to generate presigned URL for thumbnail
-            # For MVP, just return the direct image URL with proper URL encoding
-            # TODO: Implement actual thumbnail generation or use presigned URLs
-            return f"/api/files/{quote(object_key, safe='/')}?bucket={bucket_name}"
+            variant = "thumb" if self.image_variants_enabled else None
+            return self.build_file_url(object_key, bucket_name, variant=variant)
         except Exception as exc:
             self.logger.warning("Failed to generate thumbnail URL: %s", exc)
-            from urllib.parse import quote
-            return f"/api/files/{quote(object_key, safe='/')}?bucket={bucket_name}"
+            return self.build_file_url(object_key, bucket_name)
 
     def get_file_bytes(self, bucket_name: str, filename: str) -> Optional[bytes]:
         """Retrieve raw bytes for a named object from MinIO.
@@ -266,6 +367,9 @@ class FileRetrievalService:
         Returns:
             Optional[bytes]: Raw bytes or ``None`` if not found.
         """
+        if not self.minio_ready:
+            self.logger.error("MinIO adapter not configured; cannot fetch %s from %s", filename, bucket_name)
+            return None
         # Check if the file exists in the bucket.
         exists = self.storage_manager.exists('minio', filename, bucket=bucket_name)
         if not exists:
@@ -274,3 +378,41 @@ class FileRetrievalService:
         # Load the file bytes from MinIO.
         file_bytes = self.storage_manager.load_data('minio', filename, bucket=bucket_name)
         return file_bytes
+
+    def resolve_serving_key(
+        self,
+        filename: str,
+        bucket_name: str,
+        variant: str,
+        accept_header: Optional[str] = None
+    ) -> Tuple[str, str, bool]:
+        """Pick the object key to serve based on variant request and Accept header.
+
+        Returns (object_key, media_type, is_variant_served).
+        """
+        normalized_variant = (variant or "original").lower()
+        if normalized_variant not in {"thumb", "preview", "original"}:
+            normalized_variant = "original"
+
+        # Only attempt variants for images bucket when feature flag is enabled
+        if normalized_variant == "original" or bucket_name != "images" or not self.image_variants_enabled:
+            media_type = self._guess_media_type(filename)
+            return filename, media_type, False
+
+        metadata = self._load_metadata(filename)
+        variant_map: Dict[str, str] = {}
+        if metadata:
+            if normalized_variant == "thumb":
+                variant_map = metadata.thumb_keys or {}
+            elif normalized_variant == "preview":
+                variant_map = metadata.preview_keys or {}
+
+        selected_key = self._pick_best_variant_key(variant_map, accept_header)
+        if not selected_key:
+            # Fallback to original
+            self.logger.debug("Variant %s requested for %s but not found. Falling back.", normalized_variant, filename)
+            media_type = self._guess_media_type(filename, default="image/jpeg")
+            return filename, media_type, False
+
+        media_type = self._guess_media_type(selected_key, default="image/jpeg")
+        return selected_key, media_type, True

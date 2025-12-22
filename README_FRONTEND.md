@@ -172,17 +172,19 @@ These components provide the primary features of the application, mostly within 
         1.  Collapsible panel with "Show Images" / "Hide Images" toggle
         2.  Loads and displays image thumbnails in a responsive grid layout
         3.  Each thumbnail shows:
-            -   Image preview
+            -   Image preview (uses optimized `thumb` variant)
             -   "View on Map" button (if photo has GPS coordinates)
             -   Delete button
         4.  **Hover Interaction:** Displays detailed tooltip with file info, GPS coordinates, and EXIF camera metadata
         5.  **Click Interaction:** Opens full-size image viewer modal with metadata sidebar (gallery interactions dispatch selection metadata; the parent may set `preventViewer: true` so the viewer is not always opened automatically).
-        6.  **Map Synchronization:** 
+        6.  **Performance:** Uses `loading="lazy"` and `decoding="async"` for smooth scrolling. Implements `srcset` to serve optimal image sizes (`thumb` vs `preview`) based on viewport.
+        7.  **Map Synchronization:** 
             -   Clicking thumbnail scrolls to and highlights the photo
             -   "View on Map" centers map on photo location
             -   Clicking map marker scrolls gallery to corresponding thumbnail
-        7.  **Deletion:** Click delete button to remove photo (with confirmation).
+        8.  **Deletion:** Click delete button to remove photo (with confirmation).
             -   **Permission-Based Display:** Delete button only appears if `can_delete` flag is `true` (Owner or Uploader).
+        9.  **Download:** Modal includes a "Download original" link to fetch the full-resolution image.
     -   **Expected Experience:** Professional photo management interface similar to Google Photos or Lightroom, with seamless map integration for geotagged photos
 
 -   **`TimelinePanel.js`** (Replaces `PhotoTimelinePanel.js`):
@@ -193,7 +195,7 @@ These components provide the primary features of the application, mostly within 
             -   Type icon (📷 for photos, 📍 for waypoints)
             -   Timestamp (date and time)
             -   Title (auto-generated or user-edited)
-            -   Thumbnail (for photos)
+            -   Thumbnail (for photos, uses optimized variants)
             -   Note/description field
         3.  **User Interactions:**
             -   **Click photo card:** Typically opens the photo viewer, but `TripDetailPage` now controls whether the viewer opens. Map and popup selections include metadata (`preventViewer` / `forceViewer`) so the parent can suppress or force the viewer.
@@ -218,6 +220,8 @@ This directory contains reusable UI elements shared across the application.
 -   **`TripTimeline.js`** & **`TripTimelineCard.js`**: Compact timeline used on the profile page to summarize recent trips. Accepts hover callbacks for cross-highlighting with the heatmap and exposes `registerRef` hooks so parents can scroll to individual cards.
 -   **`BadgeIcon.js`**: Renders earned achievement icons and tooltips based on `badgeInfoMap`; used on the profile page and ready for reuse elsewhere.
 -   **`PhotoViewerOverlay.js`**: Full-screen overlay that appears when a user clicks on a photo thumbnail. Displays the image in a larger view with:
+    -   **Optimized Loading:** Displays the `preview` variant (max 800px) by default for faster loading.
+    -   **Download Original:** Provides a link to download the full-resolution original file.
     -   Navigation controls (previous/next arrows)
     -   Image counter (e.g., "3 / 24")
     -   Close button
@@ -317,7 +321,7 @@ The application uses a combination of:
     -   Trip CRUD: `getTrips`, `getTrip`, `createTrip`, `updateTrip`, `deleteTrip`
     -   File operations: `uploadFile`, `deleteFile`, `deleteImage`
     -   GPX: `listGpxFiles`, `listGpxFilesWithMeta`, `fetchGpxAnalysis`, `fetchGpxFile`
-    -   Images: `listImageFiles`, `getGeotaggedImages`, `getImageUrl`, `updatePhotoNote`
+    -   Images: `listImageFiles`, `getGeotaggedImages`, `getImageUrl` (supports `variant` param), `getImageVariantUrl` (new), `updatePhotoNote`
     -   GIS: `riversData`, `listRivers`
 
 ### Map Implementation Evolution
