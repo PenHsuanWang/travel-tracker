@@ -238,4 +238,136 @@ export const PLAN_STATUS_LABELS = {
   archived: 'Archived',
 };
 
+// =============================================================================
+// Feature Category Types
+// =============================================================================
+
+/**
+ * Feature categories determine behavior and allowed properties.
+ * - WAYPOINT: Time-enabled point (displays as "Checkpoint" in UI)
+ * - MARKER: Static POI point (no time fields)
+ * - ROUTE: LineString path
+ * - AREA: Polygon region
+ */
+export const FEATURE_CATEGORY = {
+  WAYPOINT: 'waypoint',
+  MARKER: 'marker',
+  ROUTE: 'route',
+  AREA: 'area',
+  REFERENCE_TRACK: 'reference_track',
+};
+
+export const FEATURE_CATEGORY_LABELS = {
+  waypoint: 'Checkpoint',  // UI name for waypoint
+  marker: 'Marker',
+  route: 'Route',
+  area: 'Area',
+  reference_track: 'Reference Track',
+};
+
+export const FEATURE_CATEGORY_ICONS = {
+  waypoint: '📍',
+  marker: '📌',
+  route: '〰️',
+  area: '⬡',
+  reference_track: '🗺️',
+};
+
+/**
+ * Get the display label for a feature category.
+ * @param {string} category - Feature category value
+ * @returns {string} Display label
+ */
+export const getCategoryLabel = (category) => {
+  return FEATURE_CATEGORY_LABELS[category] || category;
+};
+
+/**
+ * Get the icon for a feature category.
+ * @param {string} category - Feature category value
+ * @returns {string} Emoji icon
+ */
+export const getCategoryIcon = (category) => {
+  return FEATURE_CATEGORY_ICONS[category] || '•';
+};
+
+/**
+ * Check if a feature category allows time fields.
+ * Only WAYPOINT category supports estimated_arrival and estimated_duration_minutes.
+ * @param {string} category - Feature category value
+ * @returns {boolean}
+ */
+export const categoryAllowsTime = (category) => {
+  return category === FEATURE_CATEGORY.WAYPOINT;
+};
+
+/**
+ * Get the default category for a geometry type.
+ * @param {string} geometryType - GeoJSON geometry type
+ * @returns {string} Feature category
+ */
+export const getDefaultCategoryForGeometry = (geometryType) => {
+  switch (geometryType) {
+    case 'Point':
+      return FEATURE_CATEGORY.MARKER;
+    case 'LineString':
+      return FEATURE_CATEGORY.ROUTE;
+    case 'Polygon':
+      return FEATURE_CATEGORY.AREA;
+    default:
+      return FEATURE_CATEGORY.MARKER;
+  }
+};
+
+/**
+ * Format coordinates for display.
+ * @param {Array} coordinates - [lon, lat] array
+ * @param {number} precision - Decimal places (default 4)
+ * @returns {string} Formatted string "lat, lon"
+ */
+export const formatCoordinates = (coordinates, precision = 4) => {
+  if (!coordinates || coordinates.length < 2) return '';
+  const [lon, lat] = coordinates;
+  return `${lat.toFixed(precision)}, ${lon.toFixed(precision)}`;
+};
+
+/**
+ * Format datetime for display.
+ * @param {string|Date} datetime - ISO datetime string or Date object
+ * @returns {string} Formatted string like "Jan 15, 10:30 AM"
+ */
+export const formatArrivalTime = (datetime) => {
+  if (!datetime) return 'No time set';
+  try {
+    const date = new Date(datetime);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return 'Invalid time';
+  }
+};
+
+/**
+ * Format duration in minutes for display.
+ * @param {number} minutes - Duration in minutes
+ * @returns {string} Formatted string like "30 min stop"
+ */
+export const formatDuration = (minutes) => {
+  if (!minutes || minutes <= 0) return null;
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (mins > 0) {
+      return `${hours}h ${mins}m stop`;
+    }
+    return `${hours}h stop`;
+  }
+  return `${minutes} min stop`;
+};
+
 export default apiClient;

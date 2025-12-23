@@ -2,13 +2,23 @@
 /**
  * ItineraryPanel - Side panel showing plan features and reference tracks.
  * 
- * Features can be reordered via drag-and-drop, edited, and deleted.
- * Reference tracks are shown as read-only GPX baselines.
+ * The panel has THREE sections:
+ * 1. Checkpoints - Waypoint features sorted by estimated_arrival (time-sorted)
+ * 2. Other Features - Markers, routes, areas sorted by order_index (drag-drop reorder)
+ * 3. Reference Tracks - Read-only GPX baselines
  */
-import React, { useState, useCallback } from 'react';
-import { MARKER_ICON_TYPES } from '../../services/planService';
+import React, { useState, useCallback, useMemo } from 'react';
+import CheckpointItem from './CheckpointItem';
+import {
+  FEATURE_CATEGORY,
+  getCategoryIcon,
+  getCategoryLabel,
+} from '../../services/planService';
 import './ItineraryPanel.css';
 
+/**
+ * FeatureItem - Generic item for non-checkpoint features (markers, routes, areas).
+ */
 const FeatureItem = ({
   feature,
   selected,
@@ -16,10 +26,11 @@ const FeatureItem = ({
   onUpdate,
   onDelete,
   readOnly,
-  getMarkerEmoji,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState('');
+  
+  const category = feature.properties?.category || 'marker';
 
   const handleStartEdit = () => {
     if (readOnly) return;
@@ -40,10 +51,14 @@ const FeatureItem = ({
   };
 
   const getFeatureIcon = () => {
+    // Use category icon first, fallback to geometry-based icon
+    if (category) {
+      return getCategoryIcon(category);
+    }
     const type = feature.geometry?.type;
     const shapeType = feature.properties?.shape_type;
     if (type === 'Point') {
-      return '📍';
+      return '📌';
     }
     if (type === 'LineString') {
       return '〰️';
@@ -59,6 +74,10 @@ const FeatureItem = ({
   const getFeatureLabel = () => {
     if (feature.properties?.name) {
       return feature.properties.name;
+    }
+    // Use category label
+    if (category) {
+      return getCategoryLabel(category);
     }
     const type = feature.geometry?.type;
     const shapeType = feature.properties?.shape_type;
@@ -163,24 +182,77 @@ const ItineraryPanel = ({
   onUpdateFeature,
   onDeleteFeature,
   onReorderFeatures,
+  onCenterFeature,
   onAddReferenceTrack,
   onRemoveReferenceTrack,
   width,
   onWidthChange,
   readOnly,
-  getMarkerEmoji,
 }) => {
   const [draggedIndex, setDraggedIndex] = useState(null);
 
   // Ensure features is an array (handle FeatureCollection object case)
-  const featuresArray = Array.isArray(features) ? features : (features?.features || []);
+  const featuresArray = useMemo(() => {
+    return Array.isArray(features) ? features : (features?.features || []);
+  }, [features]);
 
-  // Sort features by order_index
-  const sortedFeatures = [...featuresArray].sort(
-    (a, b) => (a.order_index ?? 999) - (b.order_index ?? 999)
-  );
+  // Separate features by category: checkpoints (waypoints) vs other features
+  const { checkpoints, otherFeatures } = useMemo(() => {
+    const cp = [];
+    const other = [];
+    
+    featuresArray.forEach((feature) => {
+      const category = feature.properties?.category;
+      // Match both string 'waypoint' and constant FEATURE_CATEGORY.WAYPOINT
+      const isWaypoint = category === 'waypoint' || category === FEATURE_CATEGORY.WAYPOINT;
+      if (isWaypoint) {
+        cp.push(feature);
+      } else {
+        other.push(feature);
+      }
+    });
+    
+    return { checkpoints: cp, otherFeatures: other };
+  }, [featuresArray]);
 
-  // Drag and drop handlers
+  // Sort checkpoints by estimated_arrival (ascending), nulls last
+  const sortedCheckpoints = useMemo(() => {
+    return [...checkpoints].sort((a, b) => {
+      const aTime = a.properties?.estimated_arrival;
+      const bTime = b.properties?.estimated_arrival;
+      
+      // Both have times - sort by time
+      if (aTime && bTime) {
+        return new Date(aTime) - new Date(bTime);
+      }
+      // Only a has time - a comes first
+      if (aTime && !bTime) return -1;
+      // Only b has time - b comes first
+      if (!aTime && bTime) return 1;
+      // Neither has time - sort by order_index, then created_at
+      const aOrder = a.properties?.order_index ?? Infinity;
+      const bOrder = b.properties?.order_index ?? Infinity;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      
+      const aCreated = a.properties?.created_at;
+      const bCreated = b.properties?.created_at;
+      if (aCreated && bCreated) {
+        return new Date(aCreated) - new Date(bCreated);
+      }
+      return 0;
+    });
+  }, [checkpoints]);
+
+  // Sort other features by order_index
+  const sortedOtherFeatures = useMemo(() => {
+    return [...otherFeatures].sort((a, b) => {
+      const aOrder = a.properties?.order_index ?? Infinity;
+      const bOrder = b.properties?.order_index ?? Infinity;
+      return aOrder - bOrder;
+    });
+  }, [otherFeatures]);
+
+  // Drag and drop handlers (for Other Features only, checkpoints are time-sorted)
   const handleDragStart = (index) => {
     if (readOnly) return;
     setDraggedIndex(index);
@@ -198,8 +270,8 @@ const ItineraryPanel = ({
       return;
     }
 
-    // Calculate new order
-    const newOrder = [...sortedFeatures];
+    // Calculate new order for Other Features only
+    const newOrder = [...sortedOtherFeatures];
     const [moved] = newOrder.splice(draggedIndex, 1);
     newOrder.splice(dropIndex, 0, moved);
 
@@ -248,23 +320,58 @@ const ItineraryPanel = ({
       <div className="panel-header">
         <h3>Itinerary</h3>
         <span className="feature-count">
-          {sortedFeatures.length} {sortedFeatures.length === 1 ? 'item' : 'items'}
+          {featuresArray.length} {featuresArray.length === 1 ? 'item' : 'items'}
         </span>
       </div>
 
       <div className="panel-content">
-        {/* Features Section */}
-        <section className="features-section">
-          <h4>Features</h4>
-          {sortedFeatures.length === 0 ? (
+        {/* Section 1: Checkpoints (time-sorted waypoints) */}
+        <section className="checkpoints-section">
+          <h4>
+            <span className="section-icon">📍</span>
+            Checkpoints
+            <span className="section-count">({sortedCheckpoints.length})</span>
+          </h4>
+          {sortedCheckpoints.length === 0 ? (
             <p className="empty-message">
               {readOnly
-                ? 'No features added yet.'
-                : 'Use the tools to add markers, routes, and areas.'}
+                ? 'No checkpoints added.'
+                : 'Use the Waypoint tool to add time-scheduled stops.'}
+            </p>
+          ) : (
+            <div className="checkpoints-list">
+              {sortedCheckpoints.map((checkpoint) => (
+                <CheckpointItem
+                  key={checkpoint.id}
+                  feature={checkpoint}
+                  selected={checkpoint.id === selectedFeatureId}
+                  onSelect={onSelectFeature}
+                  onUpdate={onUpdateFeature}
+                  onDelete={onDeleteFeature}
+                  onCenter={onCenterFeature}
+                  readOnly={readOnly}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Section 2: Other Features (markers, routes, areas) - manually ordered */}
+        <section className="other-features-section">
+          <h4>
+            <span className="section-icon">📌</span>
+            Other Features
+            <span className="section-count">({sortedOtherFeatures.length})</span>
+          </h4>
+          {sortedOtherFeatures.length === 0 ? (
+            <p className="empty-message">
+              {readOnly
+                ? 'No other features added.'
+                : 'Add markers, routes, and areas.'}
             </p>
           ) : (
             <div className="features-list">
-              {sortedFeatures.map((feature, index) => (
+              {sortedOtherFeatures.map((feature, index) => (
                 <div
                   key={feature.id}
                   draggable={!readOnly}
@@ -281,7 +388,6 @@ const ItineraryPanel = ({
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
                     readOnly={readOnly}
-                    getMarkerEmoji={getMarkerEmoji}
                   />
                 </div>
               ))}
@@ -289,9 +395,13 @@ const ItineraryPanel = ({
           )}
         </section>
 
-        {/* Reference Tracks Section */}
+        {/* Section 3: Reference Tracks */}
         <section className="tracks-section">
-          <h4>Reference Tracks</h4>
+          <h4>
+            <span className="section-icon">🛤️</span>
+            Reference Tracks
+            <span className="section-count">({referenceTracks?.length || 0})</span>
+          </h4>
           {(!referenceTracks || referenceTracks.length === 0) ? (
             <p className="empty-message">
               {readOnly
@@ -310,8 +420,6 @@ const ItineraryPanel = ({
               ))}
             </div>
           )}
-
-          {/* TODO: Add reference track button/upload */}
         </section>
       </div>
     </aside>

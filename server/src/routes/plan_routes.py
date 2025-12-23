@@ -183,6 +183,10 @@ async def add_feature(
     current_user: User = Depends(get_current_user)
 ):
     """Add a feature (marker, polyline, or polygon) to a plan."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.debug(f"add_feature endpoint: Received geometry={feature_data.geometry}, properties={feature_data.properties}")
+    
     # Check plan exists and user has permission
     existing_plan = plan_service.get_plan(plan_id)
     if not existing_plan:

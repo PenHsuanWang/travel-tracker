@@ -103,20 +103,46 @@
 
 /* Feature popup */
 .feature-popup {
-  min-width: 120px;
+  min-width: 200px;
 }
 
-.feature-popup strong {
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.popup-header strong {
   display: block;
   font-size: 14px;
-  margin-bottom: 4px;
+  font-weight: 600;
+  color: #1f2937;
+  flex: 1;
 }
 
-.feature-popup p {
+.popup-edit-btn {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  line-height: 1;
+}
+
+.popup-edit-btn:hover {
+  opacity: 1;
+}
+
+.popup-description {
   margin: 0;
   font-size: 13px;
   color: #6b7280;
-  line-height: 1.4;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 /* Drawing mode cursor */
@@ -126,17 +152,25 @@
 
 /* Fix leaflet popup styles */
 .leaflet-popup-content-wrapper {
-  border-radius: 6px;
+  border-radius: 10px;
   padding: 0;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.25);
+  border: 1px solid #e5e7eb;
 }
 
 .leaflet-popup-content {
-  margin: 10px 12px;
+  margin: 14px 16px;
+  min-width: 220px;
 }
 
 .leaflet-popup-close-button {
   font-size: 18px !important;
-  padding: 4px 6px 0 0 !important;
+  padding: 6px 8px 0 0 !important;
+  color: #6b7280 !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #111827 !important;
 }
 
 /* Leaflet controls positioning - move zoom below layer switcher */

@@ -1,0 +1,165 @@
+/* client/src/components/panels/CheckpointItem.css */
+/**
+ * Styles for CheckpointItem component.
+ * Displays checkpoint with icon, name, coordinates, time, and duration.
+ */
+
+.checkpoint-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background-color: var(--card-background, #ffffff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.checkpoint-item:hover {
+  background-color: var(--hover-background, #f9fafb);
+  border-color: var(--primary-color, #3b82f6);
+}
+
+.checkpoint-item.selected {
+  background-color: var(--selected-background, #eff6ff);
+  border-color: var(--primary-color, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.checkpoint-item.editing {
+  cursor: default;
+  background-color: var(--editing-background, #fefce8);
+  border-color: var(--warning-color, #f59e0b);
+}
+
+/* Icon */
+.checkpoint-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Content */
+.checkpoint-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.checkpoint-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary, #1f2937);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.checkpoint-coords {
+  display: flex;
+  align-items: center;
+}
+
+.coords-button {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #6b7280);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.coords-button:hover {
+  background-color: var(--hover-background, #f3f4f6);
+  color: var(--primary-color, #3b82f6);
+}
+
+/* Time display */
+.checkpoint-time-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.checkpoint-arrival {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #6b7280);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.checkpoint-duration {
+  font-size: 0.8rem;
+  color: var(--text-muted, #9ca3af);
+  background-color: var(--badge-background, #f3f4f6);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Actions */
+.checkpoint-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.checkpoint-item:hover .checkpoint-actions,
+.checkpoint-item.selected .checkpoint-actions,
+.checkpoint-item.editing .checkpoint-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  line-height: 1;
+}
+
+.action-btn:hover {
+  background-color: var(--hover-background, #f3f4f6);
+}
+
+.action-btn.delete-btn:hover {
+  background-color: var(--danger-background, #fee2e2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .checkpoint-item {
+    padding: 10px;
+    gap: 8px;
+  }
+  
+  .checkpoint-icon {
+    font-size: 1.25rem;
+  }
+  
+  .checkpoint-name {
+    font-size: 0.9rem;
+  }
+  
+  .checkpoint-time-display {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .checkpoint-actions {
+    opacity: 1;
+    flex-direction: row;
+  }
+}

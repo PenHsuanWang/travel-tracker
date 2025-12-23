@@ -317,10 +317,15 @@ class PlanService:
         adapter = self.storage_manager.adapters.get('mongodb')
         if not adapter:
             raise RuntimeError("MongoDB adapter not initialized")
+        
+        # Log incoming properties for debugging
+        logger.debug(f"add_feature: Received properties: {properties}")
             
         # Build feature
         feature_props = PlanFeatureProperties(**(properties or {}))
         feature_props.created_at = datetime.utcnow()
+        
+        logger.debug(f"add_feature: Created PlanFeatureProperties with category={feature_props.category}")
         
         feature = PlanFeature(
             geometry=geometry,

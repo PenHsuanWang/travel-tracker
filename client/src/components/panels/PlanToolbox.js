@@ -2,18 +2,41 @@
 /**
  * PlanToolbox - Drawing tools panel for the plan canvas.
  * 
- * Provides a vertical toolbar with drawing tools: marker, polyline, rectangle, 
- * polygon, circle. Displays contextual action buttons during drawing.
+ * Provides a vertical toolbar with category-aware drawing tools:
+ * - Waypoint: Time-enabled point (creates "Checkpoint" in itinerary)
+ * - Marker: Static POI marker (no time)
+ * - Polyline: Route path
+ * - Rectangle/Polygon/Circle: Area features
+ * 
+ * Each tool sets the appropriate category on created features.
  */
 import React from 'react';
+import { FEATURE_CATEGORY } from '../../services/planService';
 import './PlanToolbox.css';
 
-// Tool definitions with SVG icons matching the design
+// Tool definitions with SVG icons and category mapping
 const DRAWING_TOOLS = [
+  {
+    id: 'waypoint',
+    label: 'Add Waypoint (Checkpoint)',
+    hint: 'Click to place a time-scheduled checkpoint',
+    category: FEATURE_CATEGORY.WAYPOINT,
+    timeEnabled: true,
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+        {/* Clock badge */}
+        <circle cx="18" cy="6" r="5" fill="#10b981"/>
+        <path d="M18 4v2.5l1.5 1" stroke="white" strokeWidth="1.2" fill="none"/>
+      </svg>
+    ),
+  },
   {
     id: 'marker',
     label: 'Place Marker',
-    hint: 'Click to place marker',
+    hint: 'Click to place a static marker (no time)',
+    category: FEATURE_CATEGORY.MARKER,
+    timeEnabled: false,
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
@@ -22,8 +45,10 @@ const DRAWING_TOOLS = [
   },
   {
     id: 'polyline',
-    label: 'Draw Polyline',
+    label: 'Draw Route',
     hint: 'Click to add vertices, click existing marker to finish',
+    category: FEATURE_CATEGORY.ROUTE,
+    timeEnabled: false,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
         <polyline points="4 17 10 11 13 14 20 7"/>
@@ -36,8 +61,10 @@ const DRAWING_TOOLS = [
   },
   {
     id: 'rectangle',
-    label: 'Draw Rectangle',
+    label: 'Draw Rectangle Area',
     hint: 'Click to start, click to finish',
+    category: FEATURE_CATEGORY.AREA,
+    timeEnabled: false,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
         <rect x="3" y="5" width="18" height="14" rx="1"/>
@@ -46,8 +73,10 @@ const DRAWING_TOOLS = [
   },
   {
     id: 'polygon',
-    label: 'Draw Polygon',
+    label: 'Draw Polygon Area',
     hint: 'Click to add vertices, click first point to close',
+    category: FEATURE_CATEGORY.AREA,
+    timeEnabled: false,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
         <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/>
@@ -62,8 +91,10 @@ const DRAWING_TOOLS = [
   },
   {
     id: 'circle',
-    label: 'Draw Circle',
+    label: 'Draw Circle Area',
     hint: 'Click center, then click to set radius',
+    category: FEATURE_CATEGORY.AREA,
+    timeEnabled: false,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
         <circle cx="12" cy="12" r="9"/>
@@ -138,9 +169,11 @@ const PlanToolbox = ({
   const handleToolClick = (toolId) => {
     if (disabled) return;
     if (activeTool === toolId) {
-      onSelectTool(null);
+      onSelectTool(null, null);
     } else {
-      onSelectTool(toolId);
+      // Find the tool definition to pass category info
+      const tool = DRAWING_TOOLS.find(t => t.id === toolId);
+      onSelectTool(toolId, tool?.category || null);
     }
   };
 

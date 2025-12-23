@@ -235,6 +235,76 @@
   background: rgba(217, 119, 6, 0.15);
 }
 
+/* ===== Two-Section Layout: Checkpoints + Other Features ===== */
+
+/* Checkpoints Section */
+.checkpoints-section {
+  padding: 0 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 16px;
+}
+
+.checkpoints-section h4 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #2563eb;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.checkpoints-section h4::before {
+  content: '📍';
+}
+
+.checkpoints-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Other Features Section */
+.other-features-section {
+  padding: 0 16px;
+  margin-bottom: 16px;
+}
+
+.other-features-section h4 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.other-features-section h4::before {
+  content: '📌';
+}
+
+/* Section count badges */
+.section-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 6px;
+}
+
+.checkpoints-section .section-count {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .itinerary-panel {

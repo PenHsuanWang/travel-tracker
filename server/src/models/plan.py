@@ -8,7 +8,7 @@ design-time entities that can be promoted to Trips.
 This module follows the same patterns as trip.py for consistency.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 from enum import Enum
@@ -33,6 +33,25 @@ class MarkerIconType(str, Enum):
     LODGING = "lodging"     # 🏨 Lodging
     INFO = "info"           # ℹ️ Information point
     CUSTOM = "custom"       # User-defined
+
+
+class FeatureCategory(str, Enum):
+    """Category classification for plan features.
+    
+    Categories determine:
+    - Which geometry types are valid
+    - Whether time information (estimated_arrival) is allowed
+    - How features appear in the Itinerary panel
+    - Sorting and grouping behavior
+    
+    UI Mapping:
+    - WAYPOINT displays as "Checkpoint" in the Itinerary panel
+    """
+    WAYPOINT = "waypoint"       # 📍 Time-enabled point (like GPX waypoint) - displays as "Checkpoint"
+    MARKER = "marker"           # 📌 Static POI marker (no time)
+    ROUTE = "route"             # 〰️ LineString path (no time)
+    AREA = "area"               # ⬡ Polygon/Rectangle region (no time)
+    REFERENCE_TRACK = "reference_track"  # External GPX baseline
 
 
 class PlanStatus(str, Enum):
@@ -69,22 +88,96 @@ class PlanFeatureProperties(BaseModel):
     
     Contains metadata and styling information for each GeoJSON feature
     in a Plan's feature collection.
+    
+    Validation Rules:
+    - `category` determines allowed geometry types and time fields
+    - `estimated_arrival` is ONLY valid when category == WAYPOINT
+    - `estimated_duration_minutes` is ONLY valid when category == WAYPOINT
+    - `icon_type` is ONLY valid for WAYPOINT and MARKER categories
+    - `elevation` is optional metadata for waypoints (from GPS or manual)
     """
+    # Category (required for proper feature classification)
+    category: FeatureCategory = Field(default=FeatureCategory.MARKER)
+    
+    # Core metadata
     name: Optional[str] = None
     description: Optional[str] = None
     notes: Optional[str] = None
+    
+    # Point-specific properties (WAYPOINT/MARKER only)
     icon_type: Optional[MarkerIconType] = None
+    elevation: Optional[float] = None  # meters, for waypoint altitude display
+    
+    # Time dimension (WAYPOINT only - enforced by validator)
+    estimated_arrival: Optional[datetime] = None  # When user plans to reach this point
+    estimated_duration_minutes: Optional[int] = None  # Planned stay duration at this point
+    
+    # Styling
     color: str = Field(default="#3388ff", pattern=r"^#[0-9A-Fa-f]{6}$")
     stroke_width: int = Field(default=3, ge=1, le=10)
     stroke_opacity: float = Field(default=0.8, ge=0, le=1)
     fill_opacity: float = Field(default=0.3, ge=0, le=1)
-    order_index: Optional[int] = None  # For itinerary sequencing
-    estimated_arrival: Optional[datetime] = None
-    estimated_duration_minutes: Optional[int] = None
+    
+    # UI metadata
+    shape_type: Optional[str] = None  # 'rectangle', 'circle', etc. for polygon variants
+    
+    # Ordering
+    order_index: Optional[int] = None  # For itinerary sequencing (fallback when no time)
+    
+    # Audit
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)
+    
+    @field_validator('estimated_arrival', mode='before')
+    @classmethod
+    def parse_estimated_arrival(cls, v):
+        """Parse estimated_arrival from string if needed."""
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v
+        if isinstance(v, str):
+            try:
+                return datetime.fromisoformat(v.replace('Z', '+00:00'))
+            except ValueError:
+                return None
+        return v
+    
+    @model_validator(mode='after')
+    def validate_time_only_for_waypoint(self):
+        """Ensure estimated_arrival and estimated_duration_minutes are only set for WAYPOINT category."""
+        if self.estimated_arrival is not None and self.category != FeatureCategory.WAYPOINT:
+            raise ValueError(
+                f'estimated_arrival is only allowed for WAYPOINT category, '
+                f'got category={self.category}'
+            )
+        if self.estimated_duration_minutes is not None and self.category != FeatureCategory.WAYPOINT:
+            raise ValueError(
+                f'estimated_duration_minutes is only allowed for WAYPOINT category, '
+                f'got category={self.category}'
+            )
+        return self
+    
+    @model_validator(mode='after')
+    def validate_icon_for_point_categories(self):
+        """Ensure icon_type is only set for point-based categories."""
+        if self.icon_type is not None and self.category not in (FeatureCategory.WAYPOINT, FeatureCategory.MARKER):
+            raise ValueError(
+                f'icon_type is only allowed for WAYPOINT/MARKER categories, '
+                f'got category={self.category}'
+            )
+        return self
+
+
+# Geometry type to category mapping for validation
+GEOMETRY_CATEGORY_MAP = {
+    FeatureCategory.WAYPOINT: ['Point'],
+    FeatureCategory.MARKER: ['Point'],
+    FeatureCategory.ROUTE: ['LineString'],
+    FeatureCategory.AREA: ['Polygon'],
+}
 
 
 class PlanFeature(BaseModel):
@@ -92,6 +185,11 @@ class PlanFeature(BaseModel):
     
     Each feature represents a marker (Point), route segment (LineString),
     or area (Polygon) on the planning canvas.
+    
+    Validation ensures geometry type matches category:
+    - WAYPOINT, MARKER -> Point
+    - ROUTE -> LineString
+    - AREA -> Polygon
     """
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: str = "Feature"
@@ -99,6 +197,20 @@ class PlanFeature(BaseModel):
     properties: PlanFeatureProperties = Field(default_factory=PlanFeatureProperties)
 
     model_config = ConfigDict(populate_by_name=True)
+    
+    @model_validator(mode='after')
+    def validate_geometry_category_match(self):
+        """Ensure geometry type is compatible with feature category."""
+        category = self.properties.category
+        geo_type = self.geometry.type
+        
+        allowed = GEOMETRY_CATEGORY_MAP.get(category, [])
+        if allowed and geo_type not in allowed:
+            raise ValueError(
+                f'Category {category} requires geometry type in {allowed}, '
+                f'got {geo_type}'
+            )
+        return self
 
 
 class PlanFeatureCollection(BaseModel):

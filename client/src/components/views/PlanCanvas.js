@@ -61,7 +61,8 @@ const PlanCanvas = () => {
   const [saving, setSaving] = useState(false);
 
   // UI state
-  const [activeTool, setActiveTool] = useState(null); // 'marker', 'polyline', 'polygon', 'rectangle', 'circle', etc.
+  const [activeTool, setActiveTool] = useState(null); // 'waypoint', 'marker', 'polyline', 'polygon', 'rectangle', 'circle', etc.
+  const [activeDrawCategory, setActiveDrawCategory] = useState(null); // category for the current drawing tool
   const [selectedFeatureId, setSelectedFeatureId] = useState(null);
   const [itineraryOpen, setItineraryOpen] = useState(true);
   const [itineraryWidth, setItineraryWidth] = useState(() => getStoredItineraryWidth());
@@ -378,39 +379,43 @@ const PlanCanvas = () => {
     <div className="plan-canvas">
       {/* Header Bar */}
       <header className="plan-canvas-header">
-        <div className="header-left">
+        <div className="plan-header-left">
           <Link to="/plans" className="back-link">
-            ← Plans
+            ← Back to Plans
           </Link>
-          {isEditingName ? (
-            <div className="name-editor">
-              <input
-                type="text"
-                value={editedName}
-                onChange={(e) => setEditedName(e.target.value)}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveName();
-                  if (e.key === 'Escape') handleCancelEditName();
-                }}
-              />
-              <button onClick={handleSaveName} disabled={saving}>
-                ✓
-              </button>
-              <button onClick={handleCancelEditName}>✕</button>
-            </div>
-          ) : (
-            <h1 className="plan-title" onClick={handleStartEditName}>
-              {plan.name || 'Untitled Plan'}
-              {canManage && <span className="edit-hint">✏️</span>}
-            </h1>
-          )}
+          <div className="plan-title-block">
+            <p className="plan-mode-label">Planning Mode</p>
+            {isEditingName ? (
+              <div className="name-editor">
+                <input
+                  type="text"
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveName();
+                    if (e.key === 'Escape') handleCancelEditName();
+                  }}
+                />
+                <button onClick={handleSaveName} disabled={saving}>
+                  ✓
+                </button>
+                <button onClick={handleCancelEditName}>✕</button>
+              </div>
+            ) : (
+              <h1 className="plan-title" onClick={handleStartEditName}>
+                {plan.name || 'Untitled Plan'}
+                {canManage && <span className="edit-hint">✏️</span>}
+              </h1>
+            )}
+          </div>
+        </div>
+
+        <div className="plan-header-right">
           <span className={`status-badge status-${plan.status}`}>
             {PLAN_STATUS_LABELS[plan.status] || plan.status}
           </span>
-        </div>
-
-        <div className="header-right">
+          
           {saving && <span className="saving-indicator">Saving...</span>}
           
           {canEdit && plan.status !== 'promoted' && (
@@ -427,7 +432,7 @@ const PlanCanvas = () => {
             className="btn-toggle-itinerary"
             onClick={() => setItineraryOpen(!itineraryOpen)}
           >
-            {itineraryOpen ? '◀' : '▶'} Itinerary
+            {itineraryOpen ? 'Hide Itinerary' : 'Show Itinerary'}
           </button>
 
           {canManage && (
@@ -436,7 +441,7 @@ const PlanCanvas = () => {
               onClick={handleDeletePlan}
               title="Delete plan"
             >
-              🗑️
+              Delete Plan
             </button>
           )}
         </div>
@@ -448,8 +453,9 @@ const PlanCanvas = () => {
         {canEdit && (
           <PlanToolbox
             activeTool={activeTool}
-            onSelectTool={(tool) => {
+            onSelectTool={(tool, category) => {
               setActiveTool(tool);
+              setActiveDrawCategory(category);
               setDrawingState({ isDrawing: false, vertices: [] });
             }}
             disabled={saving}
@@ -460,6 +466,7 @@ const PlanCanvas = () => {
             onCancelDrawing={() => {
               mapRef.current?.cancelDrawing?.();
               setActiveTool(null);
+              setActiveDrawCategory(null);
             }}
           />
         )}
@@ -473,6 +480,7 @@ const PlanCanvas = () => {
             selectedFeatureId={selectedFeatureId}
             onSelectFeature={setSelectedFeatureId}
             activeTool={canEdit ? activeTool : null}
+            activeDrawCategory={activeDrawCategory}
             onAddFeature={handleAddFeature}
             onUpdateFeature={handleUpdateFeature}
             onDeleteFeature={handleDeleteFeature}
@@ -491,12 +499,18 @@ const PlanCanvas = () => {
             onUpdateFeature={handleUpdateFeature}
             onDeleteFeature={handleDeleteFeature}
             onReorderFeatures={handleReorderFeatures}
+            onCenterFeature={(featureId, coords) => {
+              // Center map on feature
+              if (mapRef.current?.centerOnCoords) {
+                mapRef.current.centerOnCoords(coords);
+              }
+              setSelectedFeatureId(featureId);
+            }}
             onAddReferenceTrack={handleAddReferenceTrack}
             onRemoveReferenceTrack={handleRemoveReferenceTrack}
             width={itineraryWidth}
             onWidthChange={setItineraryWidth}
             readOnly={!canEdit}
-            getMarkerEmoji={getMarkerEmoji}
           />
         )}
       </div>

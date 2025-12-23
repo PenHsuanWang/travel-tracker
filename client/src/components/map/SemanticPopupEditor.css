@@ -1,0 +1,209 @@
+/* client/src/components/map/SemanticPopupEditor.css */
+/**
+ * Styles for SemanticPopupEditor component.
+ * Used in Leaflet map popups for category-aware feature editing.
+ */
+
+.semantic-popup-editor {
+  min-width: 260px;
+  max-width: 320px;
+  padding: 4px;
+}
+
+/* Category badge */
+.category-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background-color: var(--badge-background, #f3f4f6);
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+  margin-bottom: 8px;
+}
+
+.category-icon {
+  font-size: 1rem;
+}
+
+.category-label {
+  text-transform: capitalize;
+}
+
+/* Coordinates display */
+.coords-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background-color: var(--coords-background, #f0f9ff);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #6b7280);
+  margin-bottom: 12px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+.coords-icon {
+  font-size: 0.9rem;
+}
+
+/* Form fields */
+.form-field {
+  margin-bottom: 10px;
+}
+
+.form-field label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.form-field input[type="text"],
+.form-field input[type="number"],
+.form-field input[type="datetime-local"],
+.form-field select,
+.form-field textarea {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 0.9rem;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 4px;
+  background-color: var(--input-background, #ffffff);
+  color: var(--text-primary, #1f2937);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  outline: none;
+  border-color: var(--primary-color, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.form-field input:disabled,
+.form-field select:disabled,
+.form-field textarea:disabled {
+  background-color: var(--disabled-background, #f9fafb);
+  color: var(--text-muted, #9ca3af);
+  cursor: not-allowed;
+}
+
+.form-field textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* Time fields group */
+.time-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.time-fields .form-field {
+  margin-bottom: 0;
+}
+
+/* Color field */
+.color-field .color-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-field input[type="color"] {
+  width: 36px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.color-field .color-value {
+  font-size: 0.85rem;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  color: var(--text-secondary, #6b7280);
+}
+
+/* Actions */
+.popup-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
+.popup-actions button {
+  flex: 1;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.popup-actions button:active {
+  transform: scale(0.98);
+}
+
+.save-btn {
+  background-color: var(--primary-color, #3b82f6);
+  color: white;
+}
+
+.save-btn:hover:not(:disabled) {
+  background-color: var(--primary-hover, #2563eb);
+}
+
+.save-btn:disabled {
+  background-color: var(--gray-light, #e5e7eb);
+  color: var(--text-muted, #9ca3af);
+  cursor: not-allowed;
+}
+
+.cancel-btn,
+.close-btn {
+  background-color: var(--gray-light, #e5e7eb);
+  color: var(--text-secondary, #6b7280);
+}
+
+.cancel-btn:hover,
+.close-btn:hover {
+  background-color: var(--gray-medium, #d1d5db);
+}
+
+.delete-btn {
+  background-color: var(--danger-color, #ef4444);
+  color: white;
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.delete-btn:hover {
+  background-color: var(--danger-hover, #dc2626);
+}
+
+/* Responsive */
+@media (max-width: 320px) {
+  .semantic-popup-editor {
+    min-width: 100%;
+  }
+  
+  .time-fields {
+    grid-template-columns: 1fr;
+  }
+}

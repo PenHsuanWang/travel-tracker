@@ -9,21 +9,12 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { MapContainer, TileLayer, Polyline, Polygon, Marker, Popup, Circle, Rectangle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import FeatureStyleEditor from '../common/FeatureStyleEditor';
 import 'leaflet/dist/leaflet.css';
 import './PlanMapView.css';
 
 // Available map layers
 const MAP_LAYERS = {
-  'opentopomap': {
-    name: 'OpenTopoMap',
-    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution: 'Map data: © OpenStreetMap, SRTM | Map style: © OpenTopoMap (CC-BY-SA)',
-  },
-  'openstreetmap': {
-    name: 'OpenStreetMap',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '© OpenStreetMap contributors',
-  },
   'rudy': {
     name: 'Rudy Map',
     url: 'https://tile.happyman.idv.tw/map/rudy/{z}/{x}/{y}.png',
@@ -33,6 +24,16 @@ const MAP_LAYERS = {
     name: 'Happyman',
     url: 'https://tile.happyman.idv.tw/map/moi_osm/{z}/{x}/{y}.png',
     attribution: 'Map data © Happyman contributors',
+  },
+  'openstreetmap': {
+    name: 'OpenStreetMap',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '© OpenStreetMap contributors',
+  },
+  'opentopomap': {
+    name: 'OpenTopoMap',
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: 'Map data: © OpenStreetMap, SRTM | Map style: © OpenTopoMap (CC-BY-SA)',
   },
 };
 
@@ -47,7 +48,7 @@ function MapLayerController({ selectedLayer }) {
       }
     });
 
-    const layerConfig = MAP_LAYERS[selectedLayer] || MAP_LAYERS['opentopomap'];
+    const layerConfig = MAP_LAYERS[selectedLayer] || MAP_LAYERS['rudy'];
     L.tileLayer(layerConfig.url, {
       attribution: layerConfig.attribution,
       maxZoom: 17,
@@ -60,6 +61,7 @@ function MapLayerController({ selectedLayer }) {
 // Drawing controller - handles map clicks when a tool is active
 function DrawingController({ 
   activeTool, 
+  activeDrawCategory,
   onAddFeature,
   drawingState,
   setDrawingState,
@@ -72,16 +74,20 @@ function DrawingController({
 
       const { lat, lng } = e.latlng;
 
-      if (activeTool === 'marker') {
+      if (activeTool === 'marker' || activeTool === 'waypoint') {
         // Create a point feature immediately
+        // Use the activeDrawCategory if provided, otherwise infer from tool
+        const category = activeDrawCategory || (activeTool === 'waypoint' ? 'waypoint' : 'marker');
         const geometry = {
           type: 'Point',
           coordinates: [lng, lat], // GeoJSON uses [lng, lat]
         };
-        onAddFeature(geometry, {
+        const properties = {
+          category,
           icon_type: 'custom',
           name: null,
-        });
+        };
+        onAddFeature(geometry, properties);
         return;
       }
 
@@ -117,7 +123,10 @@ function DrawingController({
               [bounds[0][1], bounds[0][0]], // close
             ]],
           };
-          onAddFeature(geometry, { shape_type: 'rectangle' });
+          onAddFeature(geometry, { 
+            category: activeDrawCategory || 'area',
+            shape_type: 'rectangle' 
+          });
           setDrawingState({ isDrawing: false, vertices: [], startPoint: null, currentPoint: null });
         }
         return;
@@ -151,7 +160,12 @@ function DrawingController({
             type: 'Polygon',
             coordinates: [coords],
           };
-          onAddFeature(geometry, { shape_type: 'circle', center: [center[1], center[0]], radius });
+          onAddFeature(geometry, { 
+            category: activeDrawCategory || 'area',
+            shape_type: 'circle', 
+            center: [center[1], center[0]], 
+            radius 
+          });
           setDrawingState({ isDrawing: false, vertices: [], center: null, radius: 0 });
         }
         return;
@@ -385,13 +399,14 @@ const PlanMapView = forwardRef(({
   selectedFeatureId,
   onSelectFeature,
   activeTool,
+  activeDrawCategory,
   onAddFeature,
   onUpdateFeature,
   onDeleteFeature,
   readOnly,
   onDrawingStateChange,
 }, ref) => {
-  const [selectedLayer, setSelectedLayer] = useState('opentopomap');
+  const [selectedLayer, setSelectedLayer] = useState('rudy');
   const [showLayerMenu, setShowLayerMenu] = useState(false);
   const [drawingState, setDrawingState] = useState({
     isDrawing: false,
@@ -401,6 +416,7 @@ const PlanMapView = forwardRef(({
     center: null,
     radius: 0,
   });
+  const [editingFeatureId, setEditingFeatureId] = useState(null);
   const mapRef = useRef(null);
 
   // Expose drawing state to parent
@@ -432,7 +448,7 @@ const PlanMapView = forwardRef(({
           type: 'LineString',
           coordinates: drawingState.vertices.map(([lat, lng]) => [lng, lat]),
         };
-        onAddFeature(geometry, {});
+        onAddFeature(geometry, { category: activeDrawCategory || 'route' });
         setDrawingState({ isDrawing: false, vertices: [], startPoint: null, currentPoint: null, center: null, radius: 0 });
       } else if (activeTool === 'polygon' && drawingState.vertices.length >= 3) {
         const coords = drawingState.vertices.map(([lat, lng]) => [lng, lat]);
@@ -441,7 +457,7 @@ const PlanMapView = forwardRef(({
           type: 'Polygon',
           coordinates: [coords],
         };
-        onAddFeature(geometry, {});
+        onAddFeature(geometry, { category: activeDrawCategory || 'area' });
         setDrawingState({ isDrawing: false, vertices: [], startPoint: null, currentPoint: null, center: null, radius: 0 });
       }
     },
@@ -479,6 +495,7 @@ const PlanMapView = forwardRef(({
     const [lng, lat] = geom.coordinates;
     const isSelected = feature.id === selectedFeatureId;
     const icon = createMarkerIcon(isSelected);
+    const isEditing = editingFeatureId === feature.id;
 
     return (
       <Marker
@@ -489,17 +506,43 @@ const PlanMapView = forwardRef(({
           click: () => onSelectFeature(feature.id),
         }}
       >
-        <Popup>
-          <div className="feature-popup">
-            <strong>{feature.properties?.name || 'Marker'}</strong>
-            {feature.properties?.description && (
-              <p>{feature.properties.description}</p>
-            )}
-          </div>
+        <Popup
+          onOpen={() => setEditingFeatureId(null)}
+          onClose={() => setEditingFeatureId(null)}
+        >
+          {isEditing ? (
+            <FeatureStyleEditor
+              feature={feature}
+              onUpdate={onUpdateFeature}
+              onClose={() => setEditingFeatureId(null)}
+              readOnly={readOnly}
+            />
+          ) : (
+            <div className="feature-popup">
+              <div className="popup-header">
+                <strong>{feature.properties?.name || 'Marker'}</strong>
+                {!readOnly && (
+                  <button
+                    className="popup-edit-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingFeatureId(feature.id);
+                    }}
+                    title="Edit"
+                  >
+                    ✏️
+                  </button>
+                )}
+              </div>
+              {feature.properties?.description && (
+                <p className="popup-description">{feature.properties.description}</p>
+              )}
+            </div>
+          )}
         </Popup>
       </Marker>
     );
-  }, [selectedFeatureId, onSelectFeature]);
+  }, [selectedFeatureId, onSelectFeature, editingFeatureId, onUpdateFeature, readOnly]);
 
   // Render polyline features
   const renderPolyline = useCallback((feature) => {
@@ -509,6 +552,9 @@ const PlanMapView = forwardRef(({
     const positions = geom.coordinates.map(([lng, lat]) => [lat, lng]);
     const isSelected = feature.id === selectedFeatureId;
     const color = feature.properties?.color || '#3b82f6';
+    const strokeWidth = feature.properties?.strokeWidth || 3;
+    const opacity = feature.properties?.opacity ?? 0.8;
+    const isEditing = editingFeatureId === feature.id;
 
     return (
       <Polyline
@@ -516,24 +562,50 @@ const PlanMapView = forwardRef(({
         positions={positions}
         pathOptions={{
           color: isSelected ? '#ef4444' : color,
-          weight: isSelected ? 4 : 3,
-          opacity: 0.8,
+          weight: isSelected ? strokeWidth + 1 : strokeWidth,
+          opacity,
         }}
         eventHandlers={{
           click: () => onSelectFeature(feature.id),
         }}
       >
-        <Popup>
-          <div className="feature-popup">
-            <strong>{feature.properties?.name || '〰️ Route'}</strong>
-            {feature.properties?.description && (
-              <p>{feature.properties.description}</p>
-            )}
-          </div>
+        <Popup
+          onOpen={() => setEditingFeatureId(null)}
+          onClose={() => setEditingFeatureId(null)}
+        >
+          {isEditing ? (
+            <FeatureStyleEditor
+              feature={feature}
+              onUpdate={onUpdateFeature}
+              onClose={() => setEditingFeatureId(null)}
+              readOnly={readOnly}
+            />
+          ) : (
+            <div className="feature-popup">
+              <div className="popup-header">
+                <strong>{feature.properties?.name || '〰️ Route'}</strong>
+                {!readOnly && (
+                  <button
+                    className="popup-edit-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingFeatureId(feature.id);
+                    }}
+                    title="Edit"
+                  >
+                    ✏️
+                  </button>
+                )}
+              </div>
+              {feature.properties?.description && (
+                <p className="popup-description">{feature.properties.description}</p>
+              )}
+            </div>
+          )}
         </Popup>
       </Polyline>
     );
-  }, [selectedFeatureId, onSelectFeature]);
+  }, [selectedFeatureId, onSelectFeature, editingFeatureId, onUpdateFeature, readOnly]);
 
   // Render polygon features
   const renderPolygon = useCallback((feature) => {
@@ -543,6 +615,16 @@ const PlanMapView = forwardRef(({
     const positions = geom.coordinates[0].map(([lng, lat]) => [lat, lng]);
     const isSelected = feature.id === selectedFeatureId;
     const color = feature.properties?.color || '#16a34a';
+    const fillColor = feature.properties?.fillColor || color;
+    const strokeWidth = feature.properties?.strokeWidth || 2;
+    const opacity = feature.properties?.opacity ?? 0.8;
+    const fillOpacity = feature.properties?.fillOpacity ?? 0.2;
+    const isEditing = editingFeatureId === feature.id;
+    
+    const shapeType = feature.properties?.shape_type;
+    let label = '⬡ Polygon';
+    if (shapeType === 'rectangle') label = '▭ Rectangle';
+    else if (shapeType === 'circle') label = '◯ Circle';
 
     return (
       <Polygon
@@ -550,21 +632,48 @@ const PlanMapView = forwardRef(({
         positions={positions}
         pathOptions={{
           color: isSelected ? '#ef4444' : color,
-          fillColor: color,
-          fillOpacity: 0.2,
-          weight: isSelected ? 3 : 2,
+          fillColor: fillColor,
+          fillOpacity: fillOpacity,
+          opacity: opacity,
+          weight: isSelected ? strokeWidth + 1 : strokeWidth,
         }}
         eventHandlers={{
           click: () => onSelectFeature(feature.id),
         }}
       >
-        <Popup>
-          <div className="feature-popup">
-            <strong>{feature.properties?.name || '⬡ Area'}</strong>
-            {feature.properties?.description && (
-              <p>{feature.properties.description}</p>
-            )}
-          </div>
+        <Popup
+          onOpen={() => setEditingFeatureId(null)}
+          onClose={() => setEditingFeatureId(null)}
+        >
+          {isEditing ? (
+            <FeatureStyleEditor
+              feature={feature}
+              onUpdate={onUpdateFeature}
+              onClose={() => setEditingFeatureId(null)}
+              readOnly={readOnly}
+            />
+          ) : (
+            <div className="feature-popup">
+              <div className="popup-header">
+                <strong>{feature.properties?.name || label}</strong>
+                {!readOnly && (
+                  <button
+                    className="popup-edit-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingFeatureId(feature.id);
+                    }}
+                    title="Edit"
+                  >
+                    ✏️
+                  </button>
+                )}
+              </div>
+              {feature.properties?.description && (
+                <p className="popup-description">{feature.properties.description}</p>
+              )}
+            </div>
+          )}
         </Popup>
       </Polygon>
     );
@@ -629,8 +738,8 @@ const PlanMapView = forwardRef(({
         scrollWheelZoom={true}
       >
         <TileLayer
-          url={MAP_LAYERS['opentopomap'].url}
-          attribution={MAP_LAYERS['opentopomap'].attribution}
+          url={MAP_LAYERS['rudy'].url}
+          attribution={MAP_LAYERS['rudy'].attribution}
         />
 
         <MapLayerController selectedLayer={selectedLayer} />
@@ -638,7 +747,8 @@ const PlanMapView = forwardRef(({
 
         {!readOnly && activeTool && (
           <DrawingController 
-            activeTool={activeTool} 
+            activeTool={activeTool}
+            activeDrawCategory={activeDrawCategory}
             onAddFeature={onAddFeature}
             drawingState={drawingState}
             setDrawingState={setDrawingState}
