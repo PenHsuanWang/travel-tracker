@@ -74,6 +74,7 @@ class FileMetadata(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     uploader_id: Optional[str] = None
     trip_id: Optional[str] = None
+    plan_id: Optional[str] = None
     has_gpx_analysis: Optional[bool] = None
     analysis_object_key: Optional[str] = None
     analysis_bucket: Optional[str] = None
@@ -134,6 +135,7 @@ class HandlerResult(BaseModel):
     camera_make: Optional[str] = None
     camera_model: Optional[str] = None
     trip_id: Optional[str] = None
+    plan_id: Optional[str] = None
     status: str = "success"
     error: Optional[str] = None
     has_gpx_analysis: Optional[bool] = None

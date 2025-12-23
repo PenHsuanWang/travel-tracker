@@ -16,7 +16,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import PlanMapView from './PlanMapView';
 import PlanToolbox from '../panels/PlanToolbox';
 import ItineraryPanel from '../panels/ItineraryPanel';
-import PromotePlanModal from '../common/PromotePlanModal';
 import {
   getPlan,
   updatePlan,
@@ -27,8 +26,6 @@ import {
   reorderFeatures,
   addReferenceTrack,
   removeReferenceTrack,
-  promotePlanToTrip,
-  getMarkerEmoji,
   PLAN_STATUS_LABELS,
 } from '../../services/planService';
 import '../../styles/PlanCanvas.css';
@@ -66,7 +63,6 @@ const PlanCanvas = () => {
   const [selectedFeatureId, setSelectedFeatureId] = useState(null);
   const [itineraryOpen, setItineraryOpen] = useState(true);
   const [itineraryWidth, setItineraryWidth] = useState(() => getStoredItineraryWidth());
-  const [showPromoteModal, setShowPromoteModal] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [drawingState, setDrawingState] = useState({ isDrawing: false, vertices: [] });
@@ -315,21 +311,6 @@ const PlanCanvas = () => {
     }
   };
 
-  // Plan promotion
-  const handlePromote = async (options) => {
-    try {
-      setSaving(true);
-      const result = await promotePlanToTrip(planId, options);
-      setShowPromoteModal(false);
-      navigate(`/trips/${result.trip_id}`);
-    } catch (err) {
-      console.error('Failed to promote plan:', err);
-      throw err;
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // Selected feature
   const selectedFeature = useMemo(() => {
     if (!plan || !selectedFeatureId) return null;
@@ -418,16 +399,6 @@ const PlanCanvas = () => {
           
           {saving && <span className="saving-indicator">Saving...</span>}
           
-          {canEdit && plan.status !== 'promoted' && (
-            <button
-              className="btn-promote"
-              onClick={() => setShowPromoteModal(true)}
-              disabled={saving}
-            >
-              🚀 Promote to Trip
-            </button>
-          )}
-
           <button
             className="btn-toggle-itinerary"
             onClick={() => setItineraryOpen(!itineraryOpen)}
@@ -515,14 +486,6 @@ const PlanCanvas = () => {
         )}
       </div>
 
-      {/* Promote Modal */}
-      {showPromoteModal && (
-        <PromotePlanModal
-          plan={plan}
-          onClose={() => setShowPromoteModal(false)}
-          onPromote={handlePromote}
-        />
-      )}
     </div>
   );
 };

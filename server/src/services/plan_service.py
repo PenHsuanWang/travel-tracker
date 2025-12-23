@@ -2,8 +2,9 @@
 
 This service follows the same patterns as TripService, using the
 StorageManager with MongoDB adapter for persistence. It provides
-CRUD operations for Plans, feature management, and plan promotion
-to Trip workflow.
+CRUD operations for Plans, feature management, reference tracks,
+and member management. Plan/Trip promotion is intentionally omitted
+to keep the two entities fully decoupled.
 """
 
 from typing import List, Optional, Dict, Any
@@ -17,7 +18,6 @@ from src.models.plan import (
     ReferenceTrack, ReferenceTrackAdd,
     PlanStatus, GeoJSONGeometry
 )
-from src.models.trip import Trip, TripStats
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
 from src.events.event_bus import EventBus
@@ -32,7 +32,6 @@ class PlanService:
     - Creating, updating, and deleting plans
     - Managing plan features (markers, routes, areas)
     - Managing reference tracks
-    - Promoting plans to trips
     - Member management
     
     This service follows the same adapter pattern as TripService.
@@ -539,115 +538,6 @@ class PlanService:
         )
         
         return result.modified_count > 0
-    
-    # -------------------------------------------------------------------------
-    # Plan Promotion
-    # -------------------------------------------------------------------------
-    
-    def promote_to_trip(self, plan_id: str, current_user_id: str,
-                        copy_reference_tracks: bool = True,
-                        include_planned_route_as_ghost: bool = True) -> Optional[Dict[str, Any]]:
-        """Promote a Plan to a Trip.
-        
-        This creates a new Trip document based on the Plan, optionally
-        copying reference tracks and storing the planned route as a
-        ghost layer for comparison.
-        
-        Args:
-            plan_id: Plan identifier.
-            current_user_id: ID of user performing the promotion.
-            copy_reference_tracks: Whether to link reference GPX files to new Trip.
-            include_planned_route_as_ghost: Whether to store plan features as ghost layer.
-            
-        Returns:
-            Dict with plan_id, trip_id, and operation details, or None if plan not found.
-            
-        Raises:
-            PermissionError: If current user is not the plan owner.
-        """
-        plan = self.get_plan(plan_id)
-        if not plan:
-            return None
-            
-        # Check permission
-        if plan.owner_id != current_user_id:
-            raise PermissionError("Only the owner can promote a plan to a trip.")
-            
-        # Check if already promoted
-        if plan.status == PlanStatus.PROMOTED:
-            raise ValueError("Plan has already been promoted to a trip.")
-            
-        # Import TripService here to avoid circular imports
-        from src.services.trip_service import TripService
-        trip_service = TripService()
-        
-        # Create new Trip from Plan
-        trip = Trip(
-            name=plan.name,
-            region=plan.region,
-            start_date=plan.planned_start_date,
-            end_date=plan.planned_end_date,
-            notes=plan.description,
-            owner_id=plan.owner_id,
-            member_ids=plan.member_ids,
-            is_public=plan.is_public
-        )
-        
-        created_trip = trip_service.create_trip(trip)
-        
-        tracks_copied = 0
-        ghost_layer_created = False
-        
-        # Copy reference tracks (update file_metadata.trip_id)
-        if copy_reference_tracks and plan.reference_tracks:
-            adapter = self.storage_manager.adapters.get('mongodb')
-            if adapter:
-                file_metadata_collection = adapter.get_collection('file_metadata')
-                for ref_track in plan.reference_tracks:
-                    result = file_metadata_collection.update_one(
-                        {"object_key": ref_track.object_key},
-                        {"$set": {"trip_id": created_trip.id}}
-                    )
-                    if result.modified_count > 0:
-                        tracks_copied += 1
-                        
-        # Store planned route as ghost layer in Trip
-        # This requires adding a 'planned_route' field to Trip model
-        if include_planned_route_as_ghost and plan.features.features:
-            ghost_layer_created = True
-            # Store as JSON in trip metadata - this would need Trip model update
-            # For now, we'll log this as a future enhancement
-            logger.info(f"Ghost layer data prepared for trip {created_trip.id}")
-            
-        # Update Plan status
-        adapter = self.storage_manager.adapters.get('mongodb')
-        if adapter:
-            collection = adapter.get_collection(self.collection_name)
-            collection.update_one(
-                {"_id": plan_id},
-                {"$set": {
-                    "status": PlanStatus.PROMOTED.value,
-                    "promoted_trip_id": created_trip.id,
-                    "updated_at": datetime.utcnow()
-                }}
-            )
-            
-        logger.info(f"Promoted plan {plan_id} to trip {created_trip.id}")
-        
-        # Publish event
-        EventBus.publish("PLAN_PROMOTED", {
-            "plan_id": plan_id,
-            "trip_id": created_trip.id,
-            "owner_id": plan.owner_id,
-            "member_ids": plan.member_ids
-        })
-        
-        return {
-            "plan_id": plan_id,
-            "trip_id": created_trip.id,
-            "reference_tracks_copied": tracks_copied,
-            "ghost_layer_created": ghost_layer_created
-        }
     
     # -------------------------------------------------------------------------
     # Helper Methods

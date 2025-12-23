@@ -200,15 +200,22 @@ class FileUploadService:
         return file_extension.lower() in {"jpg", "jpeg", "png", "gif", "webp", "avif"}
     
     @classmethod
-    def save_file(cls, file: UploadFile, uploader_id: Optional[str] = None, trip_id: Optional[str] = None) -> Dict[str, Any]:
+    def save_file(
+        cls,
+        file: UploadFile,
+        uploader_id: Optional[str] = None,
+        trip_id: Optional[str] = None,
+        plan_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Save an uploaded file and persist its metadata.
 
         The method selects a handler based on the file extension, stores the
         file contents via the handler (which typically writes to MinIO), and
-        persists a ``file_metadata`` document in MongoDB. For GPX files
-        associated with a ``trip_id``, the method enforces a single GPX per
-        trip, may auto-fill trip dates from track timestamps, and publishes
-        a ``GPX_PROCESSED`` event when analysis is available.
+        persists a ``file_metadata`` document in MongoDB. For GPX files,
+        callers must supply either ``trip_id`` (trip-scoped GPX) or
+        ``plan_id`` (plan-scoped reference track). Trip uploads enforce a
+        single GPX per trip and may auto-fill trip dates; plan uploads skip
+        trip-side effects and store data in the ``plan-assets`` bucket.
 
         Args:
             file (UploadFile): The uploaded file object received from FastAPI.
@@ -220,16 +227,18 @@ class FileUploadService:
             and any auto-filled trip information.
 
         Raises:
-            ValueError: If a GPX file is uploaded without a ``trip_id``.
+            ValueError: If a GPX file is uploaded without a ``trip_id`` or ``plan_id``.
         """
         service = cls()
         file_extension = file.filename.split('.')[-1].lower()
         handler = HandlerFactory.get_handler(file_extension)
 
-        # Enforce trip scoping for GPX and image uploads to avoid cross-trip leakage
-        # Exception: Avatars (images without trip_id) are allowed
-        if file_extension == "gpx" and not trip_id:
-            raise ValueError("trip_id is required when uploading GPX tracks")
+        # Enforce scoping for GPX uploads (must target a trip or a plan)
+        if file_extension == "gpx" and not (trip_id or plan_id):
+            raise ValueError("trip_id or plan_id is required when uploading GPX tracks")
+
+        if file_extension == "gpx" and trip_id and plan_id:
+            raise ValueError("Provide only one of trip_id or plan_id for GPX uploads")
         
         # Enforce single GPX file per trip: delete existing GPX files before uploading new one
         if file_extension == "gpx" and trip_id:
@@ -249,7 +258,10 @@ class FileUploadService:
             except Exception as e:
                 logging.getLogger(__name__).warning(f"Error checking/deleting existing GPX files: {e}")
         
-        result = handler.handle(file, trip_id=trip_id)
+        if file_extension == "gpx":
+            result = handler.handle(file, trip_id=trip_id, plan_id=plan_id)
+        else:
+            result = handler.handle(file, trip_id=trip_id)
         
         # Handle legacy handlers that return strings
         if isinstance(result, str):
@@ -301,6 +313,7 @@ class FileUploadService:
                 created_at=datetime.now(timezone.utc),
                 uploader_id=uploader_id,
                 trip_id=trip_id,
+                plan_id=plan_id,
                 has_gpx_analysis=result.has_gpx_analysis,
                 analysis_object_key=result.analysis_object_key,
                 analysis_bucket=result.analysis_bucket,
@@ -344,6 +357,7 @@ class FileUploadService:
                 "analysis_object_key": result.analysis_object_key,
                 "analysis_error": result.analysis_error,
                 "track_summary": result.track_summary,
+                "plan_id": plan_id,
                 "thumb_keys": variant_payload.get("thumb_keys") or {},
                 "preview_keys": variant_payload.get("preview_keys") or {},
                 "variants_status": variant_payload.get("status"),

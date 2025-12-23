@@ -66,11 +66,6 @@
   color: #2563eb;
 }
 
-.plan-status-badge.status-promoted {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
 .plan-status-badge.status-archived {
   background: #fef3c7;
   color: #d97706;

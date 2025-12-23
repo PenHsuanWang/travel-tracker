@@ -30,7 +30,6 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: 'All statuses' },
   { value: PLAN_STATUS.DRAFT, label: PLAN_STATUS_LABELS.draft },
   { value: PLAN_STATUS.ACTIVE, label: PLAN_STATUS_LABELS.active },
-  { value: PLAN_STATUS.PROMOTED, label: PLAN_STATUS_LABELS.promoted },
   { value: PLAN_STATUS.ARCHIVED, label: PLAN_STATUS_LABELS.archived },
 ];
 

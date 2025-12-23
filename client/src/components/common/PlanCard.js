@@ -33,8 +33,6 @@ const getStatusClass = (status) => {
       return 'status-draft';
     case 'active':
       return 'status-active';
-    case 'promoted':
-      return 'status-promoted';
     case 'archived':
       return 'status-archived';
     default:

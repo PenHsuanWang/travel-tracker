@@ -174,24 +174,6 @@ export const removeReferenceTrack = async (planId, trackId) => {
 };
 
 // =============================================================================
-// Plan Promotion
-// =============================================================================
-
-/**
- * Promote a plan to a trip.
- * @param {string} planId - Plan identifier
- * @param {Object} options - { copy_reference_tracks, include_planned_route_as_ghost }
- * @returns {Promise<Object>} { plan_id, trip_id, reference_tracks_copied, ghost_layer_created }
- */
-export const promotePlanToTrip = async (planId, options = {}) => {
-  const response = await apiClient.post(`/plans/${planId}/promote`, {
-    copy_reference_tracks: options.copyReferenceTracks ?? true,
-    include_planned_route_as_ghost: options.includeGhostLayer ?? true,
-  });
-  return response.data;
-};
-
-// =============================================================================
 // Marker Icon Types (for UI dropdowns)
 // =============================================================================
 
@@ -227,14 +209,12 @@ export const getMarkerEmoji = (iconType) => {
 export const PLAN_STATUS = {
   DRAFT: 'draft',
   ACTIVE: 'active',
-  PROMOTED: 'promoted',
   ARCHIVED: 'archived',
 };
 
 export const PLAN_STATUS_LABELS = {
   draft: 'Draft',
   active: 'Active',
-  promoted: 'Promoted',
   archived: 'Archived',
 };
 

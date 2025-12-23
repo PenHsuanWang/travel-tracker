@@ -2,8 +2,8 @@
 
 Plans are mutable containers for GeoJSON features, used for pre-trip
 route design and waypoint planning. Unlike Trips (which represent
-completed activities with immutable GPX data), Plans are editable
-design-time entities that can be promoted to Trips.
+completed activities with immutable GPX data), Plans remain standalone
+drafts and are never converted or promoted into Trips.
 
 This module follows the same patterns as trip.py for consistency.
 """
@@ -58,7 +58,6 @@ class PlanStatus(str, Enum):
     """Lifecycle status of a Plan."""
     DRAFT = "draft"         # Being edited
     ACTIVE = "active"       # Ready for use
-    PROMOTED = "promoted"   # Converted to Trip
     ARCHIVED = "archived"   # No longer active
 
 
@@ -259,7 +258,7 @@ class Plan(BaseModel):
         member_ids: Users who can collaborate on the plan.
         features: GeoJSON FeatureCollection with all plan objects.
         reference_tracks: Read-only GPX files for reference.
-        status: Lifecycle status (draft, active, promoted, archived).
+        status: Lifecycle status (draft, active, archived).
     """
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), alias='_id')
     name: str
@@ -284,7 +283,6 @@ class Plan(BaseModel):
     
     # Lifecycle
     status: PlanStatus = Field(default=PlanStatus.DRAFT)
-    promoted_trip_id: Optional[str] = None  # Link to Trip after promotion
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
@@ -370,16 +368,3 @@ class ReferenceTrackAdd(BaseModel):
     color: Optional[str] = "#888888"
     opacity: Optional[float] = 0.5
 
-
-class PlanPromotionRequest(BaseModel):
-    """Payload for promoting a Plan to a Trip."""
-    copy_reference_tracks: bool = True
-    include_planned_route_as_ghost: bool = True
-
-
-class PlanPromotionResponse(BaseModel):
-    """Response from Plan promotion operation."""
-    plan_id: str
-    trip_id: str
-    reference_tracks_copied: int = 0
-    ghost_layer_created: bool = False

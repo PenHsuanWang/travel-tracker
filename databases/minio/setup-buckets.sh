@@ -23,7 +23,7 @@ MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-minioadmin}"
 MINIO_ALIAS="myminio"
 
 # Bucket names
-BUCKETS=("gps-data" "gps-analysis-data" "images" "gis-data")
+BUCKETS=("gps-data" "gps-analysis-data" "images" "gis-data" "plan-assets")
 
 # Function to print colored messages
 print_info() {

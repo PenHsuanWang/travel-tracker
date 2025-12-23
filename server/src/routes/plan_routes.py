@@ -16,7 +16,6 @@ from src.models.plan import (
     Plan, PlanResponse, PlanCreate, PlanUpdate, PlanMembersUpdate,
     PlanFeature, PlanFeatureCreate, PlanFeatureUpdate,
     ReferenceTrack, ReferenceTrackAdd,
-    PlanPromotionRequest, PlanPromotionResponse,
     GeoJSONGeometry
 )
 from src.services.plan_service import PlanService
@@ -349,40 +348,3 @@ async def remove_reference_track(
         raise HTTPException(status_code=404, detail="Reference track not found")
     return None
 
-
-# =============================================================================
-# Plan Promotion Endpoint
-# =============================================================================
-
-@router.post("/{plan_id}/promote", response_model=PlanPromotionResponse)
-async def promote_plan_to_trip(
-    plan_id: str,
-    promotion_data: PlanPromotionRequest,
-    current_user: User = Depends(get_current_user)
-):
-    """Promote a plan to a trip.
-    
-    Creates a new Trip based on the Plan, optionally copying reference
-    tracks and storing the planned route as a ghost layer.
-    
-    Only the owner can promote a plan.
-    """
-    try:
-        result = plan_service.promote_to_trip(
-            plan_id=plan_id,
-            current_user_id=current_user.id,
-            copy_reference_tracks=promotion_data.copy_reference_tracks,
-            include_planned_route_as_ghost=promotion_data.include_planned_route_as_ghost
-        )
-        
-        if not result:
-            raise HTTPException(status_code=404, detail="Plan not found")
-        
-        return PlanPromotionResponse(**result)
-        
-    except PermissionError:
-        raise HTTPException(status_code=403, detail="Only the owner can promote a plan")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
