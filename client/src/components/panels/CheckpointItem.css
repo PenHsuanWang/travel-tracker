@@ -163,3 +163,67 @@
     flex-direction: row;
   }
 }
+
+/* Cascade prompt */
+.cascade-prompt {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cascade-prompt-text {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #1e40af;
+  margin-bottom: 8px;
+}
+
+.cascade-prompt-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cascade-btn {
+  flex: 1;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cascade-btn.cascade-yes {
+  background: #3b82f6;
+  color: white;
+}
+
+.cascade-btn.cascade-yes:hover {
+  background: #2563eb;
+}
+
+.cascade-btn.cascade-no {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.cascade-btn.cascade-no:hover {
+  background: #f9fafb;
+}

@@ -6,6 +6,7 @@ import TripSidebar from '../layout/TripSidebar';
 import TimelinePanel from '../panels/TimelinePanel';
 import TripStatsHUD from '../panels/TripStatsHUD';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
+import CloneToPlanModal from '../common/CloneToPlanModal';
 import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, getImageVariantUrl, normalizeImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile, updateWaypointNote } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
@@ -195,6 +196,9 @@ const TripDetailPage = () => {
     const [gpxFile, setGpxFile] = useState(null);
     const [gpxTrack, setGpxTrack] = useState(null); // The analyzed track data
     const [highlightedItemId, setHighlightedItemId] = useState(null);
+    
+    // Clone to Plan modal state
+    const [showCloneToPlanModal, setShowCloneToPlanModal] = useState(false);
 
     const mapRef = useRef(null);
     const navigate = useNavigate();
@@ -875,6 +879,14 @@ const TripDetailPage = () => {
                             </option>
                         ))}
                     </select>
+                    <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => setShowCloneToPlanModal(true)}
+                        title="Clone this trip to create a new plan"
+                    >
+                        📋 Clone to Plan
+                    </button>
                     {canManageTrip && (
                         <button
                             type="button"
@@ -986,6 +998,17 @@ const TripDetailPage = () => {
                 onPrev={goToPrevious}
                 onNext={goToNext}
             />
+            
+            {showCloneToPlanModal && (
+                <CloneToPlanModal
+                    tripId={tripId}
+                    tripName={trip?.name}
+                    onClose={() => setShowCloneToPlanModal(false)}
+                    onCreated={(newPlan) => {
+                        console.log('Plan created from trip:', newPlan);
+                    }}
+                />
+            )}
         </div>
     );
 };

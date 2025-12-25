@@ -22,12 +22,15 @@ import {
   deletePlan,
   addFeature,
   updateFeature,
+  updateFeatureWithCascade,
   deleteFeature,
   reorderFeatures,
   addReferenceTrack,
+  uploadReferenceTrack,
   removeReferenceTrack,
   PLAN_STATUS_LABELS,
 } from '../../services/planService';
+import { fetchGpxAnalysis } from '../../services/api';
 import '../../styles/PlanCanvas.css';
 
 const MIN_ITINERARY_WIDTH = 280;
@@ -66,6 +69,7 @@ const PlanCanvas = () => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [drawingState, setDrawingState] = useState({ isDrawing: false, vertices: [] });
+  const [trackData, setTrackData] = useState({}); // Map of object_key -> analysis data
 
   const mapRef = useRef(null);
 
@@ -103,6 +107,37 @@ const PlanCanvas = () => {
   useEffect(() => {
     fetchPlan();
   }, [fetchPlan]);
+
+  // Fetch reference track data
+  useEffect(() => {
+    if (!plan?.reference_tracks) return;
+
+    const loadTracks = async () => {
+      const newTrackData = { ...trackData };
+      let hasUpdates = false;
+
+      await Promise.all(plan.reference_tracks.map(async (track) => {
+        if (!newTrackData[track.object_key]) {
+          try {
+            // Fetch analysis without tripId (plan context)
+            const analysis = await fetchGpxAnalysis(track.object_key);
+            if (analysis && analysis.coordinates) {
+              newTrackData[track.object_key] = analysis;
+              hasUpdates = true;
+            }
+          } catch (err) {
+            console.error(`Failed to load track ${track.object_key}:`, err);
+          }
+        }
+      }));
+
+      if (hasUpdates) {
+        setTrackData(newTrackData);
+      }
+    };
+
+    loadTracks();
+  }, [plan?.reference_tracks, trackData]);
 
   // Save itinerary width preference
   useEffect(() => {
@@ -175,6 +210,24 @@ const PlanCanvas = () => {
     [canEdit, plan, planId, getFeaturesArray]
   );
 
+  // Handle feature update with cascade time propagation
+  const handleUpdateFeatureWithCascade = useCallback(
+    async (featureId, updates) => {
+      if (!canEdit || !plan) return;
+      try {
+        setSaving(true);
+        // This returns the entire updated plan with all features updated
+        const updatedPlan = await updateFeatureWithCascade(planId, featureId, updates, true);
+        setPlan(updatedPlan);
+      } catch (err) {
+        console.error('Failed to update feature with cascade:', err);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [canEdit, plan, planId]
+  );
+
   const handleDeleteFeature = useCallback(
     async (featureId) => {
       if (!canEdit || !plan) return;
@@ -235,17 +288,30 @@ const PlanCanvas = () => {
 
   // Reference track operations
   const handleAddReferenceTrack = useCallback(
-    async (trackData) => {
+    async (fileOrData) => {
       if (!canEdit || !plan) return;
       try {
         setSaving(true);
-        const track = await addReferenceTrack(planId, trackData);
+        let track;
+        
+        // Check if it's a File object (from file input) or track data object
+        if (fileOrData instanceof File) {
+          // Upload the GPX file
+          track = await uploadReferenceTrack(planId, fileOrData, {
+            display_name: fileOrData.name.replace(/\.gpx$/i, ''),
+          });
+        } else {
+          // Use existing track data (object_key already uploaded)
+          track = await addReferenceTrack(planId, fileOrData);
+        }
+        
         setPlan((prev) => ({
           ...prev,
           reference_tracks: [...(prev.reference_tracks || []), track],
         }));
       } catch (err) {
         console.error('Failed to add reference track:', err);
+        alert('Failed to upload GPX file. Please try again.');
       } finally {
         setSaving(false);
       }
@@ -448,6 +514,7 @@ const PlanCanvas = () => {
             ref={mapRef}
             features={featuresArray}
             referenceTracks={plan.reference_tracks || []}
+            trackData={trackData}
             selectedFeatureId={selectedFeatureId}
             onSelectFeature={setSelectedFeatureId}
             activeTool={canEdit ? activeTool : null}
@@ -468,6 +535,7 @@ const PlanCanvas = () => {
             selectedFeatureId={selectedFeatureId}
             onSelectFeature={setSelectedFeatureId}
             onUpdateFeature={handleUpdateFeature}
+            onUpdateFeatureWithCascade={handleUpdateFeatureWithCascade}
             onDeleteFeature={handleDeleteFeature}
             onReorderFeatures={handleReorderFeatures}
             onCenterFeature={(featureId, coords) => {

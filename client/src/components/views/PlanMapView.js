@@ -330,7 +330,7 @@ function DrawingPreview({ activeTool, drawingState }) {
 }
 
 // Feature bounds controller - fits map to features
-function FeatureBoundsController({ features, referenceTracks }) {
+function FeatureBoundsController({ features, referenceTracks, trackData }) {
   const map = useMap();
 
   useEffect(() => {
@@ -355,7 +355,22 @@ function FeatureBoundsController({ features, referenceTracks }) {
       }
     });
 
-    // TODO: Also include reference track bounds when implemented
+    // Collect points from reference tracks
+    if (referenceTracks && trackData) {
+      referenceTracks.forEach(track => {
+        const data = trackData[track.object_key];
+        if (data && data.coordinates) {
+          data.coordinates.forEach(coord => {
+            // Check coordinate format (lat, lon) vs (lon, lat)
+            // fetchGpxAnalysis returns [lat, lon] usually for coordinates?
+            // Let's check GpxAnalysisResponse in backend.
+            // Backend extract_coordinates returns [lat, lon].
+            // So we can push directly.
+            points.push(coord);
+          });
+        }
+      });
+    }
 
     if (points.length > 0) {
       try {
@@ -367,7 +382,7 @@ function FeatureBoundsController({ features, referenceTracks }) {
         console.error('Error fitting bounds:', e);
       }
     }
-  }, [features, referenceTracks, map]);
+  }, [features, referenceTracks, trackData, map]);
 
   return null;
 }
@@ -393,9 +408,27 @@ const createMarkerIcon = (isSelected = false, isHighlighted = false) => {
   });
 };
 
+// Create small grey marker icon for reference waypoints
+const createReferenceWaypointIcon = () => {
+  return L.divIcon({
+    className: 'plan-marker reference-waypoint',
+    html: `
+      <svg viewBox="0 0 24 36" width="20" height="30" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24c0-6.6-5.4-12-12-12z" 
+              fill="#9ca3af" stroke="#6b7280" stroke-width="1"/>
+        <circle cx="12" cy="12" r="4" fill="#fff"/>
+      </svg>
+    `,
+    iconSize: [20, 30],
+    iconAnchor: [10, 30],
+    popupAnchor: [0, -30],
+  });
+};
+
 const PlanMapView = forwardRef(({
   features,
   referenceTracks,
+  trackData,
   selectedFeatureId,
   onSelectFeature,
   activeTool,
@@ -695,7 +728,58 @@ const PlanMapView = forwardRef(({
     });
   }, [features, renderMarker, renderPolyline, renderPolygon]);
 
-  // TODO: Render reference tracks as dashed polylines
+  // Render reference tracks
+  const renderedReferenceTracks = useMemo(() => {
+    if (!referenceTracks || !trackData) return null;
+
+    const referenceIcon = createReferenceWaypointIcon();
+
+    return referenceTracks.map((track) => {
+      const data = trackData[track.object_key];
+      if (!data || !data.coordinates) return null;
+
+      // coordinates from backend are [lat, lon]
+      return (
+        <React.Fragment key={track.id}>
+          <Polyline
+            positions={data.coordinates}
+            pathOptions={{
+              color: track.color || '#888888',
+              opacity: track.opacity || 0.6,
+              weight: 3,
+              dashArray: '5, 10', // Dashed line for reference tracks
+            }}
+          >
+            <Popup>
+              <div className="feature-popup">
+                <strong>{track.display_name || 'Reference Track'}</strong>
+              </div>
+            </Popup>
+          </Polyline>
+          
+          {data.waypoints && data.waypoints.map((wp, idx) => (
+            <Marker
+              key={`${track.id}-wp-${idx}`}
+              position={[wp.lat, wp.lon]}
+              icon={referenceIcon}
+            >
+              <Popup>
+                <div className="feature-popup">
+                  <div className="popup-header">
+                    <strong>{wp.name || 'Waypoint'}</strong>
+                  </div>
+                  <p className="popup-description">
+                    Reference: {track.display_name || 'GPX Track'}
+                    {wp.elev !== undefined && <br /> + `Elev: ${Math.round(wp.elev)}m`}
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+        </React.Fragment>
+      );
+    });
+  }, [referenceTracks, trackData]);
 
   return (
     <div className="plan-map-view">
@@ -743,7 +827,11 @@ const PlanMapView = forwardRef(({
         />
 
         <MapLayerController selectedLayer={selectedLayer} />
-        <FeatureBoundsController features={features} referenceTracks={referenceTracks} />
+        <FeatureBoundsController 
+          features={features} 
+          referenceTracks={referenceTracks} 
+          trackData={trackData} 
+        />
 
         {!readOnly && activeTool && (
           <DrawingController 
@@ -758,6 +846,7 @@ const PlanMapView = forwardRef(({
         {/* Drawing preview */}
         <DrawingPreview activeTool={activeTool} drawingState={drawingState} />
 
+        {renderedReferenceTracks}
         {renderedFeatures}
       </MapContainer>
     </div>

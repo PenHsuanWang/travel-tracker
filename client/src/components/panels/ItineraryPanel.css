@@ -305,6 +305,41 @@
   color: #2563eb;
 }
 
+/* Section header row with action button */
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.section-header-row h4 {
+  margin: 0;
+}
+
+/* Add GPX button */
+.add-gpx-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #f59e0b;
+  color: white;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.add-gpx-btn:hover {
+  background: #d97706;
+}
+
+.add-gpx-btn span {
+  white-space: nowrap;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .itinerary-panel {

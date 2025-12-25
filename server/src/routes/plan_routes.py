@@ -1,14 +1,14 @@
 """Plan management routes.
 
 Expose CRUD endpoints for Plan resources, feature management, reference
-track operations, and plan-to-trip promotion. Endpoints generally return
-Pydantic models from :mod:`src.models.plan` and require authentication
-for modifying operations.
+track operations, GPX ingestion, and trip-to-plan cloning. Endpoints 
+generally return Pydantic models from :mod:`src.models.plan` and require 
+authentication for modifying operations.
 
 This module follows the same patterns as trip_routes.py.
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends, Query
+from fastapi import APIRouter, HTTPException, status, Depends, Query, UploadFile, File
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 
@@ -16,7 +16,9 @@ from src.models.plan import (
     Plan, PlanResponse, PlanCreate, PlanUpdate, PlanMembersUpdate,
     PlanFeature, PlanFeatureCreate, PlanFeatureUpdate,
     ReferenceTrack, ReferenceTrackAdd,
-    GeoJSONGeometry
+    GeoJSONGeometry,
+    GpxIngestionPreview, GpxIngestionStrategy, GpxStrategyPayload,
+    PlanCreateWithGpx, ImportTripRequest
 )
 from src.services.plan_service import PlanService
 from src.auth import get_current_user, get_current_user_optional
@@ -25,17 +27,110 @@ from src.models.user import User
 router = APIRouter()
 plan_service = PlanService()
 
+# Maximum GPX file size (10 MB)
+MAX_GPX_FILE_SIZE = 10 * 1024 * 1024
+
+
+# =============================================================================
+# GPX Ingestion Endpoints
+# =============================================================================
+
+@router.post("/ingest-gpx", response_model=GpxIngestionPreview, response_model_by_alias=False)
+async def ingest_gpx(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload a GPX file for parsing and preview.
+    
+    Returns a preview of the track and detected waypoints without
+    creating a plan. The file is stored temporarily for subsequent
+    plan creation.
+    
+    - **file**: GPX file (max 10MB)
+    
+    Returns GpxIngestionPreview with:
+    - temp_file_key: Temporary storage key
+    - track_geometry: Polyline coordinates for map preview
+    - track_summary: Distance, elevation gain, etc.
+    - detected_waypoints: Parsed waypoints with coordinates and times
+    """
+    # Validate file type
+    if not file.filename or not file.filename.lower().endswith('.gpx'):
+        raise HTTPException(
+            status_code=400,
+            detail="File must be a GPX file (.gpx extension)"
+        )
+    
+    # Read file content
+    content = await file.read()
+    
+    # Validate file size
+    if len(content) > MAX_GPX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_GPX_FILE_SIZE // (1024*1024)}MB"
+        )
+    
+    try:
+        preview = plan_service.ingest_gpx(content, file.filename, current_user.id)
+        return preview
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse GPX file: {str(e)}")
+
+
+@router.post("/import-trip/{trip_id}", response_model=Plan, status_code=status.HTTP_201_CREATED, response_model_by_alias=False)
+async def import_trip_to_plan(
+    trip_id: str,
+    request: ImportTripRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Clone a Trip into a new Plan (FR-012).
+    
+    Copies the Trip's GPX file as a reference track and converts
+    its waypoints to Plan features using the specified time strategy.
+    
+    The resulting Plan has NO link to the original Trip (fully decoupled).
+    
+    - **trip_id**: Source Trip ID
+    - **name**: Name for the new plan
+    - **planned_start_date**: Optional start date for time shifting
+    - **gpx_strategy**: Optional time shift strategy
+    """
+    try:
+        # Determine strategy
+        strategy = GpxIngestionStrategy.RELATIVE_TIME_SHIFT
+        if request.gpx_strategy and request.gpx_strategy.mode:
+            strategy = request.gpx_strategy.mode
+        
+        plan = plan_service.create_plan_from_trip(
+            trip_id=trip_id,
+            user_id=current_user.id,
+            name=request.name,
+            planned_start_date=request.planned_start_date,
+            strategy=strategy
+        )
+        return plan
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # =============================================================================
 # Plan CRUD Endpoints
 # =============================================================================
 
 @router.post("/", response_model=Plan, status_code=status.HTTP_201_CREATED, response_model_by_alias=False)
-async def create_plan(plan_data: PlanCreate, current_user: User = Depends(get_current_user)):
+async def create_plan(plan_data: PlanCreateWithGpx, current_user: User = Depends(get_current_user)):
     """Create a new plan.
     
     The authenticated user becomes the owner and is automatically added
     as a member of the plan.
+    
+    If gpx_strategy is provided, the plan will be created with features
+    imported from the referenced GPX file.
     """
     try:
         plan = Plan(
@@ -48,7 +143,14 @@ async def create_plan(plan_data: PlanCreate, current_user: User = Depends(get_cu
             owner_id=current_user.id,
             member_ids=[current_user.id] if current_user.id else []
         )
-        return plan_service.create_plan(plan)
+        
+        # Check if GPX strategy is provided
+        if plan_data.gpx_strategy:
+            return plan_service.create_plan_with_gpx(plan, plan_data.gpx_strategy)
+        else:
+            return plan_service.create_plan(plan)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -261,6 +363,59 @@ async def delete_feature(
     return None
 
 
+class FeatureCascadeUpdateRequest(BaseModel):
+    """Request model for updating a feature with optional cascade time propagation."""
+    geometry: Optional[dict] = None
+    properties: Optional[dict] = None
+    cascade_time: bool = False  # If true, propagate time changes to subsequent features
+
+
+@router.put("/{plan_id}/features/{feature_id}/cascade", response_model=Plan)
+async def update_feature_with_cascade(
+    plan_id: str,
+    feature_id: str,
+    update_data: FeatureCascadeUpdateRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Update a feature with optional cascade time propagation.
+    
+    When cascade_time is True and arrival_time/departure_time is modified,
+    the time changes will be propagated to all subsequent features in the itinerary.
+    """
+    # Check plan exists and user has permission
+    existing_plan = plan_service.get_plan(plan_id)
+    if not existing_plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    is_owner = str(existing_plan.owner_id) == str(current_user.id)
+    member_ids = [str(m) for m in existing_plan.member_ids] if existing_plan.member_ids else []
+    is_member = str(current_user.id) in member_ids
+    
+    if not (is_owner or is_member):
+        raise HTTPException(status_code=403, detail="Not authorized to update features in this plan")
+    
+    updates = {}
+    if update_data.geometry:
+        updates["geometry"] = update_data.geometry
+    if update_data.properties:
+        updates["properties"] = update_data.properties
+    
+    try:
+        updated_plan = plan_service.update_feature_with_cascade(
+            plan_id, 
+            feature_id, 
+            updates, 
+            cascade=update_data.cascade_time
+        )
+        if not updated_plan:
+            raise HTTPException(status_code=404, detail="Feature not found")
+        return updated_plan
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class FeatureOrderItem(BaseModel):
     feature_id: str
     order_index: int
@@ -322,6 +477,60 @@ async def add_reference_track(
     if not track:
         raise HTTPException(status_code=500, detail="Failed to add reference track")
     return track
+
+
+@router.post("/{plan_id}/reference-tracks/upload", response_model=ReferenceTrack, status_code=status.HTTP_201_CREATED)
+async def upload_reference_track(
+    plan_id: str,
+    file: UploadFile = File(...),
+    display_name: Optional[str] = None,
+    color: Optional[str] = None,
+    opacity: Optional[float] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """Upload a GPX file and add it as a reference track.
+    
+    This endpoint handles the file upload, stores it in MinIO,
+    and creates a reference track entry for the plan.
+    """
+    # Check plan exists and user has permission
+    existing_plan = plan_service.get_plan(plan_id)
+    if not existing_plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    is_owner = str(existing_plan.owner_id) == str(current_user.id)
+    member_ids = [str(m) for m in existing_plan.member_ids] if existing_plan.member_ids else []
+    is_member = str(current_user.id) in member_ids
+    
+    if not (is_owner or is_member):
+        raise HTTPException(status_code=403, detail="Not authorized to add reference tracks to this plan")
+    
+    # Validate file
+    if not file.filename or not file.filename.lower().endswith('.gpx'):
+        raise HTTPException(status_code=400, detail="File must have .gpx extension")
+    
+    # Check file size
+    file_content = await file.read()
+    if len(file_content) > MAX_GPX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="GPX file exceeds 10MB limit")
+    
+    try:
+        track = plan_service.upload_reference_track(
+            plan_id=plan_id,
+            file_bytes=file_content,
+            filename=file.filename,
+            user_id=str(current_user.id),
+            display_name=display_name,
+            color=color,
+            opacity=opacity
+        )
+        if not track:
+            raise HTTPException(status_code=500, detail="Failed to upload reference track")
+        return track
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/{plan_id}/reference-tracks/{track_id}", status_code=status.HTTP_204_NO_CONTENT)

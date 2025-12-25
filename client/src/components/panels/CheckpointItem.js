@@ -10,6 +10,7 @@
  * - Arrival time (if set)
  * - Duration (if set)
  * - Inline time editing capability
+ * - Cascade time update option when arrival time is changed
  */
 import React, { useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
@@ -27,11 +28,14 @@ const CheckpointItem = ({
   selected,
   onSelect,
   onUpdate,
+  onUpdateWithCascade, // Optional: for cascade time updates
   onDelete,
   onCenter,
   readOnly,
+  hasSubsequentCheckpoints, // Whether there are checkpoints after this one
 }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [pendingTimeChange, setPendingTimeChange] = useState(null); // For cascade prompt
   
   const {
     name,
@@ -65,18 +69,57 @@ const CheckpointItem = ({
   }, [readOnly]);
 
   const handleSaveTime = useCallback((newArrival, newDuration) => {
-    onUpdate(feature.id, {
-      properties: {
-        ...feature.properties,
-        estimated_arrival: newArrival,
-        estimated_duration_minutes: newDuration,
-      },
-    });
+    const arrivalChanged = newArrival !== estimated_arrival;
+    
+    // If arrival time changed and we have cascade capability + subsequent checkpoints
+    if (arrivalChanged && onUpdateWithCascade && hasSubsequentCheckpoints) {
+      // Store the pending change and show cascade prompt
+      setPendingTimeChange({ newArrival, newDuration });
+    } else {
+      // Direct update without cascade
+      onUpdate(feature.id, {
+        properties: {
+          ...feature.properties,
+          estimated_arrival: newArrival,
+          estimated_duration_minutes: newDuration,
+        },
+      });
+      setIsEditing(false);
+    }
+  }, [feature.id, feature.properties, estimated_arrival, onUpdate, onUpdateWithCascade, hasSubsequentCheckpoints]);
+
+  const handleCascadeConfirm = useCallback((shouldCascade) => {
+    if (!pendingTimeChange) return;
+    
+    const { newArrival, newDuration } = pendingTimeChange;
+    
+    if (shouldCascade && onUpdateWithCascade) {
+      // Use cascade update
+      onUpdateWithCascade(feature.id, {
+        properties: {
+          ...feature.properties,
+          estimated_arrival: newArrival,
+          estimated_duration_minutes: newDuration,
+        },
+      });
+    } else {
+      // Regular update
+      onUpdate(feature.id, {
+        properties: {
+          ...feature.properties,
+          estimated_arrival: newArrival,
+          estimated_duration_minutes: newDuration,
+        },
+      });
+    }
+    
+    setPendingTimeChange(null);
     setIsEditing(false);
-  }, [feature.id, feature.properties, onUpdate]);
+  }, [feature.id, feature.properties, pendingTimeChange, onUpdate, onUpdateWithCascade]);
 
   const handleCancelEdit = useCallback(() => {
     setIsEditing(false);
+    setPendingTimeChange(null);
   }, []);
 
   const handleCenterMap = useCallback((e) => {
@@ -140,6 +183,31 @@ const CheckpointItem = ({
             onCancel={handleCancelEdit}
           />
         )}
+        
+        {/* Cascade prompt - shown when time change affects subsequent checkpoints */}
+        {pendingTimeChange && (
+          <div className="cascade-prompt" onClick={(e) => e.stopPropagation()}>
+            <span className="cascade-prompt-text">
+              Update subsequent checkpoint times?
+            </span>
+            <div className="cascade-prompt-actions">
+              <button
+                className="cascade-btn cascade-yes"
+                onClick={() => handleCascadeConfirm(true)}
+                title="Shift all subsequent checkpoint times by the same amount"
+              >
+                Yes, cascade
+              </button>
+              <button
+                className="cascade-btn cascade-no"
+                onClick={() => handleCascadeConfirm(false)}
+                title="Only update this checkpoint"
+              >
+                No, this only
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       
       {/* Actions */}
@@ -184,9 +252,11 @@ CheckpointItem.propTypes = {
   selected: PropTypes.bool,
   onSelect: PropTypes.func.isRequired,
   onUpdate: PropTypes.func.isRequired,
+  onUpdateWithCascade: PropTypes.func, // Optional: for cascade time updates
   onDelete: PropTypes.func,
   onCenter: PropTypes.func,
   readOnly: PropTypes.bool,
+  hasSubsequentCheckpoints: PropTypes.bool, // Whether there are checkpoints after this one
 };
 
 CheckpointItem.defaultProps = {
@@ -194,6 +264,8 @@ CheckpointItem.defaultProps = {
   readOnly: false,
   onDelete: null,
   onCenter: null,
+  onUpdateWithCascade: null,
+  hasSubsequentCheckpoints: false,
 };
 
 export default CheckpointItem;

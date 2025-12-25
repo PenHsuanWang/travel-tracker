@@ -15,6 +15,7 @@ import {
   PLAN_STATUS_LABELS,
 } from '../../services/planService';
 import CreatePlanModal from '../common/CreatePlanModal';
+import ImportGpxModal from '../common/ImportGpxModal';
 import PlanCard from '../common/PlanCard';
 import './PlansPage.css';
 
@@ -45,6 +46,7 @@ const PlansPage = () => {
   const [sortBy, setSortBy] = useState('newest');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showImportGpxModal, setShowImportGpxModal] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
@@ -210,6 +212,14 @@ const PlansPage = () => {
             </button>
             <button
               type="button"
+              className="btn-secondary"
+              onClick={() => setShowImportGpxModal(true)}
+              title="Import GPX file to create a plan"
+            >
+              📂 Import GPX
+            </button>
+            <button
+              type="button"
               className="btn-primary"
               onClick={() => setShowCreateModal(true)}
             >
@@ -339,6 +349,14 @@ const PlansPage = () => {
       {showCreateModal && (
         <CreatePlanModal
           onClose={() => setShowCreateModal(false)}
+          onCreated={handlePlanCreated}
+        />
+      )}
+
+      {/* Import GPX modal */}
+      {showImportGpxModal && (
+        <ImportGpxModal
+          onClose={() => setShowImportGpxModal(false)}
           onCreated={handlePlanCreated}
         />
       )}

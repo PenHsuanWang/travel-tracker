@@ -180,6 +180,7 @@ const ItineraryPanel = ({
   selectedFeatureId,
   onSelectFeature,
   onUpdateFeature,
+  onUpdateFeatureWithCascade, // Optional: for cascade time updates
   onDeleteFeature,
   onReorderFeatures,
   onCenterFeature,
@@ -340,16 +341,18 @@ const ItineraryPanel = ({
             </p>
           ) : (
             <div className="checkpoints-list">
-              {sortedCheckpoints.map((checkpoint) => (
+              {sortedCheckpoints.map((checkpoint, index) => (
                 <CheckpointItem
                   key={checkpoint.id}
                   feature={checkpoint}
                   selected={checkpoint.id === selectedFeatureId}
                   onSelect={onSelectFeature}
                   onUpdate={onUpdateFeature}
+                  onUpdateWithCascade={onUpdateFeatureWithCascade}
                   onDelete={onDeleteFeature}
                   onCenter={onCenterFeature}
                   readOnly={readOnly}
+                  hasSubsequentCheckpoints={index < sortedCheckpoints.length - 1}
                 />
               ))}
             </div>
@@ -397,11 +400,29 @@ const ItineraryPanel = ({
 
         {/* Section 3: Reference Tracks */}
         <section className="tracks-section">
-          <h4>
-            <span className="section-icon">🛤️</span>
-            Reference Tracks
-            <span className="section-count">({referenceTracks?.length || 0})</span>
-          </h4>
+          <div className="section-header-row">
+            <h4>
+              <span className="section-icon">🛤️</span>
+              Reference Tracks
+              <span className="section-count">({referenceTracks?.length || 0})</span>
+            </h4>
+            {!readOnly && (
+              <label className="add-gpx-btn" title="Upload GPX file as reference track">
+                <span>+ Add GPX</span>
+                <input
+                  type="file"
+                  accept=".gpx"
+                  onChange={(e) => {
+                    if (e.target.files?.[0] && onAddReferenceTrack) {
+                      onAddReferenceTrack(e.target.files[0]);
+                      e.target.value = ''; // Reset input
+                    }
+                  }}
+                  hidden
+                />
+              </label>
+            )}
+          </div>
           {(!referenceTracks || referenceTracks.length === 0) ? (
             <p className="empty-message">
               {readOnly

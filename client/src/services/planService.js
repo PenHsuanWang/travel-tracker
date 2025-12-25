@@ -164,6 +164,34 @@ export const addReferenceTrack = async (planId, trackData) => {
 };
 
 /**
+ * Upload a GPX file and add it as a reference track to a plan.
+ * @param {string} planId - Plan identifier
+ * @param {File} file - GPX file to upload
+ * @param {Object} options - Optional settings { display_name, color, opacity }
+ * @returns {Promise<Object>} Created reference track
+ */
+export const uploadReferenceTrack = async (planId, file, options = {}) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (options.display_name) {
+    formData.append('display_name', options.display_name);
+  }
+  if (options.color) {
+    formData.append('color', options.color);
+  }
+  if (options.opacity !== undefined) {
+    formData.append('opacity', String(options.opacity));
+  }
+  
+  const response = await apiClient.post(`/plans/${planId}/reference-tracks/upload`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};
+
+/**
  * Remove a reference track from a plan.
  * @param {string} planId - Plan identifier
  * @param {string} trackId - Reference track identifier
@@ -171,6 +199,94 @@ export const addReferenceTrack = async (planId, trackData) => {
  */
 export const removeReferenceTrack = async (planId, trackId) => {
   await apiClient.delete(`/plans/${planId}/reference-tracks/${trackId}`);
+};
+
+// =============================================================================
+// GPX Ingestion Operations
+// =============================================================================
+
+/**
+ * Upload and analyze a GPX file for import preview.
+ * Returns detected waypoints and track info without creating a plan.
+ * @param {File} file - GPX file to analyze
+ * @returns {Promise<Object>} GpxIngestionPreview { detected_waypoints, track_geometry, gpx_start_time, gpx_end_time, temp_file_key }
+ */
+export const ingestGpx = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await apiClient.post('/plans/ingest-gpx', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};
+
+/**
+ * Create a plan with GPX data, specifying the import strategy.
+ * @param {Object} planData - Plan data { name, description, region, planned_start_date, planned_end_date, is_public }
+ * @param {Object} gpxStrategy - GPX import strategy { temp_file_key, mode, selected_waypoint_indices }
+ * @returns {Promise<Object>} Created plan with features
+ */
+export const createPlanWithGpx = async (planData, gpxStrategy) => {
+  const response = await apiClient.post('/plans/', {
+    ...planData,
+    gpx_strategy: gpxStrategy,
+  });
+  return response.data;
+};
+
+/**
+ * Clone an existing trip to a new plan.
+ * @param {string} tripId - Source trip identifier
+ * @param {Object} options - { name, planned_start_date, strategy }
+ *   - name: Plan name (defaults to "[Trip Name] Plan")
+ *   - planned_start_date: New start date for time projection
+ *   - strategy: 'relative' | 'absolute' | 'no_times'
+ * @returns {Promise<Object>} Created plan
+ */
+export const importTripToPlan = async (tripId, options = {}) => {
+  const response = await apiClient.post(`/plans/import-trip/${tripId}`, options);
+  return response.data;
+};
+
+/**
+ * Update a feature with optional cascade time propagation.
+ * When cascade is true and time is modified, updates all subsequent features.
+ * @param {string} planId - Plan identifier
+ * @param {string} featureId - Feature identifier
+ * @param {Object} updates - { geometry, properties }
+ * @param {boolean} cascadeTime - Whether to propagate time changes
+ * @returns {Promise<Object>} Updated plan (with all features)
+ */
+export const updateFeatureWithCascade = async (planId, featureId, updates, cascadeTime = false) => {
+  const response = await apiClient.put(`/plans/${planId}/features/${featureId}/cascade`, {
+    ...updates,
+    cascade_time: cascadeTime,
+  });
+  return response.data;
+};
+
+/**
+ * GPX ingestion strategy types.
+ */
+export const GPX_INGESTION_STRATEGY = {
+  RELATIVE: 'relative',   // Calculate time offsets from GPX start
+  ABSOLUTE: 'absolute',   // Use exact GPX timestamps
+  NO_TIMES: 'no_times',   // Import without time data
+};
+
+export const GPX_STRATEGY_LABELS = {
+  relative: 'Relative Time (Recommended)',
+  absolute: 'Absolute Time',
+  no_times: 'No Time Data',
+};
+
+export const GPX_STRATEGY_DESCRIPTIONS = {
+  relative: 'Waypoint times are calculated relative to your planned start date',
+  absolute: 'Use exact timestamps from the GPX file',
+  no_times: 'Import waypoints without time information',
 };
 
 // =============================================================================

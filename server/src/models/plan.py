@@ -111,6 +111,10 @@ class PlanFeatureProperties(BaseModel):
     estimated_arrival: Optional[datetime] = None  # When user plans to reach this point
     estimated_duration_minutes: Optional[int] = None  # Planned stay duration at this point
     
+    # Time Shift Support (WAYPOINT only - for GPX ingestion)
+    original_gpx_time: Optional[datetime] = None  # Preserved from source GPX
+    time_offset_seconds: Optional[float] = None   # Delta from original GPX start time
+    
     # Styling
     color: str = Field(default="#3388ff", pattern=r"^#[0-9A-Fa-f]{6}$")
     stroke_width: int = Field(default=3, ge=1, le=10)
@@ -146,7 +150,7 @@ class PlanFeatureProperties(BaseModel):
     
     @model_validator(mode='after')
     def validate_time_only_for_waypoint(self):
-        """Ensure estimated_arrival and estimated_duration_minutes are only set for WAYPOINT category."""
+        """Ensure time-related fields are only set for WAYPOINT category."""
         if self.estimated_arrival is not None and self.category != FeatureCategory.WAYPOINT:
             raise ValueError(
                 f'estimated_arrival is only allowed for WAYPOINT category, '
@@ -155,6 +159,16 @@ class PlanFeatureProperties(BaseModel):
         if self.estimated_duration_minutes is not None and self.category != FeatureCategory.WAYPOINT:
             raise ValueError(
                 f'estimated_duration_minutes is only allowed for WAYPOINT category, '
+                f'got category={self.category}'
+            )
+        if self.original_gpx_time is not None and self.category != FeatureCategory.WAYPOINT:
+            raise ValueError(
+                f'original_gpx_time is only allowed for WAYPOINT category, '
+                f'got category={self.category}'
+            )
+        if self.time_offset_seconds is not None and self.category != FeatureCategory.WAYPOINT:
+            raise ValueError(
+                f'time_offset_seconds is only allowed for WAYPOINT category, '
                 f'got category={self.category}'
             )
         return self
@@ -368,3 +382,51 @@ class ReferenceTrackAdd(BaseModel):
     color: Optional[str] = "#888888"
     opacity: Optional[float] = 0.5
 
+
+# =============================================================================
+# GPX Ingestion Models (for Time Shift feature)
+# =============================================================================
+
+class GpxIngestionStrategy(str, Enum):
+    """Strategy for applying GPX timestamps to plan."""
+    RELATIVE_TIME_SHIFT = "relative"  # Shift all times relative to new plan start
+    ABSOLUTE_TIMES = "absolute"       # Keep original GPX timestamps
+    NO_TIMES = "no_times"             # Ignore timestamps, use order only
+
+
+class DetectedWaypoint(BaseModel):
+    """Waypoint detected from GPX parsing."""
+    name: Optional[str] = None
+    lat: float
+    lon: float
+    ele: Optional[float] = None
+    time: Optional[datetime] = None
+
+
+class GpxIngestionPreview(BaseModel):
+    """Response from GPX ingestion endpoint."""
+    temp_file_key: str
+    track_geometry: Optional[GeoJSONGeometry] = None  # GeoJSON LineString for preview
+    track_summary: Dict[str, Any]
+    detected_waypoints: List[DetectedWaypoint]
+    gpx_start_time: Optional[datetime] = None
+    gpx_end_time: Optional[datetime] = None
+
+
+class GpxStrategyPayload(BaseModel):
+    """Strategy selection for creating plan from GPX."""
+    temp_file_key: str
+    mode: GpxIngestionStrategy = GpxIngestionStrategy.RELATIVE_TIME_SHIFT
+    selected_waypoint_indices: Optional[List[int]] = None  # If None, import all
+
+
+class PlanCreateWithGpx(PlanCreate):
+    """Extended plan creation with GPX strategy."""
+    gpx_strategy: Optional[GpxStrategyPayload] = None
+
+
+class ImportTripRequest(BaseModel):
+    """Payload for cloning a Trip into a Plan."""
+    name: str
+    planned_start_date: Optional[datetime] = None
+    gpx_strategy: Optional[GpxStrategyPayload] = None
