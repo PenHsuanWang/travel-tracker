@@ -156,20 +156,48 @@ const FeatureItem = ({
   );
 };
 
-const ReferenceTrackItem = ({ track, onRemove, readOnly }) => {
+// UI-03: Reference track item with visibility toggles for track line and waypoints
+const ReferenceTrackItem = ({ track, onRemove, onToggleVisibility, readOnly }) => {
+  const showTrack = track.showTrack !== false; // Default true
+  const showWaypoints = track.showWaypoints === true; // Default false
+  
   return (
     <div className="reference-track-item">
       <span className="track-icon">🛤️</span>
       <span className="track-name">{track.display_name || track.filename}</span>
-      {!readOnly && (
+      <div className="track-controls">
+        {/* Toggle track line visibility */}
         <button
-          className="track-remove"
-          onClick={() => onRemove(track.id)}
-          title="Remove track"
+          className={`track-toggle ${showTrack ? 'active' : ''}`}
+          onClick={() => onToggleVisibility?.(track.id, 'showTrack', !showTrack)}
+          title={showTrack ? 'Hide track line' : 'Show track line'}
         >
-          ✕
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 12h18M3 6h18M3 18h18" />
+          </svg>
         </button>
-      )}
+        {/* Toggle waypoints visibility */}
+        <button
+          className={`track-toggle ${showWaypoints ? 'active' : ''}`}
+          onClick={() => onToggleVisibility?.(track.id, 'showWaypoints', !showWaypoints)}
+          title={showWaypoints ? 'Hide reference waypoints' : 'Show reference waypoints'}
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="3" />
+            <circle cx="12" cy="5" r="2" />
+            <circle cx="12" cy="19" r="2" />
+          </svg>
+        </button>
+        {!readOnly && (
+          <button
+            className="track-remove"
+            onClick={() => onRemove(track.id)}
+            title="Remove track"
+          >
+            ✕
+          </button>
+        )}
+      </div>
     </div>
   );
 };
@@ -186,6 +214,7 @@ const ItineraryPanel = ({
   onCenterFeature,
   onAddReferenceTrack,
   onRemoveReferenceTrack,
+  onToggleTrackVisibility, // UI-03: Toggle track/waypoint visibility
   width,
   onWidthChange,
   readOnly,
@@ -436,6 +465,7 @@ const ItineraryPanel = ({
                   key={track.id}
                   track={track}
                   onRemove={onRemoveReferenceTrack}
+                  onToggleVisibility={onToggleTrackVisibility}
                   readOnly={readOnly}
                 />
               ))}

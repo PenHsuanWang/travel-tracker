@@ -464,7 +464,7 @@ function FeatureBoundsController({ features, referenceTracks, trackData }) {
   return null;
 }
 
-// Create blue teardrop marker icons - with memoization for performance
+// Create teal/emerald teardrop marker icons for checkpoints (UI-04) - with memoization for performance
 const createMarkerIconHtml = (size, color, strokeColor, classes) => `
   <svg viewBox="0 0 24 36" width="${size * 0.7}" height="${size}" xmlns="http://www.w3.org/2000/svg">
     <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24c0-6.6-5.4-12-12-12z" 
@@ -474,24 +474,25 @@ const createMarkerIconHtml = (size, color, strokeColor, classes) => `
 `;
 
 // Pre-create cached icons for common states to avoid Leaflet re-creating DOM elements
+// UI-04: Using teal (#14b8a6) for plan checkpoints to distinguish from water sources (blue)
 const MARKER_ICONS_CACHE = {
   normal: L.divIcon({
-    className: 'plan-marker',
-    html: createMarkerIconHtml(36, '#3388ff', '#2266cc'),
+    className: 'plan-marker checkpoint',
+    html: createMarkerIconHtml(36, '#14b8a6', '#0d9488'),
     iconSize: [36 * 0.7, 36],
     iconAnchor: [36 * 0.35, 36],
     popupAnchor: [0, -36],
   }),
   selected: L.divIcon({
-    className: 'plan-marker selected',
+    className: 'plan-marker checkpoint selected',
     html: createMarkerIconHtml(40, '#e74c3c', '#c0392b'),
     iconSize: [40 * 0.7, 40],
     iconAnchor: [40 * 0.35, 40],
     popupAnchor: [0, -40],
   }),
   highlighted: L.divIcon({
-    className: 'plan-marker highlighted',
-    html: createMarkerIconHtml(44, '#3388ff', '#2266cc'),
+    className: 'plan-marker checkpoint highlighted',
+    html: createMarkerIconHtml(44, '#14b8a6', '#0d9488'),
     iconSize: [44 * 0.7, 44],
     iconAnchor: [44 * 0.35, 44],
     popupAnchor: [0, -44],
@@ -508,11 +509,12 @@ const getMarkerIcon = (isSelected = false, isHighlighted = false) => {
 // Legacy function for backwards compatibility (if needed elsewhere)
 const createMarkerIcon = (isSelected = false, isHighlighted = false) => {
   const size = isHighlighted ? 44 : isSelected ? 40 : 36;
-  const color = isSelected ? '#e74c3c' : '#3388ff';
-  const strokeColor = isSelected ? '#c0392b' : '#2266cc';
+  // UI-04: Teal for normal/highlighted, red for selected
+  const color = isSelected ? '#e74c3c' : '#14b8a6';
+  const strokeColor = isSelected ? '#c0392b' : '#0d9488';
 
   return L.divIcon({
-    className: `plan-marker ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`,
+    className: `plan-marker checkpoint ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`,
     html: createMarkerIconHtml(size, color, strokeColor),
     iconSize: [size * 0.7, size],
     iconAnchor: [size * 0.35, size],
@@ -855,7 +857,7 @@ const PlanMapView = forwardRef(({
     });
   }, [features, renderMarker, renderPolyline, renderPolygon]);
 
-  // Render reference tracks
+  // Render reference tracks with UI-01 casing technique (double-layered lines)
   const renderedReferenceTracks = useMemo(() => {
     if (!referenceTracks || !trackData) return null;
 
@@ -864,36 +866,56 @@ const PlanMapView = forwardRef(({
     return referenceTracks.map((track) => {
       const data = trackData[track.object_key];
       if (!data || !data.coordinates) return null;
+      
+      // UI-02/03: Check track visibility settings (default: track visible, waypoints hidden after import)
+      const showTrack = track.showTrack !== false; // Default true
+      const showWaypoints = track.showWaypoints === true; // Default false after import
 
       // coordinates from backend are [lat, lon]
       return (
         <React.Fragment key={track.id}>
-          <Polyline
-            positions={data.coordinates}
-            pathOptions={{
-              color: track.color || '#888888',
-              opacity: track.opacity || 0.6,
-              weight: 3,
-              dashArray: '5, 10', // Dashed line for reference tracks
-            }}
-          >
-            <Popup>
-              <div className="feature-popup">
-                <strong>{track.display_name || 'Reference Track'}</strong>
-              </div>
-            </Popup>
-          </Polyline>
+          {/* UI-01: Casing technique - white halo underneath for visibility on terrain maps */}
+          {showTrack && (
+            <Polyline
+              positions={data.coordinates}
+              pathOptions={{
+                color: '#ffffff',
+                opacity: 0.8,
+                weight: 6,
+              }}
+            />
+          )}
+          {/* UI-01: Main dashed line on top */}
+          {showTrack && (
+            <Polyline
+              positions={data.coordinates}
+              pathOptions={{
+                color: track.color || '#555555',
+                opacity: 0.9,
+                weight: 3,
+                dashArray: '10, 10', // Dashed line for reference tracks
+              }}
+            >
+              <Popup>
+                <div className="feature-popup">
+                  <strong>{track.display_name || 'Reference Track'}</strong>
+                </div>
+              </Popup>
+            </Polyline>
+          )}
           
-          {data.waypoints && data.waypoints.map((wp, idx) => (
+          {/* UI-02: Reference waypoints - hidden by default after import */}
+          {showWaypoints && data.waypoints && data.waypoints.map((wp, idx) => (
             <Marker
               key={`${track.id}-wp-${idx}`}
               position={[wp.lat, wp.lon]}
               icon={referenceIcon}
+              zIndexOffset={-1000} // UI-04: Lower z-index than checkpoints
             >
               <Popup>
                 <div className="feature-popup">
                   <div className="popup-header">
-                    <strong>{wp.name || 'Waypoint'}</strong>
+                    <strong>{wp.name || wp.note || 'Waypoint'}</strong>
                   </div>
                   <p className="popup-description">
                     Reference: {track.display_name || 'GPX Track'}

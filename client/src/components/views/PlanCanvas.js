@@ -382,6 +382,7 @@ const PlanCanvas = () => {
         }
         
         // 3. Update plan state with new features and track
+        // UI-02: Set showWaypoints=false on the new track to hide reference waypoints after import
         setPlan((prev) => {
           const updatedPlan = { ...prev };
           if (createdFeatures.length > 0) {
@@ -392,7 +393,13 @@ const PlanCanvas = () => {
             };
           }
           if (track) {
-            updatedPlan.reference_tracks = [...(prev.reference_tracks || []), track];
+            // UI-02: Smart Hiding - set showWaypoints to false by default after import
+            const trackWithVisibility = {
+              ...track,
+              showTrack: true,      // Show the reference track line
+              showWaypoints: false, // Hide reference waypoints (they're now checkpoints)
+            };
+            updatedPlan.reference_tracks = [...(prev.reference_tracks || []), trackWithVisibility];
           }
           return updatedPlan;
         });
@@ -438,6 +445,19 @@ const PlanCanvas = () => {
       }
     },
     [canEdit, plan, planId]
+  );
+
+  // UI-03: Handler for toggling reference track visibility (track line or waypoints)
+  const handleToggleTrackVisibility = useCallback(
+    (trackId, property, value) => {
+      setPlan((prev) => ({
+        ...prev,
+        reference_tracks: prev.reference_tracks.map((track) =>
+          track.id === trackId ? { ...track, [property]: value } : track
+        ),
+      }));
+    },
+    []
   );
 
   // Plan name editing
@@ -648,6 +668,7 @@ const PlanCanvas = () => {
             }}
             onAddReferenceTrack={handleAddReferenceTrack}
             onRemoveReferenceTrack={handleRemoveReferenceTrack}
+            onToggleTrackVisibility={handleToggleTrackVisibility}
             width={itineraryWidth}
             onWidthChange={setItineraryWidth}
             readOnly={!canEdit}
