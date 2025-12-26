@@ -31,6 +31,7 @@ const CheckpointItem = ({
   onUpdateWithCascade, // Optional: for cascade time updates
   onDelete,
   onCenter,
+  onFlyTo, // FE-06: Navigate map with flyTo + flash
   readOnly,
   hasSubsequentCheckpoints, // Whether there are checkpoints after this one
 }) => {
@@ -136,10 +137,20 @@ const CheckpointItem = ({
     }
   }, [feature.id, onDelete]);
 
+  // FE-06: Handle double-click to fly to feature on map
+  const handleDoubleClick = useCallback((e) => {
+    e.stopPropagation();
+    if (onFlyTo) {
+      onFlyTo(feature.id);
+    }
+  }, [feature.id, onFlyTo]);
+
   return (
     <div
       className={`checkpoint-item ${selected ? 'selected' : ''} ${isEditing ? 'editing' : ''}`}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      title="Double-click to navigate on map"
     >
       {/* Icon */}
       <span className="checkpoint-icon" title={icon_type || 'checkpoint'}>

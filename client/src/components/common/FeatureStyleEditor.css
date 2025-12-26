@@ -281,3 +281,61 @@
 .editor-body::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
+
+/* FE-05: Fill pattern selector */
+.fill-pattern-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.pattern-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pattern-option:hover {
+  border-color: #3b82f6;
+  background: #f0f9ff;
+}
+
+.pattern-option.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.pattern-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pattern-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.pattern-icon.pattern-solid {
+  color: #3b82f6;
+}
+
+.pattern-icon.pattern-crosshatch {
+  color: #f97316;
+}
+
+.pattern-icon.pattern-none {
+  color: #6b7280;
+}
+
+.pattern-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: #374151;
+}

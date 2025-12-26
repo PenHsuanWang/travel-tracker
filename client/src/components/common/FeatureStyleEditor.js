@@ -7,21 +7,30 @@
  * - Stroke/fill colors
  * - Line width and opacity
  * - Fill opacity
+ * - Fill pattern (FE-05: Solid, Crosshatch, None)
  */
 import React, { useState, useEffect } from 'react';
 import './FeatureStyleEditor.css';
 
+// FE-05: Updated color presets per PRD (Red, Orange, Teal, Blue, Grey)
 const COLOR_PRESETS = [
-  { name: 'Blue', value: '#3b82f6' },
   { name: 'Red', value: '#ef4444' },
-  { name: 'Green', value: '#10b981' },
-  { name: 'Yellow', value: '#f59e0b' },
-  { name: 'Purple', value: '#8b5cf6' },
-  { name: 'Pink', value: '#ec4899' },
   { name: 'Orange', value: '#f97316' },
   { name: 'Teal', value: '#14b8a6' },
-  { name: 'Gray', value: '#6b7280' },
+  { name: 'Blue', value: '#3b82f6' },
+  { name: 'Grey', value: '#6b7280' },
+  { name: 'Green', value: '#10b981' },
+  { name: 'Purple', value: '#8b5cf6' },
+  { name: 'Yellow', value: '#f59e0b' },
+  { name: 'Pink', value: '#ec4899' },
   { name: 'Black', value: '#1f2937' },
+];
+
+// FE-05: Fill pattern options per PRD
+const FILL_PATTERNS = [
+  { name: 'Solid', value: 'solid', description: 'Solid fill with opacity' },
+  { name: 'Crosshatch', value: 'crosshatch', description: 'Diagonal line pattern' },
+  { name: 'None', value: 'none', description: 'Outline only' },
 ];
 
 const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
@@ -30,11 +39,29 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
   const [color, setColor] = useState(feature.properties?.color || '#3b82f6');
   const [fillColor, setFillColor] = useState(feature.properties?.fillColor || feature.properties?.color || '#3b82f6');
   const [strokeWidth, setStrokeWidth] = useState(feature.properties?.strokeWidth || 3);
-  const [opacity, setOpacity] = useState(feature.properties?.opacity || 0.8);
-  const [fillOpacity, setFillOpacity] = useState(feature.properties?.fillOpacity || 0.2);
+  const [opacity, setOpacity] = useState(feature.properties?.opacity ?? 0.8);
+  const [fillOpacity, setFillOpacity] = useState(feature.properties?.fillOpacity ?? 0.2);
+  // FE-05: Fill pattern state
+  const [fillPattern, setFillPattern] = useState(feature.properties?.fillPattern || 'solid');
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showFillColorPicker, setShowFillColorPicker] = useState(false);
   const [colorPickerType, setColorPickerType] = useState('stroke'); // 'stroke' or 'fill'
+
+  // BUG FIX: Sync state when feature prop changes (e.g., modal reopened for same feature)
+  // This ensures the modal displays current values, not stale initial state
+  useEffect(() => {
+    setName(feature.properties?.name || '');
+    setDescription(feature.properties?.description || '');
+    setColor(feature.properties?.color || '#3b82f6');
+    setFillColor(feature.properties?.fillColor || feature.properties?.color || '#3b82f6');
+    setStrokeWidth(feature.properties?.strokeWidth || 3);
+    setOpacity(feature.properties?.opacity ?? 0.8);
+    setFillOpacity(feature.properties?.fillOpacity ?? 0.2);
+    setFillPattern(feature.properties?.fillPattern || 'solid');
+    // Reset color pickers
+    setShowColorPicker(false);
+    setShowFillColorPicker(false);
+  }, [feature.id, feature.properties]);
 
   const isPolygon = feature.geometry?.type === 'Polygon';
   const isPolyline = feature.geometry?.type === 'LineString';
@@ -58,6 +85,8 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
       if (isPolygon) {
         updates.properties.fillColor = fillColor;
         updates.properties.fillOpacity = fillOpacity;
+        // FE-05: Save fill pattern
+        updates.properties.fillPattern = fillPattern;
       }
     }
 
@@ -253,8 +282,33 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
                   step="0.1"
                   value={fillOpacity}
                   onChange={(e) => setFillOpacity(Number(e.target.value))}
-                  disabled={readOnly}
+                  disabled={readOnly || fillPattern === 'none'}
                 />
+              </div>
+            )}
+
+            {/* FE-05: Fill pattern selector for polygons */}
+            {isPolygon && (
+              <div className="form-group">
+                <label>Fill Pattern</label>
+                <div className="fill-pattern-selector">
+                  {FILL_PATTERNS.map((pattern) => (
+                    <button
+                      key={pattern.value}
+                      className={`pattern-option ${fillPattern === pattern.value ? 'active' : ''}`}
+                      onClick={() => setFillPattern(pattern.value)}
+                      disabled={readOnly}
+                      title={pattern.description}
+                    >
+                      <span className={`pattern-icon pattern-${pattern.value}`}>
+                        {pattern.value === 'solid' && '█'}
+                        {pattern.value === 'crosshatch' && '▤'}
+                        {pattern.value === 'none' && '▢'}
+                      </span>
+                      <span className="pattern-name">{pattern.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </>

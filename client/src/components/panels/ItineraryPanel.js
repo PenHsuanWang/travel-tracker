@@ -18,6 +18,7 @@ import './ItineraryPanel.css';
 
 /**
  * FeatureItem - Generic item for non-checkpoint features (markers, routes, areas).
+ * Supports FE-06: Double-click to navigate/flyTo map location.
  */
 const FeatureItem = ({
   feature,
@@ -25,6 +26,7 @@ const FeatureItem = ({
   onSelect,
   onUpdate,
   onDelete,
+  onDoubleClick,
   readOnly,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -48,6 +50,14 @@ const FeatureItem = ({
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditedName('');
+  };
+
+  // FE-06: Handle double-click to fly to feature
+  const handleDoubleClick = (e) => {
+    e.stopPropagation();
+    if (onDoubleClick) {
+      onDoubleClick(feature.id);
+    }
   };
 
   const getFeatureIcon = () => {
@@ -99,6 +109,8 @@ const FeatureItem = ({
     <div
       className={`feature-item ${selected ? 'selected' : ''}`}
       onClick={() => onSelect(feature.id)}
+      onDoubleClick={handleDoubleClick}
+      title="Double-click to navigate on map"
     >
       <span className="feature-icon">{getFeatureIcon()}</span>
 
@@ -212,6 +224,7 @@ const ItineraryPanel = ({
   onDeleteFeature,
   onReorderFeatures,
   onCenterFeature,
+  onFlyToFeature, // FE-06: Navigate map to feature with flyTo + flash
   onAddReferenceTrack,
   onRemoveReferenceTrack,
   onToggleTrackVisibility, // UI-03: Toggle track/waypoint visibility
@@ -380,6 +393,7 @@ const ItineraryPanel = ({
                   onUpdateWithCascade={onUpdateFeatureWithCascade}
                   onDelete={onDeleteFeature}
                   onCenter={onCenterFeature}
+                  onFlyTo={onFlyToFeature}
                   readOnly={readOnly}
                   hasSubsequentCheckpoints={index < sortedCheckpoints.length - 1}
                 />
@@ -419,6 +433,7 @@ const ItineraryPanel = ({
                     onSelect={onSelectFeature}
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
+                    onDoubleClick={onFlyToFeature}
                     readOnly={readOnly}
                   />
                 </div>

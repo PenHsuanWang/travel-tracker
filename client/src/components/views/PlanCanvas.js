@@ -666,6 +666,13 @@ const PlanCanvas = () => {
               }
               setSelectedFeatureId(featureId);
             }}
+            onFlyToFeature={(featureId) => {
+              // FE-06: Fly to feature with flash animation
+              if (mapRef.current?.flyToFeature) {
+                mapRef.current.flyToFeature(featureId);
+              }
+              setSelectedFeatureId(featureId);
+            }}
             onAddReferenceTrack={handleAddReferenceTrack}
             onRemoveReferenceTrack={handleRemoveReferenceTrack}
             onToggleTrackVisibility={handleToggleTrackVisibility}

@@ -101,6 +101,59 @@
   transform: scale(1.15);
 }
 
+/* FE-06: Flashing animation for navigation confirmation */
+.plan-marker.flashing svg {
+  animation: markerFlash 0.5s ease-in-out 3;
+}
+
+@keyframes markerFlash {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1.2);
+  }
+}
+
+/* FE-06: Flashing animation for polylines and polygons */
+.feature-flashing {
+  animation: featureFlash 0.5s ease-in-out 3;
+}
+
+@keyframes featureFlash {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* FE-07: Hover tooltip styling to match Trip Page */
+.plan-feature-tooltip {
+  background-color: #ffffff !important;
+  border: none !important;
+  border-radius: 4px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #1f2937 !important;
+  white-space: nowrap !important;
+}
+
+.plan-feature-tooltip::before {
+  border: none !important;
+  display: none !important;
+}
+
+/* FE-07: Pointer cursor for interactive features on hover */
+.leaflet-interactive {
+  cursor: pointer !important;
+}
+
 /* Feature popup */
 .feature-popup {
   min-width: 200px;

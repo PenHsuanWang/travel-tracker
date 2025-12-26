@@ -61,6 +61,19 @@ class PlanStatus(str, Enum):
     ARCHIVED = "archived"   # No longer active
 
 
+class FillPattern(str, Enum):
+    """Fill pattern options for polygon features (FE-05).
+    
+    Determines how polygon interiors are rendered:
+    - SOLID: Standard fill with opacity
+    - CROSSHATCH: Diagonal line pattern (for hazard zones)
+    - NONE: Outline only, no fill
+    """
+    SOLID = "solid"
+    CROSSHATCH = "crosshatch"
+    NONE = "none"
+
+
 class GeoJSONGeometry(BaseModel):
     """GeoJSON geometry object.
     
@@ -120,6 +133,10 @@ class PlanFeatureProperties(BaseModel):
     stroke_width: int = Field(default=3, ge=1, le=10)
     stroke_opacity: float = Field(default=0.8, ge=0, le=1)
     fill_opacity: float = Field(default=0.3, ge=0, le=1)
+    # FE-05: Fill pattern for polygons (solid, crosshatch, none)
+    fill_pattern: Optional[FillPattern] = Field(default=FillPattern.SOLID)
+    # Fill color (optional, defaults to stroke color)
+    fill_color: Optional[str] = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     
     # UI metadata
     shape_type: Optional[str] = None  # 'rectangle', 'circle', etc. for polygon variants

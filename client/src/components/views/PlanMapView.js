@@ -7,7 +7,7 @@
  * Supports OpenTopoMap and other tile layers with a layer switcher.
  */
 import React, { useEffect, useMemo, useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { MapContainer, TileLayer, Polyline, Polygon, Marker, Popup, Circle, Rectangle, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, Polygon, Marker, Popup, Circle, Rectangle, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import FeatureStyleEditor from '../common/FeatureStyleEditor';
 import 'leaflet/dist/leaflet.css';
@@ -124,6 +124,89 @@ function projectPointOnSegment(point, segStart, segEnd) {
     startPt.lat + t * dy,
     startPt.lng + t * dx
   );
+}
+
+// FE-04: Double-click handler for smart drawing completion
+function DoubleClickDrawHandler({
+  activeTool,
+  activeDrawCategory,
+  onAddFeature,
+  drawingState,
+  setDrawingState,
+}) {
+  const map = useMap();
+
+  useMapEvents({
+    dblclick(e) {
+      // Only handle double-click during active drawing
+      if (!activeTool || !drawingState.isDrawing) return;
+      
+      // Stop propagation to prevent map zoom
+      L.DomEvent.stopPropagation(e);
+      L.DomEvent.preventDefault(e);
+      
+      const { lat, lng } = e.latlng;
+      
+      // FR-30: Double-click to finish polygon
+      if (activeTool === 'polygon' && drawingState.vertices?.length >= 2) {
+        // Add the final vertex and complete the shape
+        const finalVertices = [...drawingState.vertices, [lat, lng]];
+        if (finalVertices.length >= 3) {
+          const coords = finalVertices.map(([lt, ln]) => [ln, lt]);
+          coords.push(coords[0]); // Close the polygon
+          const geometry = {
+            type: 'Polygon',
+            coordinates: [coords],
+          };
+          onAddFeature(geometry, { category: activeDrawCategory || 'area' });
+          setDrawingState({
+            isDrawing: false,
+            vertices: [],
+            startPoint: null,
+            currentPoint: null,
+            center: null,
+            radius: 0,
+          });
+        }
+        return;
+      }
+      
+      // FR-30: Double-click to finish polyline
+      if (activeTool === 'polyline' && drawingState.vertices?.length >= 1) {
+        const finalVertices = [...drawingState.vertices, [lat, lng]];
+        if (finalVertices.length >= 2) {
+          const geometry = {
+            type: 'LineString',
+            coordinates: finalVertices.map(([lt, ln]) => [ln, lt]),
+          };
+          onAddFeature(geometry, { category: activeDrawCategory || 'route' });
+          setDrawingState({
+            isDrawing: false,
+            vertices: [],
+            startPoint: null,
+            currentPoint: null,
+            center: null,
+            radius: 0,
+          });
+        }
+        return;
+      }
+    },
+  });
+
+  // Disable default map double-click zoom when drawing
+  useEffect(() => {
+    if (activeTool && drawingState.isDrawing) {
+      map.doubleClickZoom.disable();
+    } else {
+      map.doubleClickZoom.enable();
+    }
+    return () => {
+      map.doubleClickZoom.enable();
+    };
+  }, [activeTool, drawingState.isDrawing, map]);
+
+  return null;
 }
 
 // Drawing controller - handles map clicks when a tool is active
@@ -522,6 +605,86 @@ const createMarkerIcon = (isSelected = false, isHighlighted = false) => {
   });
 };
 
+// FE-05: Polygon component with SVG pattern fill support
+// Standard Leaflet pathOptions don't support SVG patterns, so we use a ref
+// to directly manipulate the SVG path element after render
+const PatternPolygon = ({ positions, pathOptions, fillPattern, fillColor, children, eventHandlers }) => {
+  const polygonRef = useRef(null);
+
+  // Apply SVG pattern fill directly to the path element when fillPattern is 'crosshatch'
+  useEffect(() => {
+    if (!polygonRef.current) return;
+    
+    const pathElement = polygonRef.current.getElement();
+    if (!pathElement) return;
+
+    if (fillPattern === 'crosshatch') {
+      // Create a unique pattern ID based on the fill color
+      const patternId = `crosshatch-${fillColor.replace('#', '')}`;
+      
+      // Check if pattern already exists, if not create it
+      let existingPattern = document.getElementById(patternId);
+      if (!existingPattern) {
+        // Find or create the SVG defs element
+        let svgDefs = document.getElementById('plan-map-patterns');
+        if (!svgDefs) {
+          const svgNS = 'http://www.w3.org/2000/svg';
+          const svg = document.createElementNS(svgNS, 'svg');
+          svg.setAttribute('id', 'plan-map-patterns-container');
+          svg.style.position = 'absolute';
+          svg.style.width = '0';
+          svg.style.height = '0';
+          
+          svgDefs = document.createElementNS(svgNS, 'defs');
+          svgDefs.setAttribute('id', 'plan-map-patterns');
+          svg.appendChild(svgDefs);
+          document.body.appendChild(svg);
+        }
+        
+        // Create the crosshatch pattern
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const pattern = document.createElementNS(svgNS, 'pattern');
+        pattern.setAttribute('id', patternId);
+        pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+        pattern.setAttribute('width', '8');
+        pattern.setAttribute('height', '8');
+        pattern.setAttribute('patternTransform', 'rotate(45)');
+        
+        // Add line element for the hatch
+        const line = document.createElementNS(svgNS, 'line');
+        line.setAttribute('x1', '0');
+        line.setAttribute('y1', '0');
+        line.setAttribute('x2', '0');
+        line.setAttribute('y2', '8');
+        line.setAttribute('stroke', fillColor);
+        line.setAttribute('stroke-width', '2');
+        
+        pattern.appendChild(line);
+        svgDefs.appendChild(pattern);
+      }
+      
+      // Apply the pattern to the path
+      pathElement.style.fill = `url(#${patternId})`;
+      pathElement.style.fillOpacity = pathOptions.fillOpacity || 0.5;
+    } else {
+      // Reset to normal fill
+      pathElement.style.fill = pathOptions.fillColor || fillColor;
+      pathElement.style.fillOpacity = pathOptions.fillOpacity;
+    }
+  }, [fillPattern, fillColor, pathOptions.fillOpacity, pathOptions.fillColor]);
+
+  return (
+    <Polygon
+      ref={polygonRef}
+      positions={positions}
+      pathOptions={pathOptions}
+      eventHandlers={eventHandlers}
+    >
+      {children}
+    </Polygon>
+  );
+};
+
 // Create small grey marker icon for reference waypoints
 const createReferenceWaypointIcon = () => {
   return L.divIcon({
@@ -599,6 +762,18 @@ const PlanMapView = forwardRef(({
     });
   }, [activeTool]);
 
+  // FE-06: Feature highlight flash animation state
+  const [flashingFeatureId, setFlashingFeatureId] = useState(null);
+
+  // FE-06: Flash a feature 3 times for navigation confirmation
+  const flashFeature = useCallback((featureId) => {
+    setFlashingFeatureId(featureId);
+    // Clear flash after animation completes (3 flashes * 500ms = 1500ms)
+    setTimeout(() => {
+      setFlashingFeatureId(null);
+    }, 1500);
+  }, []);
+
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
     finishDrawing: () => {
@@ -642,11 +817,69 @@ const PlanMapView = forwardRef(({
       });
     },
     getDrawingState: () => drawingState,
+    
+    // FE-06: Fly to a feature and flash it for navigation confirmation
+    flyToFeature: (featureId) => {
+      if (!mapRef.current || !features) return;
+      
+      const map = mapRef.current;
+      const featuresArray = Array.isArray(features) ? features : (features.features || []);
+      const feature = featuresArray.find(f => f.id === featureId);
+      
+      if (!feature || !feature.geometry) return;
+      
+      const geom = feature.geometry;
+      
+      // FE-06: FlyTo with appropriate zoom based on feature type
+      if (geom.type === 'Point' && geom.coordinates) {
+        const [lng, lat] = geom.coordinates;
+        map.flyTo([lat, lng], 16, { duration: 1.0 }); // Close-up zoom for points
+      } else if (geom.type === 'LineString' && geom.coordinates) {
+        const positions = geom.coordinates.map(([lng, lat]) => [lat, lng]);
+        const bounds = L.latLngBounds(positions);
+        if (bounds.isValid()) {
+          map.flyToBounds(bounds, { padding: [50, 50], duration: 1.0, maxZoom: 16 });
+        }
+      } else if (geom.type === 'Polygon' && geom.coordinates?.[0]) {
+        const positions = geom.coordinates[0].map(([lng, lat]) => [lat, lng]);
+        const bounds = L.latLngBounds(positions);
+        if (bounds.isValid()) {
+          map.flyToBounds(bounds, { padding: [50, 50], duration: 1.0, maxZoom: 16 });
+        }
+      }
+      
+      // FE-06: Flash the feature after flyTo animation
+      setTimeout(() => {
+        flashFeature(featureId);
+      }, 1000); // Wait for flyTo to complete
+    },
+    
+    // Center on coordinates (for simple centering without flash)
+    centerOnCoords: (coords) => {
+      if (mapRef.current && coords) {
+        mapRef.current.flyTo(coords, 15, { duration: 0.5 });
+      }
+    },
   }));
 
   // Default center (can be adjusted based on user location or last plan)
   const defaultCenter = [25.1, 121.5]; // Taiwan center
   const defaultZoom = 12;
+
+  // FE-06: Create a flashing marker icon
+  const getFlashingMarkerIcon = useCallback((isSelected = false) => {
+    const size = 40;
+    const color = isSelected ? '#e74c3c' : '#14b8a6';
+    const strokeColor = isSelected ? '#c0392b' : '#0d9488';
+    
+    return L.divIcon({
+      className: 'plan-marker checkpoint flashing',
+      html: createMarkerIconHtml(size, color, strokeColor),
+      iconSize: [size * 0.7, size],
+      iconAnchor: [size * 0.35, size],
+      popupAnchor: [0, -size],
+    });
+  }, []);
 
   // Render point features as markers
   const renderMarker = useCallback((feature) => {
@@ -655,9 +888,13 @@ const PlanMapView = forwardRef(({
 
     const [lng, lat] = geom.coordinates;
     const isSelected = feature.id === selectedFeatureId;
-    // Use cached icon to avoid recreating DOM elements on every render
-    const icon = getMarkerIcon(isSelected);
+    const isFlashing = feature.id === flashingFeatureId;
+    // Use cached icon or flashing icon
+    const icon = isFlashing ? getFlashingMarkerIcon(isSelected) : getMarkerIcon(isSelected);
     const isEditing = editingFeatureId === feature.id;
+
+    // FE-07: Tooltip content for hover
+    const tooltipContent = feature.properties?.name || 'Marker';
 
     return (
       <Marker
@@ -668,6 +905,16 @@ const PlanMapView = forwardRef(({
           click: () => onSelectFeature(feature.id),
         }}
       >
+        {/* FE-07: Hover tooltip for glanceability */}
+        <Tooltip
+          direction="auto"
+          offset={[0, -20]}
+          opacity={1}
+          className="plan-feature-tooltip"
+          interactive={false}
+        >
+          {tooltipContent}
+        </Tooltip>
         <Popup
           onOpen={() => setEditingFeatureId(null)}
           onClose={() => setEditingFeatureId(null)}
@@ -704,7 +951,7 @@ const PlanMapView = forwardRef(({
         </Popup>
       </Marker>
     );
-  }, [selectedFeatureId, onSelectFeature, editingFeatureId, onUpdateFeature, readOnly]);
+  }, [selectedFeatureId, onSelectFeature, editingFeatureId, onUpdateFeature, readOnly, flashingFeatureId, getFlashingMarkerIcon]);
 
   // Render polyline features
   const renderPolyline = useCallback((feature) => {
@@ -713,10 +960,15 @@ const PlanMapView = forwardRef(({
 
     const positions = geom.coordinates.map(([lng, lat]) => [lat, lng]);
     const isSelected = feature.id === selectedFeatureId;
+    const isFlashing = feature.id === flashingFeatureId;
     const color = feature.properties?.color || '#3b82f6';
     const strokeWidth = feature.properties?.strokeWidth || 3;
-    const opacity = feature.properties?.opacity ?? 0.8;
+    // FE-06: Flashing effect - alternate opacity
+    const opacity = isFlashing ? 0.4 : (feature.properties?.opacity ?? 0.8);
     const isEditing = editingFeatureId === feature.id;
+
+    // FE-07: Tooltip content for hover
+    const tooltipContent = feature.properties?.name || '〰️ Route';
 
     return (
       <Polyline
@@ -724,13 +976,25 @@ const PlanMapView = forwardRef(({
         positions={positions}
         pathOptions={{
           color: isSelected ? '#ef4444' : color,
-          weight: isSelected ? strokeWidth + 1 : strokeWidth,
+          weight: isFlashing ? strokeWidth + 2 : (isSelected ? strokeWidth + 1 : strokeWidth),
           opacity,
+          className: isFlashing ? 'feature-flashing' : '',
         }}
         eventHandlers={{
           click: () => onSelectFeature(feature.id),
         }}
       >
+        {/* FE-07: Hover tooltip for glanceability */}
+        <Tooltip
+          direction="auto"
+          offset={[0, 0]}
+          opacity={1}
+          className="plan-feature-tooltip"
+          interactive={false}
+          sticky={true}
+        >
+          {tooltipContent}
+        </Tooltip>
         <Popup
           onOpen={() => setEditingFeatureId(null)}
           onClose={() => setEditingFeatureId(null)}
@@ -767,7 +1031,7 @@ const PlanMapView = forwardRef(({
         </Popup>
       </Polyline>
     );
-  }, [selectedFeatureId, onSelectFeature, editingFeatureId, onUpdateFeature, readOnly]);
+  }, [selectedFeatureId, onSelectFeature, editingFeatureId, onUpdateFeature, readOnly, flashingFeatureId]);
 
   // Render polygon features
   const renderPolygon = useCallback((feature) => {
@@ -776,11 +1040,19 @@ const PlanMapView = forwardRef(({
 
     const positions = geom.coordinates[0].map(([lng, lat]) => [lat, lng]);
     const isSelected = feature.id === selectedFeatureId;
+    const isFlashing = feature.id === flashingFeatureId;
     const color = feature.properties?.color || '#16a34a';
     const fillColor = feature.properties?.fillColor || color;
     const strokeWidth = feature.properties?.strokeWidth || 2;
-    const opacity = feature.properties?.opacity ?? 0.8;
-    const fillOpacity = feature.properties?.fillOpacity ?? 0.2;
+    // FE-05: Fill pattern support
+    const fillPattern = feature.properties?.fillPattern || 'solid';
+    // FE-06: Flashing effect
+    const opacity = isFlashing ? 0.4 : (feature.properties?.opacity ?? 0.8);
+    // FE-05: Apply fill opacity based on pattern
+    let fillOpacity = isFlashing ? 0.1 : (feature.properties?.fillOpacity ?? 0.2);
+    if (fillPattern === 'none') {
+      fillOpacity = 0; // No fill for 'none' pattern
+    }
     const isEditing = editingFeatureId === feature.id;
     
     const shapeType = feature.properties?.shape_type;
@@ -788,21 +1060,39 @@ const PlanMapView = forwardRef(({
     if (shapeType === 'rectangle') label = '▭ Rectangle';
     else if (shapeType === 'circle') label = '◯ Circle';
 
+    // FE-07: Tooltip content for hover
+    const tooltipContent = feature.properties?.name || label;
+
+    // FE-05: Use PatternPolygon for crosshatch support
     return (
-      <Polygon
+      <PatternPolygon
         key={feature.id}
         positions={positions}
+        fillPattern={fillPattern}
+        fillColor={fillColor}
         pathOptions={{
           color: isSelected ? '#ef4444' : color,
           fillColor: fillColor,
           fillOpacity: fillOpacity,
           opacity: opacity,
-          weight: isSelected ? strokeWidth + 1 : strokeWidth,
+          weight: isFlashing ? strokeWidth + 2 : (isSelected ? strokeWidth + 1 : strokeWidth),
+          className: isFlashing ? 'feature-flashing' : '',
         }}
         eventHandlers={{
           click: () => onSelectFeature(feature.id),
         }}
       >
+        {/* FE-07: Hover tooltip for glanceability */}
+        <Tooltip
+          direction="auto"
+          offset={[0, 0]}
+          opacity={1}
+          className="plan-feature-tooltip"
+          interactive={false}
+          sticky={true}
+        >
+          {tooltipContent}
+        </Tooltip>
         <Popup
           onOpen={() => setEditingFeatureId(null)}
           onClose={() => setEditingFeatureId(null)}
@@ -837,9 +1127,9 @@ const PlanMapView = forwardRef(({
             </div>
           )}
         </Popup>
-      </Polygon>
+      </PatternPolygon>
     );
-  }, [selectedFeatureId, onSelectFeature]);
+  }, [selectedFeatureId, onSelectFeature, editingFeatureId, onUpdateFeature, readOnly, flashingFeatureId]);
 
   // Render all features
   const renderedFeatures = useMemo(() => {
@@ -990,6 +1280,17 @@ const PlanMapView = forwardRef(({
             drawingState={drawingState}
             setDrawingState={setDrawingState}
             referenceTrackCoords={referenceTrackCoords}
+          />
+        )}
+
+        {/* FE-04: Double-click to finish drawing handler */}
+        {!readOnly && activeTool && (
+          <DoubleClickDrawHandler
+            activeTool={activeTool}
+            activeDrawCategory={activeDrawCategory}
+            onAddFeature={onAddFeature}
+            drawingState={drawingState}
+            setDrawingState={setDrawingState}
           />
         )}
 
