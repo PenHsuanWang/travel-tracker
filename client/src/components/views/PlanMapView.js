@@ -58,6 +58,74 @@ function MapLayerController({ selectedLayer }) {
   return null;
 }
 
+// Snap-to-Track helper (FR-051): Find closest point on reference tracks
+const SNAP_TOLERANCE_PX = 20; // 20 pixel snap threshold per HLD
+
+function findSnapPoint(map, clickLatLng, referenceTrackCoords) {
+  if (!referenceTrackCoords || referenceTrackCoords.length === 0) {
+    return null;
+  }
+
+  let closestPoint = null;
+  let minDistance = Infinity;
+
+  referenceTrackCoords.forEach((coordArray) => {
+    if (!coordArray || coordArray.length < 2) return;
+
+    // Find closest point on this polyline
+    for (let i = 0; i < coordArray.length - 1; i++) {
+      const segStart = L.latLng(coordArray[i]);
+      const segEnd = L.latLng(coordArray[i + 1]);
+      
+      // Project click point onto segment
+      const projected = projectPointOnSegment(clickLatLng, segStart, segEnd);
+      const distancePx = map.latLngToContainerPoint(clickLatLng).distanceTo(
+        map.latLngToContainerPoint(projected)
+      );
+      
+      if (distancePx < minDistance) {
+        minDistance = distancePx;
+        closestPoint = projected;
+      }
+    }
+  });
+
+  // Only snap if within tolerance
+  if (closestPoint && minDistance <= SNAP_TOLERANCE_PX) {
+    return closestPoint;
+  }
+  return null;
+}
+
+// Project a point onto a line segment and return the closest point
+function projectPointOnSegment(point, segStart, segEnd) {
+  const startPt = L.latLng(segStart);
+  const endPt = L.latLng(segEnd);
+  const clickPt = L.latLng(point);
+
+  // Vector from start to end
+  const dx = endPt.lng - startPt.lng;
+  const dy = endPt.lat - startPt.lat;
+  
+  // Length squared
+  const lenSq = dx * dx + dy * dy;
+  
+  if (lenSq === 0) {
+    // Segment is a point
+    return startPt;
+  }
+  
+  // Project point onto line (parametric)
+  const t = Math.max(0, Math.min(1, (
+    (clickPt.lng - startPt.lng) * dx + (clickPt.lat - startPt.lat) * dy
+  ) / lenSq));
+  
+  return L.latLng(
+    startPt.lat + t * dy,
+    startPt.lng + t * dx
+  );
+}
+
 // Drawing controller - handles map clicks when a tool is active
 function DrawingController({ 
   activeTool, 
@@ -65,6 +133,7 @@ function DrawingController({
   onAddFeature,
   drawingState,
   setDrawingState,
+  referenceTrackCoords,
 }) {
   const map = useMap();
 
@@ -72,9 +141,17 @@ function DrawingController({
     click(e) {
       if (!activeTool) return;
 
-      const { lat, lng } = e.latlng;
+      let { lat, lng } = e.latlng;
 
+      // FR-051: Snap to reference track for marker/waypoint tools
       if (activeTool === 'marker' || activeTool === 'waypoint') {
+        const snapPoint = findSnapPoint(map, e.latlng, referenceTrackCoords);
+        if (snapPoint) {
+          lat = snapPoint.lat;
+          lng = snapPoint.lng;
+          console.log('[Snap-to-Track] Snapped to reference track:', { lat, lng });
+        }
+        
         // Create a point feature immediately
         // Use the activeDrawCategory if provided, otherwise infer from tool
         const category = activeDrawCategory || (activeTool === 'waypoint' ? 'waypoint' : 'marker');
@@ -387,7 +464,48 @@ function FeatureBoundsController({ features, referenceTracks, trackData }) {
   return null;
 }
 
-// Create blue teardrop marker icons
+// Create blue teardrop marker icons - with memoization for performance
+const createMarkerIconHtml = (size, color, strokeColor, classes) => `
+  <svg viewBox="0 0 24 36" width="${size * 0.7}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24c0-6.6-5.4-12-12-12z" 
+          fill="${color}" stroke="${strokeColor}" stroke-width="1"/>
+    <circle cx="12" cy="12" r="5" fill="#fff"/>
+  </svg>
+`;
+
+// Pre-create cached icons for common states to avoid Leaflet re-creating DOM elements
+const MARKER_ICONS_CACHE = {
+  normal: L.divIcon({
+    className: 'plan-marker',
+    html: createMarkerIconHtml(36, '#3388ff', '#2266cc'),
+    iconSize: [36 * 0.7, 36],
+    iconAnchor: [36 * 0.35, 36],
+    popupAnchor: [0, -36],
+  }),
+  selected: L.divIcon({
+    className: 'plan-marker selected',
+    html: createMarkerIconHtml(40, '#e74c3c', '#c0392b'),
+    iconSize: [40 * 0.7, 40],
+    iconAnchor: [40 * 0.35, 40],
+    popupAnchor: [0, -40],
+  }),
+  highlighted: L.divIcon({
+    className: 'plan-marker highlighted',
+    html: createMarkerIconHtml(44, '#3388ff', '#2266cc'),
+    iconSize: [44 * 0.7, 44],
+    iconAnchor: [44 * 0.35, 44],
+    popupAnchor: [0, -44],
+  }),
+};
+
+// Get cached marker icon - prevents recreating icons on every render
+const getMarkerIcon = (isSelected = false, isHighlighted = false) => {
+  if (isHighlighted) return MARKER_ICONS_CACHE.highlighted;
+  if (isSelected) return MARKER_ICONS_CACHE.selected;
+  return MARKER_ICONS_CACHE.normal;
+};
+
+// Legacy function for backwards compatibility (if needed elsewhere)
 const createMarkerIcon = (isSelected = false, isHighlighted = false) => {
   const size = isHighlighted ? 44 : isSelected ? 40 : 36;
   const color = isSelected ? '#e74c3c' : '#3388ff';
@@ -395,13 +513,7 @@ const createMarkerIcon = (isSelected = false, isHighlighted = false) => {
 
   return L.divIcon({
     className: `plan-marker ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`,
-    html: `
-      <svg viewBox="0 0 24 36" width="${size * 0.7}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24c0-6.6-5.4-12-12-12z" 
-              fill="${color}" stroke="${strokeColor}" stroke-width="1"/>
-        <circle cx="12" cy="12" r="5" fill="#fff"/>
-      </svg>
-    `,
+    html: createMarkerIconHtml(size, color, strokeColor),
     iconSize: [size * 0.7, size],
     iconAnchor: [size * 0.35, size],
     popupAnchor: [0, -size],
@@ -451,6 +563,20 @@ const PlanMapView = forwardRef(({
   });
   const [editingFeatureId, setEditingFeatureId] = useState(null);
   const mapRef = useRef(null);
+  // FR-051: Store refs to reference track polyline layers for snap-to-track
+  const referenceTrackLayersRef = useRef([]);
+
+  // FR-051: Compute reference track coordinates for snap-to-track
+  const referenceTrackCoords = useMemo(() => {
+    if (!referenceTracks || !trackData) return [];
+    
+    return referenceTracks.map((track) => {
+      const data = trackData[track.object_key];
+      if (!data || !data.coordinates) return null;
+      // coordinates from backend are [lat, lon], which is Leaflet's format
+      return data.coordinates;
+    }).filter(Boolean);
+  }, [referenceTracks, trackData]);
 
   // Expose drawing state to parent
   useEffect(() => {
@@ -527,7 +653,8 @@ const PlanMapView = forwardRef(({
 
     const [lng, lat] = geom.coordinates;
     const isSelected = feature.id === selectedFeatureId;
-    const icon = createMarkerIcon(isSelected);
+    // Use cached icon to avoid recreating DOM elements on every render
+    const icon = getMarkerIcon(isSelected);
     const isEditing = editingFeatureId === feature.id;
 
     return (
@@ -840,6 +967,7 @@ const PlanMapView = forwardRef(({
             onAddFeature={onAddFeature}
             drawingState={drawingState}
             setDrawingState={setDrawingState}
+            referenceTrackCoords={referenceTrackCoords}
           />
         )}
 

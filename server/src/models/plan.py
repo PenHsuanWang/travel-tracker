@@ -396,7 +396,9 @@ class GpxIngestionStrategy(str, Enum):
 
 class DetectedWaypoint(BaseModel):
     """Waypoint detected from GPX parsing."""
+    # Prefer GPX waypoint note/description as the logical name for plan checkpoints
     name: Optional[str] = None
+    note: Optional[str] = None
     lat: float
     lon: float
     ele: Optional[float] = None

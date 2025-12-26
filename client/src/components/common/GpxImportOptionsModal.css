@@ -1,0 +1,411 @@
+/* client/src/components/common/GpxImportOptionsModal.css */
+/**
+ * Styles for GpxImportOptionsModal component.
+ * 
+ * This modal presents GPX import options for existing plans,
+ * including waypoint selection, time strategy, and start date.
+ */
+
+.gpx-import-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.gpx-import-options-modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.gpx-import-options-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.gpx-import-options-modal .modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.gpx-import-options-modal .modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+}
+
+.gpx-import-options-modal .modal-close-btn:hover {
+  color: #1f2937;
+}
+
+.gpx-import-options-modal .modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.gpx-import-options-modal .form-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+/* Import sections */
+.import-section {
+  margin-bottom: 1.5rem;
+}
+
+.import-section:last-of-type {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 0.75rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+/* Reference track option */
+.reference-track-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #f3f4f6;
+  border-radius: 8px;
+  cursor: not-allowed;
+}
+
+.reference-track-option.disabled-option {
+  opacity: 0.8;
+}
+
+.reference-track-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #3b82f6;
+}
+
+.reference-track-option .option-hint {
+  color: #6b7280;
+  font-size: 0.75rem;
+  margin-left: auto;
+}
+
+/* Waypoint list header */
+.waypoint-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.select-all-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.select-all-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+}
+
+.selected-count {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/* Waypoint list */
+.waypoint-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.waypoint-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.waypoint-item:last-child {
+  border-bottom: none;
+}
+
+.waypoint-item:hover {
+  background: #f3f4f6;
+}
+
+.waypoint-item.selected {
+  background: #eff6ff;
+}
+
+.waypoint-item input[type="checkbox"] {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.waypoint-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.waypoint-name {
+  display: block;
+  font-weight: 500;
+  color: #1f2937;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+.waypoint-times {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.waypoint-original-time {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.waypoint-new-time {
+  font-size: 0.75rem;
+  color: #059669;
+  font-weight: 500;
+}
+
+.waypoint-elevation {
+  font-size: 0.75rem;
+  color: #6b7280;
+  background: #e5e7eb;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.no-waypoints {
+  padding: 2rem;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* Form group */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.datetime-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #1f2937;
+  background: white;
+}
+
+.datetime-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input-hint {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* Strategy options */
+.strategy-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.strategy-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: white;
+}
+
+.strategy-option:hover {
+  border-color: #3b82f6;
+  background: #f8fafc;
+}
+
+.strategy-option.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.strategy-option input[type="radio"] {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.strategy-content {
+  flex: 1;
+}
+
+.strategy-label {
+  display: block;
+  font-weight: 500;
+  color: #1f2937;
+  font-size: 0.875rem;
+  margin-bottom: 0.125rem;
+}
+
+.strategy-desc {
+  display: block;
+  font-size: 0.75rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* Track summary */
+.track-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #f3f4f6;
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+
+.track-summary .summary-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.track-summary .summary-value {
+  font-size: 0.875rem;
+  color: #1f2937;
+  font-weight: 500;
+}
+
+/* Modal footer */
+.gpx-import-options-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.gpx-import-options-modal .btn-secondary {
+  padding: 0.625rem 1.25rem;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gpx-import-options-modal .btn-secondary:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.gpx-import-options-modal .btn-primary {
+  padding: 0.625rem 1.25rem;
+  border: none;
+  background: #3b82f6;
+  color: white;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gpx-import-options-modal .btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.gpx-import-options-modal .btn-primary:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .gpx-import-options-modal {
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+  
+  .waypoint-list {
+    max-height: 150px;
+  }
+}

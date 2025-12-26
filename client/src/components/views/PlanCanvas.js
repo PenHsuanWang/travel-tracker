@@ -28,9 +28,11 @@ import {
   addReferenceTrack,
   uploadReferenceTrack,
   removeReferenceTrack,
+  ingestGpx,
   PLAN_STATUS_LABELS,
 } from '../../services/planService';
 import { fetchGpxAnalysis } from '../../services/api';
+import GpxImportOptionsModal from '../common/GpxImportOptionsModal';
 import '../../styles/PlanCanvas.css';
 
 const MIN_ITINERARY_WIDTH = 280;
@@ -70,6 +72,11 @@ const PlanCanvas = () => {
   const [editedName, setEditedName] = useState('');
   const [drawingState, setDrawingState] = useState({ isDrawing: false, vertices: [] });
   const [trackData, setTrackData] = useState({}); // Map of object_key -> analysis data
+  
+  // GPX Import Modal state
+  const [gpxImportModalOpen, setGpxImportModalOpen] = useState(false);
+  const [gpxPreviewData, setGpxPreviewData] = useState(null);
+  const [uploadingGpx, setUploadingGpx] = useState(false);
 
   const mapRef = useRef(null);
 
@@ -287,37 +294,131 @@ const PlanCanvas = () => {
   );
 
   // Reference track operations
+  // Handler for GPX file upload - shows import options modal for user to select waypoints
   const handleAddReferenceTrack = useCallback(
     async (fileOrData) => {
       if (!canEdit || !plan) return;
+      
+      // Check if it's a File object (from file input) - show import modal
+      if (fileOrData instanceof File) {
+        try {
+          setUploadingGpx(true);
+          // First, ingest the GPX to get preview data (waypoints, times, etc.)
+          const previewData = await ingestGpx(fileOrData);
+          
+          // Store preview data and show the import options modal
+          setGpxPreviewData({
+            ...previewData,
+            file: fileOrData,
+            fileName: fileOrData.name,
+          });
+          setGpxImportModalOpen(true);
+        } catch (err) {
+          console.error('Failed to parse GPX file:', err);
+          alert('Failed to parse GPX file. Please check the file format.');
+        } finally {
+          setUploadingGpx(false);
+        }
+        return;
+      }
+      
+      // Direct track data object (object_key already uploaded) - no modal needed
       try {
         setSaving(true);
-        let track;
-        
-        // Check if it's a File object (from file input) or track data object
-        if (fileOrData instanceof File) {
-          // Upload the GPX file
-          track = await uploadReferenceTrack(planId, fileOrData, {
-            display_name: fileOrData.name.replace(/\.gpx$/i, ''),
-          });
-        } else {
-          // Use existing track data (object_key already uploaded)
-          track = await addReferenceTrack(planId, fileOrData);
-        }
-        
+        const track = await addReferenceTrack(planId, fileOrData);
         setPlan((prev) => ({
           ...prev,
           reference_tracks: [...(prev.reference_tracks || []), track],
         }));
       } catch (err) {
         console.error('Failed to add reference track:', err);
-        alert('Failed to upload GPX file. Please try again.');
+        alert('Failed to add reference track. Please try again.');
       } finally {
         setSaving(false);
       }
     },
     [canEdit, plan, planId]
   );
+
+  // Handler for GPX import from modal - creates checkpoints and uploads track
+  const handleGpxImport = useCallback(
+    async (checkpoints, tempFileKey) => {
+      if (!canEdit || !plan || !gpxPreviewData) return;
+      
+      try {
+        setSaving(true);
+        setGpxImportModalOpen(false);
+        
+        // 1. Create checkpoint features from selected waypoints
+        const createdFeatures = [];
+        for (const checkpoint of checkpoints) {
+          // API expects: addFeature(planId, geometry, properties)
+          // Geometry should be a GeoJSON geometry object
+          const geometry = checkpoint.geometry;
+          
+          // Properties should include category, name, and other checkpoint data
+          const properties = {
+            category: checkpoint.properties?.category || 'waypoint',
+            name: checkpoint.properties?.name || 'Checkpoint',
+            description: checkpoint.properties?.description,
+            estimated_arrival: checkpoint.properties?.estimated_arrival,
+            time_offset_seconds: checkpoint.properties?.time_offset_seconds,
+            source: 'gpx_import',
+            original_gpx_time: checkpoint.properties?.original_gpx_time,
+            elevation: checkpoint.properties?.elevation,
+            order_index: checkpoint.properties?.order_index,
+          };
+          
+          const feature = await addFeature(planId, geometry, properties);
+          createdFeatures.push(feature);
+        }
+        
+        // 2. Upload reference track if tempFileKey was provided (user selected to include it)
+        let track = null;
+        if (tempFileKey && gpxPreviewData.file) {
+          track = await uploadReferenceTrack(planId, gpxPreviewData.file, {
+            display_name: gpxPreviewData.fileName.replace(/\.gpx$/i, ''),
+          });
+        }
+        
+        // 3. Update plan state with new features and track
+        setPlan((prev) => {
+          const updatedPlan = { ...prev };
+          if (createdFeatures.length > 0) {
+            const currentFeatures = getFeaturesArray(prev);
+            updatedPlan.features = {
+              type: 'FeatureCollection',
+              features: [...currentFeatures, ...createdFeatures],
+            };
+          }
+          if (track) {
+            updatedPlan.reference_tracks = [...(prev.reference_tracks || []), track];
+          }
+          return updatedPlan;
+        });
+        
+        // Clear modal state
+        setGpxPreviewData(null);
+        
+        // Show success message
+        const trackMsg = track ? ' and reference track' : '';
+        console.log(`Successfully imported ${createdFeatures.length} checkpoints${trackMsg}`);
+        
+      } catch (err) {
+        console.error('Failed to import GPX data:', err);
+        alert('Failed to import GPX data. Please try again.');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [canEdit, plan, planId, gpxPreviewData, getFeaturesArray]
+  );
+
+  // Handler for closing the GPX import modal
+  const handleGpxImportCancel = useCallback(() => {
+    setGpxImportModalOpen(false);
+    setGpxPreviewData(null);
+  }, []);
 
   const handleRemoveReferenceTrack = useCallback(
     async (trackId) => {
@@ -553,6 +654,17 @@ const PlanCanvas = () => {
           />
         )}
       </div>
+
+      {/* GPX Import Options Modal */}
+      {gpxImportModalOpen && gpxPreviewData && (
+        <GpxImportOptionsModal
+          isOpen={gpxImportModalOpen}
+          onClose={handleGpxImportCancel}
+          onImport={handleGpxImport}
+          previewData={gpxPreviewData}
+          planStartDate={plan.start_date}
+        />
+      )}
 
     </div>
   );

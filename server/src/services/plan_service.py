@@ -980,6 +980,9 @@ class PlanService:
     def _extract_waypoints_from_track(self, analyzed_track) -> List[DetectedWaypoint]:
         """Extract waypoints from an analyzed GPX track object.
         
+        Uses the gpxana library API: get_waypoint_list() returns explicit GPX waypoints.
+        If no waypoints are found, falls back to extracting key points from the track.
+        
         Args:
             analyzed_track: AnalyzedTrackObject from gpxana library.
             
@@ -989,76 +992,147 @@ class PlanService:
         waypoints = []
         
         try:
-            # Try to get waypoints from the analyzed track
-            # The gpxana library structure may vary
-            if hasattr(analyzed_track, 'get_waypoints'):
-                raw_waypoints = analyzed_track.get_waypoints()
-            elif hasattr(analyzed_track, 'waypoints'):
-                raw_waypoints = analyzed_track.waypoints
-            else:
-                # Try to extract from tracks if no waypoints
-                raw_waypoints = []
+            # Use gpxana API: get_waypoint_list() returns explicit GPX waypoints
+            raw_waypoints = analyzed_track.get_waypoint_list() or []
                 
             for wp in raw_waypoints:
-                waypoint = DetectedWaypoint(
-                    name=getattr(wp, 'name', None),
-                    lat=float(getattr(wp, 'latitude', getattr(wp, 'lat', 0))),
-                    lon=float(getattr(wp, 'longitude', getattr(wp, 'lon', 0))),
-                    ele=float(getattr(wp, 'elevation', getattr(wp, 'ele', None))) if hasattr(wp, 'elevation') or hasattr(wp, 'ele') else None,
-                    time=getattr(wp, 'time', None)
+                # gpxana waypoints may expose lat/lon OR latitude/longitude
+                lat_val = (
+                    getattr(wp, 'lat', None)
+                    or getattr(wp, 'latitude', None)
+                    or 0
                 )
-                waypoints.append(waypoint)
+                lon_val = (
+                    getattr(wp, 'lon', None)
+                    or getattr(wp, 'longitude', None)
+                    or 0
+                )
+                ele_val = getattr(wp, 'elevation', None) or getattr(wp, 'elev', None) or getattr(wp, 'ele', None)
+                # Prefer waypoint note as name, then name/desc
+                # gpxana waypoints often expose get_note(); fall back to note/description/desc
+                note_val = None
+                try:
+                    note_val = wp.get_note()  # type: ignore[attr-defined]
+                except Exception:
+                    note_val = getattr(wp, 'note', None) or getattr(wp, 'description', None) or getattr(wp, 'desc', None)
+                name_val = (
+                    note_val
+                    or getattr(wp, 'name', None)
+                    or getattr(wp, 'desc', None)
+                    or getattr(wp, 'description', None)
+                )
+                
+                if lat_val or lon_val:
+                    waypoint = DetectedWaypoint(
+                        name=name_val,
+                        note=note_val,
+                        lat=float(lat_val),
+                        lon=float(lon_val),
+                        ele=float(ele_val) if ele_val is not None else None,
+                        time=getattr(wp, 'time', None)
+                    )
+                    waypoints.append(waypoint)
                 
         except Exception as e:
             logger.warning(f"Failed to extract waypoints from track: {e}")
         
         # If no waypoints found, try to extract key points from track
         if not waypoints:
+            logger.info("No explicit waypoints found in GPX, attempting to extract key points from track")
             waypoints = self._extract_key_points_from_track(analyzed_track)
+        
+        # Warn if still no waypoints found after all extraction attempts
+        if not waypoints:
+            logger.warning(
+                "No waypoints could be extracted from GPX track. "
+                "The GPX file may not contain waypoint data or recognizable key points."
+            )
         
         return waypoints
     
     def _extract_key_points_from_track(self, analyzed_track) -> List[DetectedWaypoint]:
-        """Extract key points (start, end, rest points) from track when no waypoints exist."""
+        """Extract key points (start, end, rest points) from track when no waypoints exist.
+        
+        Uses gpxana library API to extract:
+        - Start point (first track point)
+        - End point (last track point)  
+        - Rest points (detected rest/pause locations)
+        """
         waypoints = []
         
         try:
-            # Get track points
-            if hasattr(analyzed_track, 'get_main_tracks'):
-                main_tracks = analyzed_track.get_main_tracks()
-                if hasattr(main_tracks, 'get_main_tracks_points_list'):
-                    points = main_tracks.get_main_tracks_points_list()
-                    
-                    if points and len(points) > 0:
-                        # Add start point
-                        start = points[0]
-                        waypoints.append(DetectedWaypoint(
-                            name="Start",
-                            lat=float(getattr(start, 'latitude', 0)),
-                            lon=float(getattr(start, 'longitude', 0)),
-                            ele=float(getattr(start, 'elevation', 0)) if hasattr(start, 'elevation') else None,
-                            time=getattr(start, 'time', None)
-                        ))
+            # Get track points using gpxana API
+            main_tracks = analyzed_track.get_main_tracks()
+            points = main_tracks.get_main_tracks_points_list() if main_tracks else []
+            
+            if points and len(points) > 0:
+                # Add start point - support both lat/lon and latitude/longitude field names
+                start = points[0]
+                start_lat = (
+                    getattr(start, 'lat', None)
+                    or getattr(start, 'latitude', None)
+                    or 0
+                )
+                start_lon = (
+                    getattr(start, 'lon', None)
+                    or getattr(start, 'longitude', None)
+                    or 0
+                )
+                start_ele = getattr(start, 'elevation', None) or getattr(start, 'elev', None)
+                
+                if start_lat or start_lon:
+                    waypoints.append(DetectedWaypoint(
+                        name="Start",
+                        lat=float(start_lat),
+                        lon=float(start_lon),
+                        ele=float(start_ele) if start_ele is not None else None,
+                        time=getattr(start, 'time', None)
+                    ))
+                
+                # Add end point
+                end = points[-1]
+                end_lat = (
+                    getattr(end, 'lat', None)
+                    or getattr(end, 'latitude', None)
+                    or 0
+                )
+                end_lon = (
+                    getattr(end, 'lon', None)
+                    or getattr(end, 'longitude', None)
+                    or 0
+                )
+                end_ele = getattr(end, 'elevation', None) or getattr(end, 'elev', None)
+                
+                if end_lat or end_lon:
+                    waypoints.append(DetectedWaypoint(
+                        name="End",
+                        lat=float(end_lat),
+                        lon=float(end_lon),
+                        ele=float(end_ele) if end_ele is not None else None,
+                        time=getattr(end, 'time', None)
+                    ))
                         
-                        # Add end point
-                        end = points[-1]
-                        waypoints.append(DetectedWaypoint(
-                            name="End",
-                            lat=float(getattr(end, 'latitude', 0)),
-                            lon=float(getattr(end, 'longitude', 0)),
-                            ele=float(getattr(end, 'elevation', 0)) if hasattr(end, 'elevation') else None,
-                            time=getattr(end, 'time', None)
-                        ))
-                        
-            # Also try to get rest points if available
-            if hasattr(analyzed_track, 'get_rest_points'):
-                rest_points = analyzed_track.get_rest_points()
-                for i, rp in enumerate(rest_points[:10]):  # Limit to 10 rest points
+            # Get rest points using gpxana API: get_rest_point_list()
+            rest_points = analyzed_track.get_rest_point_list() or []
+            for i, rp in enumerate(rest_points[:10]):  # Limit to 10 rest points
+                rp_lat = (
+                    getattr(rp, 'lat', None)
+                    or getattr(rp, 'latitude', None)
+                    or 0
+                )
+                rp_lon = (
+                    getattr(rp, 'lon', None)
+                    or getattr(rp, 'longitude', None)
+                    or 0
+                )
+                rp_ele = getattr(rp, 'elevation', None) or getattr(rp, 'elev', None)
+                
+                if rp_lat or rp_lon:
                     waypoints.append(DetectedWaypoint(
                         name=f"Rest Stop {i + 1}",
-                        lat=float(getattr(rp, 'latitude', 0)),
-                        lon=float(getattr(rp, 'longitude', 0)),
-                        ele=float(getattr(rp, 'elevation', 0)) if hasattr(rp, 'elevation') else None,
+                        lat=float(rp_lat),
+                        lon=float(rp_lon),
+                        ele=float(rp_ele) if rp_ele is not None else None,
                         time=getattr(rp, 'time', None)
                     ))
                     
@@ -1068,30 +1142,45 @@ class PlanService:
         return waypoints
     
     def _extract_track_geometry(self, analyzed_track) -> List[List[float]]:
-        """Extract track geometry as [[lon, lat], ...] for map rendering."""
+        """Extract track geometry as [[lon, lat], ...] for map rendering.
+        
+        Uses gpxana API to get track points and extracts coordinates.
+        Samples points if too many for performance.
+        """
         geometry = []
         
         try:
-            if hasattr(analyzed_track, 'get_main_tracks'):
-                main_tracks = analyzed_track.get_main_tracks()
-                if hasattr(main_tracks, 'get_main_tracks_points_list'):
-                    points = main_tracks.get_main_tracks_points_list()
-                    
-                    # Sample points if too many (for performance)
-                    step = max(1, len(points) // 1000)
-                    
-                    for i, pt in enumerate(points):
-                        if i % step == 0:
-                            lon = float(getattr(pt, 'longitude', 0))
-                            lat = float(getattr(pt, 'latitude', 0))
-                            geometry.append([lon, lat])
-                    
-                    # Always include last point
-                    if points and len(geometry) > 0:
-                        last = points[-1]
-                        last_coord = [float(getattr(last, 'longitude', 0)), float(getattr(last, 'latitude', 0))]
-                        if geometry[-1] != last_coord:
-                            geometry.append(last_coord)
+            main_tracks = analyzed_track.get_main_tracks()
+            points = main_tracks.get_main_tracks_points_list() if main_tracks else []
+            
+            if points:
+                # Sample points if too many (for performance)
+                step = max(1, len(points) // 1000)
+                
+                for i, pt in enumerate(points):
+                    if i % step == 0:
+                        # gpxana points may expose lat/lon OR latitude/longitude
+                        lon_val = (
+                            getattr(pt, 'lon', None)
+                            or getattr(pt, 'longitude', None)
+                            or 0
+                        )
+                        lat_val = (
+                            getattr(pt, 'lat', None)
+                            or getattr(pt, 'latitude', None)
+                            or 0
+                        )
+                        geometry.append([float(lon_val), float(lat_val)])
+                
+                # Always include last point
+                if len(geometry) > 0:
+                    last = points[-1]
+                    last_coord = [
+                        float(getattr(last, 'lon', None) or getattr(last, 'longitude', None) or 0),
+                        float(getattr(last, 'lat', None) or getattr(last, 'latitude', None) or 0)
+                    ]
+                    if geometry[-1] != last_coord:
+                        geometry.append(last_coord)
                             
         except Exception as e:
             logger.warning(f"Failed to extract track geometry: {e}")

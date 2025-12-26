@@ -61,10 +61,18 @@ async def ingest_gpx(
             detail="File must be a GPX file (.gpx extension)"
         )
     
+    # Validate file size BEFORE reading into memory (security: prevent DOS attacks)
+    # file.size may be None for chunked uploads, but we check it when available
+    if file.size is not None and file.size > MAX_GPX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_GPX_FILE_SIZE // (1024*1024)}MB"
+        )
+    
     # Read file content
     content = await file.read()
     
-    # Validate file size
+    # Double-check file size after reading (for cases where size wasn't known beforehand)
     if len(content) > MAX_GPX_FILE_SIZE:
         raise HTTPException(
             status_code=413,
