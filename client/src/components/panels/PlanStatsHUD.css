@@ -1,0 +1,56 @@
+/* client/src/components/panels/PlanStatsHUD.css */
+
+.plan-stats-hud {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 300;
+  pointer-events: none;
+}
+
+.hud-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.hud-card {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  pointer-events: auto;
+}
+
+.hud-label {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+  letter-spacing: 0.02em;
+}
+
+.hud-value {
+  margin: 4px 0 2px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.hud-meta {
+  font-size: 11px;
+  color: #4b5563;
+}
+
+@media (max-width: 768px) {
+  .plan-stats-hud {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+  }
+
+  .hud-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}

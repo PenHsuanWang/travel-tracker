@@ -366,6 +366,34 @@ export const PLAN_STATUS_LABELS = {
 };
 
 // =============================================================================
+// Semantic Types (Phase 2 Module A)
+// =============================================================================
+
+export const SEMANTIC_TYPE = {
+  WATER: 'water',
+  CAMP: 'camp',
+  SIGNAL: 'signal',
+  HAZARD: 'hazard',
+  CHECKIN: 'checkin',
+  GENERIC: 'generic',
+};
+
+export const SEMANTIC_TYPE_LABELS = {
+  water: 'Water',
+  camp: 'Camp',
+  signal: 'Signal',
+  hazard: 'Hazard',
+  checkin: 'Check-in',
+  generic: 'Generic',
+};
+
+// Route types for line features
+export const ROUTE_TYPE = {
+  MAIN: 'main',
+  ESCAPE: 'escape',
+};
+
+// =============================================================================
 // Feature Category Types
 // =============================================================================
 

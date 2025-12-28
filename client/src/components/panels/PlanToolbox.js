@@ -11,7 +11,7 @@
  * Each tool sets the appropriate category on created features.
  */
 import React from 'react';
-import { FEATURE_CATEGORY } from '../../services/planService';
+import { FEATURE_CATEGORY, SEMANTIC_TYPE } from '../../services/planService';
 import './PlanToolbox.css';
 
 // Tool definitions with SVG icons and category mapping
@@ -156,6 +156,14 @@ const EDIT_TOOLS = [
   },
 ];
 
+const SEMANTIC_BUTTONS = [
+  { id: SEMANTIC_TYPE.WATER, label: 'Water', emoji: '💧' },
+  { id: SEMANTIC_TYPE.CAMP, label: 'Camp', emoji: '⛺' },
+  { id: SEMANTIC_TYPE.SIGNAL, label: 'Signal', emoji: '📶' },
+  { id: SEMANTIC_TYPE.HAZARD, label: 'Hazard', emoji: '⚠️' },
+  { id: SEMANTIC_TYPE.CHECKIN, label: 'Check-in', emoji: '🆘' },
+];
+
 const PlanToolbox = ({ 
   activeTool, 
   onSelectTool, 
@@ -166,6 +174,8 @@ const PlanToolbox = ({
   onRemoveLastVertex,
   onCancelDrawing,
   embedded = false, // Phase 2: When true, renders in Zone A sidebar instead of floating
+  activeSemanticType = SEMANTIC_TYPE.GENERIC,
+  onSelectSemanticType,
 }) => {
   const handleToolClick = (toolId) => {
     if (disabled) return;
@@ -184,6 +194,25 @@ const PlanToolbox = ({
 
   return (
     <div className={`plan-toolbox ${embedded ? 'plan-toolbox--embedded' : ''}`}>
+      {/* Semantic quick tags */}
+      <div className="toolbox-section semantic-section" role="group" aria-label="Semantic tags">
+        {SEMANTIC_BUTTONS.map((semantic) => (
+          <button
+            key={semantic.id}
+            className={`toolbox-btn semantic-btn ${activeSemanticType === semantic.id ? 'active' : ''}`}
+            onClick={() => onSelectSemanticType?.(semantic.id)}
+            disabled={disabled}
+            title={`${semantic.label} tag`}
+            aria-pressed={activeSemanticType === semantic.id}
+          >
+            <span className="semantic-emoji" aria-hidden="true">{semantic.emoji}</span>
+            <span className="semantic-label">{semantic.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="toolbox-divider" />
+
       {/* Drawing tools section */}
       <div className="toolbox-section">
         {DRAWING_TOOLS.map((tool) => (

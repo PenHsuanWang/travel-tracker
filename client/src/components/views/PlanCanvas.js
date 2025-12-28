@@ -16,6 +16,7 @@ import PlanMapView from './PlanMapView';
 import PlanToolbox from '../panels/PlanToolbox';
 import OperationsPanel from '../panels/OperationsPanel';
 import ItineraryPanel from '../panels/ItineraryPanel';
+import PlanStatsHUD from '../panels/PlanStatsHUD';
 import {
   getPlan,
   updatePlan,
@@ -32,6 +33,9 @@ import {
   updateLogistics,
   updateDaySummaries,
   PLAN_STATUS_LABELS,
+  FEATURE_CATEGORY,
+  SEMANTIC_TYPE,
+  ROUTE_TYPE,
 } from '../../services/planService';
 import { fetchGpxAnalysis } from '../../services/api';
 import GpxImportOptionsModal from '../common/GpxImportOptionsModal';
@@ -67,6 +71,7 @@ const PlanCanvas = () => {
   // UI state
   const [activeTool, setActiveTool] = useState(null); // 'waypoint', 'marker', 'polyline', 'polygon', 'rectangle', 'circle', etc.
   const [activeDrawCategory, setActiveDrawCategory] = useState(null); // category for the current drawing tool
+  const [activeSemanticType, setActiveSemanticType] = useState(SEMANTIC_TYPE.GENERIC);
   const [selectedFeatureId, setSelectedFeatureId] = useState(null);
   const [itineraryOpen, setItineraryOpen] = useState(true);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true); // Phase 2: Left sidebar visibility
@@ -75,6 +80,8 @@ const PlanCanvas = () => {
   const [editedName, setEditedName] = useState('');
   const [drawingState, setDrawingState] = useState({ isDrawing: false, vertices: [] });
   const [trackData, setTrackData] = useState({}); // Map of object_key -> analysis data
+  const [daySummaries, setDaySummaries] = useState([]);
+  const [daySummariesDirty, setDaySummariesDirty] = useState(false);
   
   // Phase 2 - Logistics state (local editing before save)
   const [localRoster, setLocalRoster] = useState([]);
@@ -115,6 +122,8 @@ const PlanCanvas = () => {
       setLocalRoster(data.roster || []);
       setLocalLogistics(data.logistics || {});
       setLocalChecklist(data.checklist || []);
+      setDaySummaries(data.day_summaries || []);
+      setDaySummariesDirty(false);
     } catch (err) {
       console.error('Failed to fetch plan:', err);
       setError('Failed to load plan. It may not exist or you may not have access.');
@@ -180,7 +189,18 @@ const PlanCanvas = () => {
       if (!canEdit || !plan) return null;
       try {
         setSaving(true);
-        const feature = await addFeature(planId, geometry, properties);
+        const semantic_type = properties.semantic_type || activeSemanticType || SEMANTIC_TYPE.GENERIC;
+        const featureProps = {
+          semantic_type,
+          ...properties,
+        };
+
+        // Default route type for lines
+        if (!featureProps.route_type && featureProps.category === FEATURE_CATEGORY.ROUTE) {
+          featureProps.route_type = ROUTE_TYPE.MAIN;
+        }
+
+        const feature = await addFeature(planId, geometry, featureProps);
         setPlan((prev) => {
           const currentFeatures = getFeaturesArray(prev);
           return {
@@ -201,7 +221,7 @@ const PlanCanvas = () => {
         setSaving(false);
       }
     },
-    [canEdit, plan, planId, getFeaturesArray]
+    [canEdit, plan, planId, getFeaturesArray, activeSemanticType]
   );
 
   const handleUpdateFeature = useCallback(
@@ -529,6 +549,28 @@ const PlanCanvas = () => {
     }
   }, [canEdit, plan, planId, localRoster, localLogistics, localChecklist]);
 
+  // Phase 2: Day summary (itinerary) updates
+  const handleUpdateDaySummaries = useCallback((updatedSummaries) => {
+    setDaySummaries(updatedSummaries);
+    setDaySummariesDirty(true);
+  }, []);
+
+  const handleSaveDaySummaries = useCallback(async () => {
+    if (!canEdit || !plan) return;
+    try {
+      setSaving(true);
+      const updatedPlan = await updateDaySummaries(planId, daySummaries);
+      setPlan(updatedPlan);
+      setDaySummaries(updatedPlan.day_summaries || []);
+      setDaySummariesDirty(false);
+    } catch (err) {
+      console.error('Failed to save day summaries:', err);
+      alert('Failed to save day summaries. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }, [canEdit, plan, planId, daySummaries]);
+
   // Phase 2: Update plan metadata from OperationsPanel Settings tab
   const handleUpdatePlanMetadata = useCallback(async (updates) => {
     if (!canEdit || !plan) return;
@@ -557,21 +599,8 @@ const PlanCanvas = () => {
   if (loading) {
     return (
       <div className="plan-canvas-loading">
-        <div className="spinner" />
-        <p>Loading plan...</p>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="plan-canvas-error">
-        <h2>Unable to load plan</h2>
-        <p>{error}</p>
-        <Link to="/plans" className="btn-secondary">
-          Back to Plans
-        </Link>
+        <div className="loading-spinner" />
+        <div>Loading plan...</div>
       </div>
     );
   }
@@ -597,7 +626,6 @@ const PlanCanvas = () => {
             ← Back to Plans
           </Link>
           <div className="plan-title-block">
-            <p className="plan-mode-label">Planning Mode</p>
             {isEditingName ? (
               <div className="name-editor">
                 <input
@@ -624,7 +652,7 @@ const PlanCanvas = () => {
           </div>
         </div>
 
-        <div className="plan-header-right">
+        <div className="plan-header-right header-actions">
           <span className={`status-badge status-${plan.status}`}>
             {PLAN_STATUS_LABELS[plan.status] || plan.status}
           </span>
@@ -633,23 +661,24 @@ const PlanCanvas = () => {
           
           {/* Phase 2: Toggle buttons for both sidebars */}
           <button
-            className="btn-toggle-sidebar"
+            className="header-btn btn-toggle-sidebar"
             onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
             title={leftSidebarOpen ? 'Hide Operations Panel' : 'Show Operations Panel'}
           >
             {leftSidebarOpen ? '◀ Hide Ops' : '▶ Show Ops'}
           </button>
           
-          <button
-            className="btn-toggle-itinerary"
+          <div className="header-center-controls">
+            <button
+              className="header-btn btn-toggle-itinerary"
             onClick={() => setItineraryOpen(!itineraryOpen)}
           >
             {itineraryOpen ? 'Hide Itinerary ▶' : '◀ Show Itinerary'}
           </button>
-
+          </div>
           {canManage && (
             <button
-              className="btn-delete"
+              className="header-btn btn-delete"
               onClick={handleDeletePlan}
               title="Delete plan"
             >
@@ -674,6 +703,8 @@ const PlanCanvas = () => {
                   setActiveDrawCategory(category);
                   setDrawingState({ isDrawing: false, vertices: [] });
                 }}
+                activeSemanticType={activeSemanticType}
+                onSelectSemanticType={setActiveSemanticType}
                 disabled={saving}
                 isDrawing={drawingState.isDrawing}
                 drawingVertices={drawingState.vertices?.length || 0}
@@ -715,7 +746,8 @@ const PlanCanvas = () => {
               trackData={trackData}
               selectedFeatureId={selectedFeatureId}
               onSelectFeature={setSelectedFeatureId}
-              activeTool={canEdit ? activeTool : null}
+                activeTool={canEdit ? activeTool : null}
+                activeSemanticType={activeSemanticType}
               activeDrawCategory={activeDrawCategory}
               onAddFeature={handleAddFeature}
               onUpdateFeature={handleUpdateFeature}
@@ -724,6 +756,12 @@ const PlanCanvas = () => {
               onDrawingStateChange={setDrawingState}
             />
           </div>
+
+          <PlanStatsHUD
+            features={featuresArray}
+            referenceTracks={plan.reference_tracks || []}
+            trackData={trackData}
+          />
         </div>
 
         {/* Zone C: Right Sidebar (Itinerary) */}
@@ -756,6 +794,11 @@ const PlanCanvas = () => {
             onToggleTrackVisibility={handleToggleTrackVisibility}
             width={itineraryWidth}
             onWidthChange={setItineraryWidth}
+            daySummaries={daySummaries}
+            onUpdateDaySummaries={handleUpdateDaySummaries}
+            onSaveDaySummaries={handleSaveDaySummaries}
+            daySummariesDirty={daySummariesDirty}
+            savingDaySummaries={saving}
             readOnly={!canEdit}
           />
         )}

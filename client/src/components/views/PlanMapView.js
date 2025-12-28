@@ -10,6 +10,7 @@ import React, { useEffect, useMemo, useState, useRef, useCallback, forwardRef, u
 import { MapContainer, TileLayer, Polyline, Polygon, Marker, Popup, Circle, Rectangle, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import FeatureStyleEditor from '../common/FeatureStyleEditor';
+import { SEMANTIC_TYPE, ROUTE_TYPE } from '../../services/planService';
 import 'leaflet/dist/leaflet.css';
 import './PlanMapView.css';
 
@@ -213,6 +214,7 @@ function DoubleClickDrawHandler({
 function DrawingController({ 
   activeTool, 
   activeDrawCategory,
+  activeSemanticType,
   onAddFeature,
   drawingState,
   setDrawingState,
@@ -246,6 +248,7 @@ function DrawingController({
           category,
           icon_type: 'custom',
           name: null,
+          semantic_type: activeSemanticType || undefined,
         };
         onAddFeature(geometry, properties);
         return;
@@ -547,8 +550,20 @@ function FeatureBoundsController({ features, referenceTracks, trackData }) {
   return null;
 }
 
-// Create teal/emerald teardrop marker icons for checkpoints (UI-04) - with memoization for performance
-const createMarkerIconHtml = (size, color, strokeColor, classes) => `
+// Palette for semantic styling
+const SEMANTIC_PALETTES = {
+  [SEMANTIC_TYPE.WATER]: { marker: '#0ea5e9', stroke: '#0284c7', fill: '#bfdbfe' },
+  [SEMANTIC_TYPE.CAMP]: { marker: '#f97316', stroke: '#ea580c', fill: '#fed7aa' },
+  [SEMANTIC_TYPE.SIGNAL]: { marker: '#8b5cf6', stroke: '#7c3aed', fill: '#ddd6fe' },
+  [SEMANTIC_TYPE.HAZARD]: { marker: '#dc2626', stroke: '#b91c1c', fill: '#fecdd3' },
+  [SEMANTIC_TYPE.CHECKIN]: { marker: '#f59e0b', stroke: '#d97706', fill: '#fde68a' },
+  [SEMANTIC_TYPE.GENERIC]: { marker: '#14b8a6', stroke: '#0d9488', fill: '#99f6e4' },
+};
+
+const getSemanticPalette = (semanticType) => SEMANTIC_PALETTES[semanticType] || SEMANTIC_PALETTES[SEMANTIC_TYPE.GENERIC];
+
+// Create teardrop marker with semantic-aware colors
+const createMarkerIconHtml = (size, color, strokeColor) => `
   <svg viewBox="0 0 24 36" width="${size * 0.7}" height="${size}" xmlns="http://www.w3.org/2000/svg">
     <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24c0-6.6-5.4-12-12-12z" 
           fill="${color}" stroke="${strokeColor}" stroke-width="1"/>
@@ -556,53 +571,31 @@ const createMarkerIconHtml = (size, color, strokeColor, classes) => `
   </svg>
 `;
 
-// Pre-create cached icons for common states to avoid Leaflet re-creating DOM elements
-// UI-04: Using teal (#14b8a6) for plan checkpoints to distinguish from water sources (blue)
-const MARKER_ICONS_CACHE = {
-  normal: L.divIcon({
-    className: 'plan-marker checkpoint',
-    html: createMarkerIconHtml(36, '#14b8a6', '#0d9488'),
-    iconSize: [36 * 0.7, 36],
-    iconAnchor: [36 * 0.35, 36],
-    popupAnchor: [0, -36],
-  }),
-  selected: L.divIcon({
-    className: 'plan-marker checkpoint selected',
-    html: createMarkerIconHtml(40, '#e74c3c', '#c0392b'),
-    iconSize: [40 * 0.7, 40],
-    iconAnchor: [40 * 0.35, 40],
-    popupAnchor: [0, -40],
-  }),
-  highlighted: L.divIcon({
-    className: 'plan-marker checkpoint highlighted',
-    html: createMarkerIconHtml(44, '#14b8a6', '#0d9488'),
-    iconSize: [44 * 0.7, 44],
-    iconAnchor: [44 * 0.35, 44],
-    popupAnchor: [0, -44],
-  }),
-};
+const MARKER_ICON_CACHE = new Map();
 
-// Get cached marker icon - prevents recreating icons on every render
-const getMarkerIcon = (isSelected = false, isHighlighted = false) => {
-  if (isHighlighted) return MARKER_ICONS_CACHE.highlighted;
-  if (isSelected) return MARKER_ICONS_CACHE.selected;
-  return MARKER_ICONS_CACHE.normal;
-};
-
-// Legacy function for backwards compatibility (if needed elsewhere)
-const createMarkerIcon = (isSelected = false, isHighlighted = false) => {
+const getSemanticMarkerIcon = (semanticType, isSelected = false, isHighlighted = false) => {
+  const palette = getSemanticPalette(semanticType);
   const size = isHighlighted ? 44 : isSelected ? 40 : 36;
-  // UI-04: Teal for normal/highlighted, red for selected
-  const color = isSelected ? '#e74c3c' : '#14b8a6';
-  const strokeColor = isSelected ? '#c0392b' : '#0d9488';
+  // Keep the fill color as the semantic color so types remain distinguishable.
+  const color = palette.marker;
+  // Use a stronger stroke when selected to indicate selection without losing semantic color.
+  const strokeColor = isSelected ? '#ef4444' : palette.stroke;
+  const key = `${semanticType || 'generic'}-${size}-${color}-${strokeColor}-${isSelected}`;
 
-  return L.divIcon({
-    className: `plan-marker checkpoint ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`,
-    html: createMarkerIconHtml(size, color, strokeColor),
-    iconSize: [size * 0.7, size],
-    iconAnchor: [size * 0.35, size],
-    popupAnchor: [0, -size],
-  });
+  if (!MARKER_ICON_CACHE.has(key)) {
+    MARKER_ICON_CACHE.set(
+      key,
+      L.divIcon({
+        className: `plan-marker checkpoint ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`,
+        html: createMarkerIconHtml(size, color, strokeColor),
+        iconSize: [size * 0.7, size],
+        iconAnchor: [size * 0.35, size],
+        popupAnchor: [0, -size],
+      })
+    );
+  }
+
+  return MARKER_ICON_CACHE.get(key);
 };
 
 // FE-05: Polygon component with SVG pattern fill support
@@ -709,6 +702,7 @@ const PlanMapView = forwardRef(({
   selectedFeatureId,
   onSelectFeature,
   activeTool,
+  activeSemanticType,
   activeDrawCategory,
   onAddFeature,
   onUpdateFeature,
@@ -867,10 +861,11 @@ const PlanMapView = forwardRef(({
   const defaultZoom = 12;
 
   // FE-06: Create a flashing marker icon
-  const getFlashingMarkerIcon = useCallback((isSelected = false) => {
+  const getFlashingMarkerIcon = useCallback((semanticType, isSelected = false) => {
     const size = 40;
-    const color = isSelected ? '#e74c3c' : '#14b8a6';
-    const strokeColor = isSelected ? '#c0392b' : '#0d9488';
+    const palette = getSemanticPalette(semanticType);
+    const color = palette.marker;
+    const strokeColor = isSelected ? '#e74c3c' : palette.stroke;
     
     return L.divIcon({
       className: 'plan-marker checkpoint flashing',
@@ -889,8 +884,11 @@ const PlanMapView = forwardRef(({
     const [lng, lat] = geom.coordinates;
     const isSelected = feature.id === selectedFeatureId;
     const isFlashing = feature.id === flashingFeatureId;
+    const semanticType = feature.properties?.semantic_type || SEMANTIC_TYPE.GENERIC;
     // Use cached icon or flashing icon
-    const icon = isFlashing ? getFlashingMarkerIcon(isSelected) : getMarkerIcon(isSelected);
+    const icon = isFlashing
+      ? getFlashingMarkerIcon(semanticType, isSelected)
+      : getSemanticMarkerIcon(semanticType, isSelected, false);
     const isEditing = editingFeatureId === feature.id;
 
     // FE-07: Tooltip content for hover
@@ -961,8 +959,12 @@ const PlanMapView = forwardRef(({
     const positions = geom.coordinates.map(([lng, lat]) => [lat, lng]);
     const isSelected = feature.id === selectedFeatureId;
     const isFlashing = feature.id === flashingFeatureId;
-    const color = feature.properties?.color || '#3b82f6';
-    const strokeWidth = feature.properties?.strokeWidth || 3;
+    const semanticType = feature.properties?.semantic_type || SEMANTIC_TYPE.GENERIC;
+    const palette = getSemanticPalette(semanticType);
+    const routeType = feature.properties?.route_type;
+    const color = routeType === ROUTE_TYPE.ESCAPE ? '#16a34a' : (feature.properties?.color || palette.stroke || '#3b82f6');
+    const strokeWidth = feature.properties?.strokeWidth || feature.properties?.stroke_width || 3;
+    const dashArray = routeType === ROUTE_TYPE.ESCAPE ? '8, 6' : (semanticType === SEMANTIC_TYPE.SIGNAL ? '4, 6' : feature.properties?.dashArray);
     // FE-06: Flashing effect - alternate opacity
     const opacity = isFlashing ? 0.4 : (feature.properties?.opacity ?? 0.8);
     const isEditing = editingFeatureId === feature.id;
@@ -979,6 +981,7 @@ const PlanMapView = forwardRef(({
           weight: isFlashing ? strokeWidth + 2 : (isSelected ? strokeWidth + 1 : strokeWidth),
           opacity,
           className: isFlashing ? 'feature-flashing' : '',
+          dashArray,
         }}
         eventHandlers={{
           click: () => onSelectFeature(feature.id),
@@ -1041,15 +1044,23 @@ const PlanMapView = forwardRef(({
     const positions = geom.coordinates[0].map(([lng, lat]) => [lat, lng]);
     const isSelected = feature.id === selectedFeatureId;
     const isFlashing = feature.id === flashingFeatureId;
-    const color = feature.properties?.color || '#16a34a';
-    const fillColor = feature.properties?.fillColor || color;
-    const strokeWidth = feature.properties?.strokeWidth || 2;
+    const semanticType = feature.properties?.semantic_type || SEMANTIC_TYPE.GENERIC;
+    const palette = getSemanticPalette(semanticType);
+    const color = feature.properties?.color || palette.stroke || '#16a34a';
+    const fillColor = feature.properties?.fillColor || feature.properties?.fill_color || palette.fill || color;
+    const strokeWidth = feature.properties?.strokeWidth || feature.properties?.stroke_width || 2;
     // FE-05: Fill pattern support
-    const fillPattern = feature.properties?.fillPattern || 'solid';
+    const fillPattern =
+      semanticType === SEMANTIC_TYPE.HAZARD
+        ? 'crosshatch'
+        : (feature.properties?.fillPattern || feature.properties?.fill_pattern || 'solid');
     // FE-06: Flashing effect
     const opacity = isFlashing ? 0.4 : (feature.properties?.opacity ?? 0.8);
     // FE-05: Apply fill opacity based on pattern
-    let fillOpacity = isFlashing ? 0.1 : (feature.properties?.fillOpacity ?? 0.2);
+    let fillOpacity = isFlashing ? 0.1 : (feature.properties?.fillOpacity ?? feature.properties?.fill_opacity ?? 0.2);
+    if (semanticType === SEMANTIC_TYPE.HAZARD) {
+      fillOpacity = 0.18;
+    }
     if (fillPattern === 'none') {
       fillOpacity = 0; // No fill for 'none' pattern
     }
@@ -1274,13 +1285,14 @@ const PlanMapView = forwardRef(({
 
         {!readOnly && activeTool && (
           <DrawingController 
-            activeTool={activeTool}
-            activeDrawCategory={activeDrawCategory}
-            onAddFeature={onAddFeature}
-            drawingState={drawingState}
-            setDrawingState={setDrawingState}
-            referenceTrackCoords={referenceTrackCoords}
-          />
+              activeTool={activeTool}
+              activeDrawCategory={activeDrawCategory}
+              activeSemanticType={activeSemanticType}
+              onAddFeature={onAddFeature}
+              drawingState={drawingState}
+              setDrawingState={setDrawingState}
+              referenceTrackCoords={referenceTrackCoords}
+            />
         )}
 
         {/* FE-04: Double-click to finish drawing handler */}

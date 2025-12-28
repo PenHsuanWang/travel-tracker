@@ -44,8 +44,15 @@ const RosterForm = ({ roster = [], onUpdate, readOnly }) => {
       phone: newMember.phone.trim() || null,
       emergency_contact: newMember.emergency_contact.trim() || null,
     };
-    
-    onUpdate([...roster, member]);
+
+    // Use functional update when available to avoid stale state
+    if (typeof onUpdate === 'function') {
+      onUpdate((prev) => {
+        const base = Array.isArray(prev) ? prev : roster;
+        return [...base, member];
+      });
+    }
+
     setNewMember({ name: '', role: '', phone: '', emergency_contact: '' });
   };
 
@@ -53,9 +60,14 @@ const RosterForm = ({ roster = [], onUpdate, readOnly }) => {
     onUpdate(roster.filter(m => m.id !== memberId));
   };
 
-  const handleUpdateMember = (memberId, updates) => {
-    onUpdate(roster.map(m => m.id === memberId ? { ...m, ...updates } : m));
-    setEditingId(null);
+  const handleUpdateMember = (memberId, updates, stayEditing = false) => {
+    if (typeof onUpdate === 'function') {
+      onUpdate((prev) => {
+        const base = Array.isArray(prev) ? prev : roster;
+        return base.map((m) => (m.id === memberId ? { ...m, ...updates } : m));
+      });
+    }
+    if (!stayEditing) setEditingId(null);
   };
 
   return (
@@ -71,14 +83,26 @@ const RosterForm = ({ roster = [], onUpdate, readOnly }) => {
                 <input
                   type="text"
                   value={member.name}
-                  onChange={(e) => handleUpdateMember(member.id, { name: e.target.value })}
+                  onChange={(e) => handleUpdateMember(member.id, { name: e.target.value }, true)}
                   placeholder="Name"
                 />
                 <input
                   type="text"
                   value={member.role || ''}
-                  onChange={(e) => handleUpdateMember(member.id, { role: e.target.value })}
+                  onChange={(e) => handleUpdateMember(member.id, { role: e.target.value }, true)}
                   placeholder="Role"
+                />
+                <input
+                  type="tel"
+                  value={member.phone || ''}
+                  onChange={(e) => handleUpdateMember(member.id, { phone: e.target.value }, true)}
+                  placeholder="Phone"
+                />
+                <input
+                  type="text"
+                  value={member.emergency_contact || ''}
+                  onChange={(e) => handleUpdateMember(member.id, { emergency_contact: e.target.value }, true)}
+                  placeholder="Emergency Contact"
                 />
                 <button onClick={() => setEditingId(null)}>Done</button>
               </div>
@@ -88,6 +112,9 @@ const RosterForm = ({ roster = [], onUpdate, readOnly }) => {
                   <span className="roster-name">{member.name}</span>
                   {member.role && <span className="roster-role">{member.role}</span>}
                   {member.phone && <span className="roster-phone">📞 {member.phone}</span>}
+                  {member.emergency_contact && (
+                    <span className="roster-emergency">🚑 {member.emergency_contact}</span>
+                  )}
                 </div>
                 {!readOnly && (
                   <div className="roster-item-actions">
@@ -484,6 +511,7 @@ const OperationsPanel = ({
 }) => {
   const [activeTab, setActiveTab] = useState(TABS.TEAM);
   const [hasChanges, setHasChanges] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('idle'); // idle | saving | saved | error
 
   // Wrap update handlers to track changes
   const handleRosterUpdate = useCallback((newRoster) => {
@@ -506,10 +534,22 @@ const OperationsPanel = ({
     setHasChanges(true);
   }, [onUpdatePlan]);
 
-  const handleSave = useCallback(() => {
-    onSave();
-    setHasChanges(false);
-  }, [onSave]);
+  const handleSave = useCallback(async () => {
+    if (readOnly) return;
+    try {
+      setSaveStatus('saving');
+      const maybePromise = onSave();
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        await maybePromise;
+      }
+      setHasChanges(false);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      console.error('Failed to save operations data:', err);
+      setSaveStatus('error');
+    }
+  }, [onSave, readOnly]);
 
   return (
     <div className="operations-panel">
@@ -566,14 +606,21 @@ const OperationsPanel = ({
       </div>
 
       {/* Save button */}
-      {!readOnly && hasChanges && (
+      {!readOnly && (
         <div className="ops-footer">
+          <div className="save-status">
+            {saveStatus === 'saving' && <span className="status saving">Saving...</span>}
+            {saveStatus === 'saved' && <span className="status saved">Saved</span>}
+            {saveStatus === 'error' && <span className="status error">Save failed</span>}
+            {saveStatus === 'idle' && !hasChanges && <span className="status idle">No changes</span>}
+            {hasChanges && saveStatus === 'idle' && <span className="status dirty">Unsaved changes</span>}
+          </div>
           <button 
             className="btn-save-ops"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || (!hasChanges && saveStatus !== 'error')}
           >
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saveStatus === 'saving' || saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       )}

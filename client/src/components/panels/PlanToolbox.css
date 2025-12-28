@@ -10,6 +10,55 @@
   gap: 0;
 }
 
+.semantic-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 8px;
+  padding: 8px;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  align-items: stretch;
+}
+
+.semantic-btn {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.semantic-btn .semantic-label {
+  display: inline;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.semantic-btn .semantic-emoji {
+  font-size: 16px;
+}
+
+.semantic-btn.active {
+  background: #dbeafe;
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
+
+.semantic-btn:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
 .toolbox-section {
   display: flex;
   flex-direction: column;
@@ -186,6 +235,33 @@
   padding: 12px;
   background: var(--color-surface, #fff);
   border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.plan-toolbox--embedded .semantic-section {
+  border: none;
+  padding: 0;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+}
+
+.plan-toolbox--embedded .semantic-btn {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--color-surface-alt, #f8fafc);
+  border-color: var(--color-border, #e2e8f0);
+}
+
+.plan-toolbox--embedded .semantic-btn .semantic-label {
+  display: inline;
+}
+
+@media (max-width: 720px) {
+  .semantic-section {
+    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  }
+  .semantic-btn .semantic-label {
+    display: none;
+  }
 }
 
 .plan-toolbox--embedded .toolbox-section {

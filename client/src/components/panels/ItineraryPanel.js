@@ -168,6 +168,55 @@ const FeatureItem = ({
   );
 };
 
+const DaySummaryCard = ({ summary, onChange, readOnly }) => {
+  const handleFieldChange = (field, value) => {
+    if (onChange) {
+      onChange(summary.day_number, field, value);
+    }
+  };
+
+  return (
+    <div className="day-summary-card">
+      <div className="day-summary-header">
+        <span className="day-pill">Day {summary.day_number}</span>
+        {!readOnly && (
+          <input
+            type="text"
+            value={summary.title || ''}
+            onChange={(e) => handleFieldChange('title', e.target.value)}
+            placeholder="Title (optional)"
+          />
+        )}
+        {readOnly && summary.title && <span className="day-title">{summary.title}</span>}
+      </div>
+      {!readOnly && (
+        <div className="day-summary-fields">
+          <textarea
+            value={summary.route_summary || ''}
+            onChange={(e) => handleFieldChange('route_summary', e.target.value)}
+            placeholder="Route summary, key moves, timing..."
+            rows={2}
+          />
+          <textarea
+            value={summary.conditions || ''}
+            onChange={(e) => handleFieldChange('conditions', e.target.value)}
+            placeholder="Conditions (weather, trail, avalanche, etc.)"
+            rows={2}
+          />
+        </div>
+      )}
+      {readOnly && (
+        <div className="day-summary-readonly">
+          {summary.route_summary && <p className="day-summary-text">{summary.route_summary}</p>}
+          {summary.conditions && (
+            <p className="day-summary-conditions">Conditions: {summary.conditions}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // UI-03: Reference track item with visibility toggles for track line and waypoints
 const ReferenceTrackItem = ({ track, onRemove, onToggleVisibility, readOnly }) => {
   const showTrack = track.showTrack !== false; // Default true
@@ -230,6 +279,11 @@ const ItineraryPanel = ({
   onToggleTrackVisibility, // UI-03: Toggle track/waypoint visibility
   width,
   onWidthChange,
+  daySummaries = [],
+  onUpdateDaySummaries,
+  onSaveDaySummaries,
+  daySummariesDirty,
+  savingDaySummaries,
   readOnly,
 }) => {
   const [draggedIndex, setDraggedIndex] = useState(null);
@@ -294,6 +348,33 @@ const ItineraryPanel = ({
       return aOrder - bOrder;
     });
   }, [otherFeatures]);
+
+  const sortedDaySummaries = useMemo(() => {
+    const summaries = Array.isArray(daySummaries) ? daySummaries : [];
+    return [...summaries].sort((a, b) => (a.day_number || 0) - (b.day_number || 0));
+  }, [daySummaries]);
+
+  const handleDaySummaryChange = (dayNumber, field, value) => {
+    if (!onUpdateDaySummaries) return;
+    const base = Array.isArray(daySummaries) ? daySummaries : [];
+    const updated = base.map((day) =>
+      day.day_number === dayNumber ? { ...day, [field]: value } : day
+    );
+    onUpdateDaySummaries(updated);
+  };
+
+  const handleAddDay = () => {
+    if (!onUpdateDaySummaries) return;
+    const base = Array.isArray(daySummaries) ? daySummaries : [];
+    const nextDayNumber = base.reduce((max, day) => Math.max(max, day.day_number || 0), 0) + 1;
+    const newEntry = {
+      day_number: nextDayNumber,
+      title: `Day ${nextDayNumber}`,
+      route_summary: '',
+      conditions: '',
+    };
+    onUpdateDaySummaries([...base, newEntry]);
+  };
 
   // Drag and drop handlers (for Other Features only, checkpoints are time-sorted)
   const handleDragStart = (index) => {
@@ -368,6 +449,51 @@ const ItineraryPanel = ({
       </div>
 
       <div className="panel-content">
+        <section className="day-summary-section">
+          <div className="section-header-row">
+            <h4>
+              <span className="section-icon">📝</span>
+              Day Summaries
+              <span className="section-count">({sortedDaySummaries.length})</span>
+            </h4>
+            {!readOnly && (
+              <div className="day-summary-actions">
+                <button className="add-day-btn" onClick={handleAddDay} title="Add day summary">
+                  + Add Day
+                </button>
+                {daySummariesDirty && (
+                  <button
+                    className="save-day-btn"
+                    onClick={() => onSaveDaySummaries?.()}
+                    disabled={savingDaySummaries}
+                    title="Save day summaries"
+                  >
+                    {savingDaySummaries ? 'Saving...' : 'Save' }
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          {sortedDaySummaries.length === 0 ? (
+            <p className="empty-message">
+              {readOnly
+                ? 'No day summaries added.'
+                : 'Add a quick summary for each day (route overview and conditions).'}
+            </p>
+          ) : (
+            <div className="day-summary-list">
+              {sortedDaySummaries.map((summary) => (
+                <DaySummaryCard
+                  key={summary.day_number}
+                  summary={summary}
+                  onChange={handleDaySummaryChange}
+                  readOnly={readOnly}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* Section 1: Checkpoints (time-sorted waypoints) */}
         <section className="checkpoints-section">
           <h4>
