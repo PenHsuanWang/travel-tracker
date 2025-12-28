@@ -11,6 +11,7 @@ import { MapContainer, TileLayer, Polyline, Polygon, Marker, Popup, Circle, Rect
 import L from 'leaflet';
 import FeatureStyleEditor from '../common/FeatureStyleEditor';
 import { SEMANTIC_TYPE, ROUTE_TYPE } from '../../services/planService';
+import { getSemanticIcon } from '../../utils/mapIcons';
 import 'leaflet/dist/leaflet.css';
 import './PlanMapView.css';
 
@@ -888,7 +889,7 @@ const PlanMapView = forwardRef(({
     // Use cached icon or flashing icon
     const icon = isFlashing
       ? getFlashingMarkerIcon(semanticType, isSelected)
-      : getSemanticMarkerIcon(semanticType, isSelected, false);
+      : getSemanticIcon(semanticType, { size: 36, selected: isSelected, highlighted: false });
     const isEditing = editingFeatureId === feature.id;
 
     // FE-07: Tooltip content for hover
