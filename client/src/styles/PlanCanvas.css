@@ -223,22 +223,154 @@
   background: #ffe4e6;
 }
 
-/* Content */
+/* Content - Phase 2: Three-Column CSS Grid Layout */
 .plan-canvas-content {
-  display: flex;
+  display: grid;
+  grid-template-columns: 300px 1fr 320px;
+  grid-template-areas: "left-sidebar center-canvas right-sidebar";
   flex: 1;
   overflow: hidden;
   position: relative;
   width: 100%;
+  min-height: 0;
 }
 
-.plan-map-container {
-  flex: 1;
-  position: relative;
+/* Zone A: Left Sidebar (Operations) */
+.plan-left-sidebar {
+  grid-area: left-sidebar;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  overflow-y: auto;
+  overflow-x: hidden;
   min-width: 0;
 }
 
-/* Responsive */
+/* Zone B: Center Canvas (Map) */
+.plan-center-canvas {
+  grid-area: center-canvas;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.plan-map-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Zone C: Right Sidebar (Itinerary) - handled by ItineraryPanel */
+
+/* Collapsed states */
+.plan-canvas-content.left-collapsed {
+  grid-template-columns: 0 1fr 320px;
+}
+
+.plan-canvas-content.right-collapsed {
+  grid-template-columns: 300px 1fr 0;
+}
+
+.plan-canvas-content.both-collapsed {
+  grid-template-columns: 0 1fr 0;
+}
+
+/* Left sidebar collapse toggle */
+.sidebar-collapse-toggle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 40px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.sidebar-collapse-toggle:hover {
+  background: #f3f4f6;
+}
+
+.sidebar-collapse-toggle.left {
+  left: 300px;
+}
+
+.sidebar-collapse-toggle.left.collapsed {
+  left: 0;
+}
+
+/* Responsive - Tablet (1024px - 1280px) */
+@media (max-width: 1280px) and (min-width: 1024px) {
+  .plan-canvas-content {
+    grid-template-columns: 280px 1fr 300px;
+  }
+}
+
+/* Responsive - Small Tablet / Large Mobile */
+@media (max-width: 1024px) {
+  .plan-canvas-content {
+    grid-template-columns: 1fr;
+    grid-template-areas: "center-canvas";
+  }
+  
+  .plan-left-sidebar {
+    position: fixed;
+    left: 0;
+    top: 60px;
+    bottom: 0;
+    width: 300px;
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .plan-left-sidebar.open {
+    transform: translateX(0);
+  }
+  
+  /* Right sidebar becomes overlay drawer */
+  .plan-canvas-content .itinerary-panel {
+    position: fixed;
+    right: 0;
+    top: 60px;
+    bottom: 0;
+    width: 320px;
+    z-index: 200;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .plan-canvas-content .itinerary-panel.open {
+    transform: translateX(0);
+  }
+  
+  /* Mobile overlay backdrop */
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 150;
+    display: none;
+  }
+  
+  .sidebar-backdrop.visible {
+    display: block;
+  }
+}
+
+/* Responsive - Mobile */
 @media (max-width: 768px) {
   .plan-canvas-header {
     flex-wrap: wrap;
@@ -263,5 +395,10 @@
   
   .status-badge {
     order: -1;
+  }
+  
+  .plan-left-sidebar {
+    width: 85vw;
+    max-width: 320px;
   }
 }

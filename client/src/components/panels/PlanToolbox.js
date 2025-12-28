@@ -165,6 +165,7 @@ const PlanToolbox = ({
   onFinishDrawing,
   onRemoveLastVertex,
   onCancelDrawing,
+  embedded = false, // Phase 2: When true, renders in Zone A sidebar instead of floating
 }) => {
   const handleToolClick = (toolId) => {
     if (disabled) return;
@@ -182,7 +183,7 @@ const PlanToolbox = ({
   const canFinish = drawingVertices && drawingVertices >= (activeTool === 'polygon' ? 3 : 2);
 
   return (
-    <div className="plan-toolbox">
+    <div className={`plan-toolbox ${embedded ? 'plan-toolbox--embedded' : ''}`}>
       {/* Drawing tools section */}
       <div className="toolbox-section">
         {DRAWING_TOOLS.map((tool) => (

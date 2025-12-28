@@ -149,6 +149,37 @@ export const reorderFeatures = async (planId, featureOrders) => {
 };
 
 // =============================================================================
+// Logistics & Roster Operations (Phase 2)
+// =============================================================================
+
+/**
+ * Update plan logistics, roster, and gear checklist.
+ * @param {string} planId - Plan identifier
+ * @param {Object} logisticsData - { roster, logistics, checklist }
+ * @param {Array<Object>} logisticsData.roster - Team members list
+ * @param {Object} logisticsData.logistics - Logistics info (emergency_contacts, transportation_notes, permits, etc.)
+ * @param {Array<Object>} logisticsData.checklist - Gear checklist items
+ * @returns {Promise<Object>} Updated plan
+ */
+export const updateLogistics = async (planId, logisticsData) => {
+  const response = await apiClient.put(`/plans/${planId}/logistics`, logisticsData);
+  return response.data;
+};
+
+/**
+ * Update plan day summaries (itinerary structure).
+ * @param {string} planId - Plan identifier
+ * @param {Array<Object>} daySummaries - Day summary objects with day_number, date, title, notes, etc.
+ * @returns {Promise<Object>} Updated plan
+ */
+export const updateDaySummaries = async (planId, daySummaries) => {
+  const response = await apiClient.put(`/plans/${planId}/days`, {
+    day_summaries: daySummaries,
+  });
+  return response.data;
+};
+
+// =============================================================================
 // Reference Track Operations
 // =============================================================================
 

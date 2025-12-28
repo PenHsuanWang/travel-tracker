@@ -310,6 +310,147 @@ class PlanService:
         return self.get_plan(plan_id)
     
     # -------------------------------------------------------------------------
+    # Phase 2 - Logistics & Itinerary Updates
+    # -------------------------------------------------------------------------
+    
+    def update_logistics(
+        self, 
+        plan_id: str, 
+        roster: Optional[List[Dict[str, Any]]] = None,
+        logistics: Optional[Dict[str, Any]] = None,
+        checklist: Optional[List[Dict[str, Any]]] = None,
+        current_user_id: Optional[str] = None
+    ) -> Optional[Plan]:
+        """Update logistics-related data (roster, logistics info, gear checklist).
+        
+        This provides atomic updates for the Left Sidebar (Zone A) data
+        without requiring the full plan payload.
+        
+        Args:
+            plan_id: Plan identifier.
+            roster: List of RosterMember data (replaces existing if provided).
+            logistics: LogisticsInfo data (replaces existing if provided).
+            checklist: List of GearItem data (replaces existing if provided).
+            current_user_id: ID of the user performing the update.
+            
+        Returns:
+            Updated Plan or None if not found.
+            
+        Raises:
+            PermissionError: If user is not owner or member of the plan.
+        """
+        adapter = self.storage_manager.adapters.get('mongodb')
+        if not adapter:
+            raise RuntimeError("MongoDB adapter not initialized")
+        
+        # Load current plan to check permissions
+        raw_data = self.storage_manager.load_data(
+            'mongodb', plan_id, collection_name=self.collection_name
+        )
+        if not raw_data:
+            return None
+        
+        plan = Plan(**raw_data)
+        
+        # Permission check (owner or member can update)
+        if current_user_id:
+            is_owner = plan.owner_id == current_user_id
+            is_member = current_user_id in (plan.member_ids or [])
+            if not (is_owner or is_member):
+                raise PermissionError("You do not have permission to update this plan.")
+        
+        # Build update document
+        update_fields = {"updated_at": datetime.utcnow()}
+        
+        if roster is not None:
+            # Import here to avoid circular dependency
+            from src.models.plan import RosterMember
+            validated_roster = [RosterMember(**r).model_dump() for r in roster]
+            update_fields["roster"] = validated_roster
+            
+        if logistics is not None:
+            from src.models.plan import LogisticsInfo
+            validated_logistics = LogisticsInfo(**logistics).model_dump()
+            update_fields["logistics"] = validated_logistics
+            
+        if checklist is not None:
+            from src.models.plan import GearItem
+            validated_checklist = [GearItem(**g).model_dump() for g in checklist]
+            update_fields["checklist"] = validated_checklist
+        
+        collection = adapter.get_collection(self.collection_name)
+        result = collection.update_one(
+            {"_id": plan_id},
+            {"$set": update_fields}
+        )
+        
+        if result.matched_count == 0:
+            return None
+        
+        logger.info(f"Updated logistics for plan {plan_id}")
+        return self.get_plan(plan_id)
+    
+    def update_day_summaries(
+        self, 
+        plan_id: str, 
+        day_summaries: List[Dict[str, Any]],
+        current_user_id: Optional[str] = None
+    ) -> Optional[Plan]:
+        """Update day summaries for the structured itinerary.
+        
+        This provides atomic updates for the Right Sidebar (Zone C) day structure.
+        
+        Args:
+            plan_id: Plan identifier.
+            day_summaries: List of DaySummary data (replaces existing).
+            current_user_id: ID of the user performing the update.
+            
+        Returns:
+            Updated Plan or None if not found.
+            
+        Raises:
+            PermissionError: If user is not owner or member of the plan.
+        """
+        adapter = self.storage_manager.adapters.get('mongodb')
+        if not adapter:
+            raise RuntimeError("MongoDB adapter not initialized")
+        
+        # Load current plan to check permissions
+        raw_data = self.storage_manager.load_data(
+            'mongodb', plan_id, collection_name=self.collection_name
+        )
+        if not raw_data:
+            return None
+        
+        plan = Plan(**raw_data)
+        
+        # Permission check (owner or member can update)
+        if current_user_id:
+            is_owner = plan.owner_id == current_user_id
+            is_member = current_user_id in (plan.member_ids or [])
+            if not (is_owner or is_member):
+                raise PermissionError("You do not have permission to update this plan.")
+        
+        # Validate day summaries
+        from src.models.plan import DaySummary
+        validated_summaries = [DaySummary(**ds).model_dump() for ds in day_summaries]
+        
+        collection = adapter.get_collection(self.collection_name)
+        result = collection.update_one(
+            {"_id": plan_id},
+            {"$set": {
+                "day_summaries": validated_summaries,
+                "updated_at": datetime.utcnow()
+            }}
+        )
+        
+        if result.matched_count == 0:
+            return None
+        
+        logger.info(f"Updated day summaries for plan {plan_id}")
+        return self.get_plan(plan_id)
+    
+    # -------------------------------------------------------------------------
     # Feature Management
     # -------------------------------------------------------------------------
     

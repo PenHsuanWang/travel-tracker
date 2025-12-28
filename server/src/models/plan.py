@@ -74,6 +74,31 @@ class FillPattern(str, Enum):
     NONE = "none"
 
 
+class SemanticType(str, Enum):
+    """Semantic categorization for plan features (FR-A01).
+    
+    Used to tag waypoints and markers with specific meanings
+    for safety planning and visual distinction on the map.
+    """
+    WATER = "water"         # 💧 Water Source
+    CAMP = "camp"           # ⛺ Campsite
+    SIGNAL = "signal"       # 📶 Mobile Signal Coverage
+    HAZARD = "hazard"       # ⚠️ Hazardous Area/Point
+    CHECKIN = "checkin"     # 🆘 Safety Check-in Location (FR-A04)
+    GENERIC = "generic"     # Default/Unspecified
+
+
+class RouteType(str, Enum):
+    """Route classification for LineString features (FR-A03).
+    
+    Determines visual styling:
+    - MAIN: Primary route (default solid line)
+    - ESCAPE: Emergency/alternative route (green dashed line)
+    """
+    MAIN = "main"
+    ESCAPE = "escape"
+
+
 class GeoJSONGeometry(BaseModel):
     """GeoJSON geometry object.
     
@@ -143,6 +168,17 @@ class PlanFeatureProperties(BaseModel):
     
     # Ordering
     order_index: Optional[int] = None  # For itinerary sequencing (fallback when no time)
+    
+    # Phase 2 - Semantic Categorization (Module A)
+    semantic_type: SemanticType = Field(default=SemanticType.GENERIC)  # FR-A01
+    route_type: RouteType = Field(default=RouteType.MAIN)  # FR-A03: Main vs Escape route
+    is_safety_checkin: bool = Field(default=False)  # FR-A04: Safety check-in location flag
+    
+    # Phase 2 - Export Support (Module E)
+    decision_notes: Optional[str] = None  # FR-E01: If-Else logic notes for critical decisions
+    
+    # Phase 2 - Itinerary Support (Module B)
+    manual_day_break: bool = Field(default=False)  # FR-B03: Force new day after this feature
     
     # Audit
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -254,6 +290,96 @@ class PlanFeatureCollection(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+# =============================================================================
+# Phase 2 - Module D: Logistics & Team Management (FR-D01, FR-D02, FR-D03)
+# =============================================================================
+
+class RosterMember(BaseModel):
+    """Team member entry for expedition roster (FR-D01).
+    
+    Stores contact information and role for each team member.
+    """
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    role: Optional[str] = None  # e.g., "Leader", "Navigator", "First Aid"
+    phone: Optional[str] = None
+    emergency_contact: Optional[str] = None  # Emergency contact info
+    notes: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class LogisticsInfo(BaseModel):
+    """Logistics and transportation details (FR-D02).
+    
+    Stores information about transport, insurance, and communication.
+    """
+    transport_provider: Optional[str] = None  # Shuttle/taxi company
+    driver_phone: Optional[str] = None
+    pickup_location: Optional[str] = None
+    pickup_time: Optional[datetime] = None
+    dropoff_location: Optional[str] = None
+    dropoff_time: Optional[datetime] = None
+    insurance_policy: Optional[str] = None  # Policy number or details
+    insurance_provider: Optional[str] = None
+    radio_channel: Optional[str] = None  # For group communication
+    emergency_contacts: Optional[str] = None  # Park ranger, rescue team, etc.
+    notes: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class GearCategory(str, Enum):
+    """Gear category classification (FR-D03)."""
+    GROUP = "group"       # Shared group gear
+    PERSONAL = "personal" # Individual gear
+    SAFETY = "safety"     # Safety equipment
+    COOKING = "cooking"   # Cooking/food gear
+    SHELTER = "shelter"   # Tent/tarp/bivvy
+
+
+class GearItem(BaseModel):
+    """Individual gear checklist item (FR-D03).
+    
+    Supports tracking of group and personal equipment.
+    """
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    category: GearCategory = Field(default=GearCategory.PERSONAL)
+    item_name: str
+    quantity: int = Field(default=1, ge=1)
+    weight_grams: Optional[int] = None  # Weight in grams
+    is_checked: bool = Field(default=False)  # Packed/verified status
+    assigned_to: Optional[str] = None  # Member name or ID responsible
+    notes: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+# =============================================================================
+# Phase 2 - Module B: Structured Itinerary (FR-B01, FR-B02, FR-B03)
+# =============================================================================
+
+class DaySummary(BaseModel):
+    """Summary information for a single day in the itinerary (FR-B02).
+    
+    Each day in the expedition can have:
+    - A descriptive summary of the route
+    - Weather/condition notes
+    - Distance/elevation stats (computed or manual)
+    """
+    day_number: int = Field(ge=1)  # Day 1, Day 2, etc.
+    date: Optional[datetime] = None  # Actual date if known
+    title: Optional[str] = None  # e.g., "Summit Day", "Approach"
+    route_summary: Optional[str] = None  # FR-B02: Route overview text
+    conditions: Optional[str] = None  # FR-B02: Weather/trail conditions
+    distance_km: Optional[float] = None  # Planned distance
+    elevation_gain_m: Optional[int] = None  # Planned ascent
+    elevation_loss_m: Optional[int] = None  # Planned descent
+    notes: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class ReferenceTrack(BaseModel):
     """Reference GPX track attached to a Plan (read-only baseline).
     
@@ -311,6 +437,18 @@ class Plan(BaseModel):
     
     # Cover image for dashboard
     cover_image_url: Optional[str] = None
+    
+    # ==========================================================================
+    # Phase 2 - Module D: Logistics & Team Management
+    # ==========================================================================
+    roster: List[RosterMember] = Field(default_factory=list)  # FR-D01: Team roster
+    logistics: LogisticsInfo = Field(default_factory=LogisticsInfo)  # FR-D02: Logistics info
+    checklist: List[GearItem] = Field(default_factory=list)  # FR-D03: Gear checklist
+    
+    # ==========================================================================
+    # Phase 2 - Module B: Structured Itinerary
+    # ==========================================================================
+    day_summaries: List[DaySummary] = Field(default_factory=list)  # FR-B02: Day summaries
     
     # Lifecycle
     status: PlanStatus = Field(default=PlanStatus.DRAFT)
@@ -398,6 +536,29 @@ class ReferenceTrackAdd(BaseModel):
     display_name: Optional[str] = None
     color: Optional[str] = "#888888"
     opacity: Optional[float] = 0.5
+
+
+# =============================================================================
+# Phase 2 - Module D & B: Logistics & Itinerary Update Payloads
+# =============================================================================
+
+class LogisticsUpdate(BaseModel):
+    """Payload for updating logistics-related data (PUT /plans/{id}/logistics).
+    
+    Allows atomic updates to roster, logistics, and checklist without
+    sending the entire plan payload.
+    """
+    roster: Optional[List[RosterMember]] = None
+    logistics: Optional[LogisticsInfo] = None
+    checklist: Optional[List[GearItem]] = None
+
+
+class DaySummariesUpdate(BaseModel):
+    """Payload for updating day summaries (PUT /plans/{id}/days).
+    
+    Allows atomic updates to itinerary structure.
+    """
+    day_summaries: List[DaySummary]
 
 
 # =============================================================================

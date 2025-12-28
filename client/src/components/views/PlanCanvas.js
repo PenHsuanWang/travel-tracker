@@ -2,11 +2,10 @@
 /**
  * PlanCanvas - Main editing view for a trip plan.
  * 
- * This component provides a full-page canvas for editing a plan with:
- * - A map view with drawing capabilities
- * - A toolbox panel for drawing tools
- * - An itinerary panel showing features list
- * - Reference track management
+ * Phase 2 Architecture:
+ * - Zone A (Left Sidebar): PlanToolbox + OperationsPanel (Team, Gear, Settings)
+ * - Zone B (Center Canvas): PlanMapView + PlanStatsHUD
+ * - Zone C (Right Sidebar): ItineraryPanel (Day Grouping)
  * 
  * Follows the same patterns as TripDetailPage but adapted for plans.
  */
@@ -15,6 +14,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import PlanMapView from './PlanMapView';
 import PlanToolbox from '../panels/PlanToolbox';
+import OperationsPanel from '../panels/OperationsPanel';
 import ItineraryPanel from '../panels/ItineraryPanel';
 import {
   getPlan,
@@ -29,6 +29,8 @@ import {
   uploadReferenceTrack,
   removeReferenceTrack,
   ingestGpx,
+  updateLogistics,
+  updateDaySummaries,
   PLAN_STATUS_LABELS,
 } from '../../services/planService';
 import { fetchGpxAnalysis } from '../../services/api';
@@ -67,11 +69,17 @@ const PlanCanvas = () => {
   const [activeDrawCategory, setActiveDrawCategory] = useState(null); // category for the current drawing tool
   const [selectedFeatureId, setSelectedFeatureId] = useState(null);
   const [itineraryOpen, setItineraryOpen] = useState(true);
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true); // Phase 2: Left sidebar visibility
   const [itineraryWidth, setItineraryWidth] = useState(() => getStoredItineraryWidth());
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [drawingState, setDrawingState] = useState({ isDrawing: false, vertices: [] });
   const [trackData, setTrackData] = useState({}); // Map of object_key -> analysis data
+  
+  // Phase 2 - Logistics state (local editing before save)
+  const [localRoster, setLocalRoster] = useState([]);
+  const [localLogistics, setLocalLogistics] = useState({});
+  const [localChecklist, setLocalChecklist] = useState([]);
   
   // GPX Import Modal state
   const [gpxImportModalOpen, setGpxImportModalOpen] = useState(false);
@@ -103,6 +111,10 @@ const PlanCanvas = () => {
       setError(null);
       const data = await getPlan(planId);
       setPlan(data);
+      // Phase 2: Initialize local logistics state from fetched plan
+      setLocalRoster(data.roster || []);
+      setLocalLogistics(data.logistics || {});
+      setLocalChecklist(data.checklist || []);
     } catch (err) {
       console.error('Failed to fetch plan:', err);
       setError('Failed to load plan. It may not exist or you may not have access.');
@@ -498,6 +510,39 @@ const PlanCanvas = () => {
     }
   };
 
+  // Phase 2: Save logistics data (roster, logistics, checklist)
+  const handleSaveLogistics = useCallback(async () => {
+    if (!canEdit || !plan) return;
+    try {
+      setSaving(true);
+      const updatedPlan = await updateLogistics(planId, {
+        roster: localRoster,
+        logistics: localLogistics,
+        checklist: localChecklist,
+      });
+      setPlan(updatedPlan);
+    } catch (err) {
+      console.error('Failed to save logistics:', err);
+      alert('Failed to save logistics data. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }, [canEdit, plan, planId, localRoster, localLogistics, localChecklist]);
+
+  // Phase 2: Update plan metadata from OperationsPanel Settings tab
+  const handleUpdatePlanMetadata = useCallback(async (updates) => {
+    if (!canEdit || !plan) return;
+    try {
+      setSaving(true);
+      const updatedPlan = await updatePlan(planId, updates);
+      setPlan(updatedPlan);
+    } catch (err) {
+      console.error('Failed to update plan:', err);
+    } finally {
+      setSaving(false);
+    }
+  }, [canEdit, plan, planId]);
+
   // Selected feature
   const selectedFeature = useMemo(() => {
     if (!plan || !selectedFeatureId) return null;
@@ -586,11 +631,20 @@ const PlanCanvas = () => {
           
           {saving && <span className="saving-indicator">Saving...</span>}
           
+          {/* Phase 2: Toggle buttons for both sidebars */}
+          <button
+            className="btn-toggle-sidebar"
+            onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
+            title={leftSidebarOpen ? 'Hide Operations Panel' : 'Show Operations Panel'}
+          >
+            {leftSidebarOpen ? '◀ Hide Ops' : '▶ Show Ops'}
+          </button>
+          
           <button
             className="btn-toggle-itinerary"
             onClick={() => setItineraryOpen(!itineraryOpen)}
           >
-            {itineraryOpen ? 'Hide Itinerary' : 'Show Itinerary'}
+            {itineraryOpen ? 'Hide Itinerary ▶' : '◀ Show Itinerary'}
           </button>
 
           {canManage && (
@@ -605,50 +659,74 @@ const PlanCanvas = () => {
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="plan-canvas-content">
-        {/* Toolbox */}
-        {canEdit && (
-          <PlanToolbox
-            activeTool={activeTool}
-            onSelectTool={(tool, category) => {
-              setActiveTool(tool);
-              setActiveDrawCategory(category);
-              setDrawingState({ isDrawing: false, vertices: [] });
-            }}
-            disabled={saving}
-            isDrawing={drawingState.isDrawing}
-            drawingVertices={drawingState.vertices?.length || 0}
-            onFinishDrawing={() => mapRef.current?.finishDrawing?.()}
-            onRemoveLastVertex={() => mapRef.current?.removeLastVertex?.()}
-            onCancelDrawing={() => {
-              mapRef.current?.cancelDrawing?.();
-              setActiveTool(null);
-              setActiveDrawCategory(null);
-            }}
-          />
+      {/* Main Content - Phase 2: Three-Column Grid Layout */}
+      <div className={`plan-canvas-content ${!leftSidebarOpen ? 'left-collapsed' : ''} ${!itineraryOpen ? 'right-collapsed' : ''}`}>
+        
+        {/* Zone A: Left Sidebar (Operations) */}
+        {leftSidebarOpen && (
+          <div className="plan-left-sidebar">
+            {/* Toolbox - Now embedded in Zone A */}
+            {canEdit && (
+              <PlanToolbox
+                activeTool={activeTool}
+                onSelectTool={(tool, category) => {
+                  setActiveTool(tool);
+                  setActiveDrawCategory(category);
+                  setDrawingState({ isDrawing: false, vertices: [] });
+                }}
+                disabled={saving}
+                isDrawing={drawingState.isDrawing}
+                drawingVertices={drawingState.vertices?.length || 0}
+                onFinishDrawing={() => mapRef.current?.finishDrawing?.()}
+                onRemoveLastVertex={() => mapRef.current?.removeLastVertex?.()}
+                onCancelDrawing={() => {
+                  mapRef.current?.cancelDrawing?.();
+                  setActiveTool(null);
+                  setActiveDrawCategory(null);
+                }}
+                embedded={true}
+              />
+            )}
+            
+            {/* Operations Panel - Team, Gear, Settings Tabs */}
+            <OperationsPanel
+              plan={plan}
+              roster={localRoster}
+              logistics={localLogistics}
+              checklist={localChecklist}
+              onUpdateRoster={setLocalRoster}
+              onUpdateLogistics={setLocalLogistics}
+              onUpdateChecklist={setLocalChecklist}
+              onUpdatePlan={handleUpdatePlanMetadata}
+              onSave={handleSaveLogistics}
+              saving={saving}
+              readOnly={!canEdit}
+            />
+          </div>
         )}
 
-        {/* Map */}
-        <div className="plan-map-container">
-          <PlanMapView
-            ref={mapRef}
-            features={featuresArray}
-            referenceTracks={plan.reference_tracks || []}
-            trackData={trackData}
-            selectedFeatureId={selectedFeatureId}
-            onSelectFeature={setSelectedFeatureId}
-            activeTool={canEdit ? activeTool : null}
-            activeDrawCategory={activeDrawCategory}
-            onAddFeature={handleAddFeature}
-            onUpdateFeature={handleUpdateFeature}
-            onDeleteFeature={handleDeleteFeature}
-            readOnly={!canEdit}
-            onDrawingStateChange={setDrawingState}
-          />
+        {/* Zone B: Center Canvas (Map) */}
+        <div className="plan-center-canvas">
+          <div className="plan-map-container">
+            <PlanMapView
+              ref={mapRef}
+              features={featuresArray}
+              referenceTracks={plan.reference_tracks || []}
+              trackData={trackData}
+              selectedFeatureId={selectedFeatureId}
+              onSelectFeature={setSelectedFeatureId}
+              activeTool={canEdit ? activeTool : null}
+              activeDrawCategory={activeDrawCategory}
+              onAddFeature={handleAddFeature}
+              onUpdateFeature={handleUpdateFeature}
+              onDeleteFeature={handleDeleteFeature}
+              readOnly={!canEdit}
+              onDrawingStateChange={setDrawingState}
+            />
+          </div>
         </div>
 
-        {/* Itinerary Panel */}
+        {/* Zone C: Right Sidebar (Itinerary) */}
         {itineraryOpen && (
           <ItineraryPanel
             features={featuresArray}

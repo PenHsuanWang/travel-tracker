@@ -282,6 +282,86 @@ async def update_plan_members(
 
 
 # =============================================================================
+# Phase 2 - Logistics & Itinerary Endpoints (Module D & B)
+# =============================================================================
+
+class LogisticsUpdatePayload(BaseModel):
+    """Request payload for updating logistics data."""
+    roster: Optional[List[Dict[str, Any]]] = None
+    logistics: Optional[Dict[str, Any]] = None
+    checklist: Optional[List[Dict[str, Any]]] = None
+
+
+class DaySummariesPayload(BaseModel):
+    """Request payload for updating day summaries."""
+    day_summaries: List[Dict[str, Any]]
+
+
+@router.put("/{plan_id}/logistics", response_model=Plan, response_model_by_alias=False)
+async def update_logistics(
+    plan_id: str,
+    payload: LogisticsUpdatePayload,
+    current_user: User = Depends(get_current_user)
+):
+    """Update logistics-related data (roster, logistics info, gear checklist).
+    
+    Located in Left Sidebar > Team/Gear Tabs (Zone A).
+    This endpoint provides atomic updates without requiring the full plan payload.
+    
+    - **roster**: Team member list (FR-D01)
+    - **logistics**: Transport and insurance info (FR-D02)
+    - **checklist**: Gear packing list (FR-D03)
+    """
+    try:
+        plan = plan_service.update_logistics(
+            plan_id=plan_id,
+            roster=payload.roster,
+            logistics=payload.logistics,
+            checklist=payload.checklist,
+            current_user_id=current_user.id
+        )
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        return plan
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{plan_id}/days", response_model=Plan, response_model_by_alias=False)
+async def update_day_summaries(
+    plan_id: str,
+    payload: DaySummariesPayload,
+    current_user: User = Depends(get_current_user)
+):
+    """Update day summaries for the structured itinerary.
+    
+    Located in Right Sidebar (Zone C) Day Headers.
+    This endpoint provides atomic updates to the itinerary structure.
+    
+    - **day_summaries**: List of day summary objects with route overview and conditions (FR-B02)
+    """
+    try:
+        plan = plan_service.update_day_summaries(
+            plan_id=plan_id,
+            day_summaries=payload.day_summaries,
+            current_user_id=current_user.id
+        )
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        return plan
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # Feature CRUD Endpoints
 # =============================================================================
 
