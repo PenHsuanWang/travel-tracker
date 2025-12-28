@@ -11,7 +11,7 @@ import { MapContainer, TileLayer, Polyline, Polygon, Marker, Popup, Circle, Rect
 import L from 'leaflet';
 import FeatureStyleEditor from '../common/FeatureStyleEditor';
 import { SEMANTIC_TYPE, ROUTE_TYPE } from '../../services/planService';
-import { getSemanticIcon } from '../../utils/mapIcons';
+import { getSemanticIcon, ICON_CONFIG } from '../../utils/mapIcons';
 import 'leaflet/dist/leaflet.css';
 import './PlanMapView.css';
 
@@ -937,6 +937,9 @@ const PlanMapView = forwardRef(({
     // FE-07: Tooltip content for hover
     const tooltipContent = feature.properties?.name || 'Marker';
 
+    const semanticConfig = ICON_CONFIG[semanticType] || ICON_CONFIG[SEMANTIC_TYPE.GENERIC];
+    const displayTitle = feature.properties?.name || semanticConfig.label.toUpperCase();
+
     return (
       <Marker
         key={feature.id}
@@ -970,7 +973,10 @@ const PlanMapView = forwardRef(({
           ) : (
             <div className="feature-popup">
               <div className="popup-header">
-                <strong>{feature.properties?.name || 'Marker'}</strong>
+                <strong>
+                  <span style={{ marginRight: '6px' }}>{semanticConfig.emoji}</span>
+                  {displayTitle}
+                </strong>
                 {!readOnly && (
                   <button
                     className="popup-edit-btn"

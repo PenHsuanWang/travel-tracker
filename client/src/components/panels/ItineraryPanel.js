@@ -13,7 +13,9 @@ import {
   FEATURE_CATEGORY,
   getCategoryIcon,
   getCategoryLabel,
+  SEMANTIC_TYPE,
 } from '../../services/planService';
+import { ICON_CONFIG } from '../../utils/mapIcons';
 import './ItineraryPanel.css';
 
 /**
@@ -61,7 +63,13 @@ const FeatureItem = ({
   };
 
   const getFeatureIcon = () => {
-    // Use category icon first, fallback to geometry-based icon
+    // Priority 1: Semantic Type (if specific)
+    const semanticType = feature.properties?.semantic_type;
+    if (semanticType && semanticType !== SEMANTIC_TYPE.GENERIC && ICON_CONFIG[semanticType]) {
+      return ICON_CONFIG[semanticType].emoji;
+    }
+
+    // Priority 2: Category
     if (category) {
       return getCategoryIcon(category);
     }
@@ -263,6 +271,43 @@ const ReferenceTrackItem = ({ track, onRemove, onToggleVisibility, readOnly }) =
   );
 };
 
+const FeatureGroup = ({ title, icon, count, children, defaultOpen = true }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  
+  if (count === 0) return null;
+
+  return (
+    <div className="feature-group" style={{ marginBottom: '8px' }}>
+      <div 
+        className="feature-group-header" 
+        onClick={() => setIsOpen(!isOpen)}
+        style={{ 
+          cursor: 'pointer', 
+          display: 'flex', 
+          alignItems: 'center', 
+          padding: '8px 12px', 
+          backgroundColor: '#f3f4f6', 
+          borderRadius: '6px', 
+          marginBottom: '4px', 
+          justifyContent: 'space-between',
+          userSelect: 'none'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, fontSize: '12px', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <span style={{ fontSize: '10px' }}>{isOpen ? '▼' : '▶'}</span>
+          <span>{icon} {title}</span>
+        </div>
+        <span className="section-count" style={{ fontSize: '11px', color: '#6b7280', backgroundColor: '#e5e7eb', padding: '2px 6px', borderRadius: '10px' }}>{count}</span>
+      </div>
+      {isOpen && (
+        <div className="feature-group-content" style={{ paddingLeft: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ItineraryPanel = ({
   features,
   referenceTracks,
@@ -348,6 +393,30 @@ const ItineraryPanel = ({
       return aOrder - bOrder;
     });
   }, [otherFeatures]);
+
+  // Group otherFeatures by semantic type for display
+  const groupedFeatures = useMemo(() => {
+    const groups = {
+      hazard: [],
+      water: [],
+      camp: [],
+      signal: [],
+      checkin: [],
+      other: []
+    };
+
+    sortedOtherFeatures.forEach(feature => {
+      const type = feature.properties?.semantic_type;
+      if (type === 'hazard') groups.hazard.push(feature);
+      else if (type === 'water') groups.water.push(feature);
+      else if (type === 'camp') groups.camp.push(feature);
+      else if (type === 'signal') groups.signal.push(feature);
+      else if (type === 'checkin') groups.checkin.push(feature);
+      else groups.other.push(feature);
+    });
+
+    return groups;
+  }, [sortedOtherFeatures]);
 
   const sortedDaySummaries = useMemo(() => {
     const summaries = Array.isArray(daySummaries) ? daySummaries : [];
@@ -531,11 +600,11 @@ const ItineraryPanel = ({
           )}
         </section>
 
-        {/* Section 2: Other Features (markers, routes, areas) - manually ordered */}
+        {/* Section 2: Other Features (markers, routes, areas) - Categorized */}
         <section className="other-features-section">
           <h4>
             <span className="section-icon">📌</span>
-            Other Features
+            Features & Markers
             <span className="section-count">({sortedOtherFeatures.length})</span>
           </h4>
           {sortedOtherFeatures.length === 0 ? (
@@ -545,18 +614,11 @@ const ItineraryPanel = ({
                 : 'Add markers, routes, and areas.'}
             </p>
           ) : (
-            <div className="features-list">
-              {sortedOtherFeatures.map((feature, index) => (
-                <div
-                  key={feature.id}
-                  draggable={!readOnly}
-                  onDragStart={() => handleDragStart(index)}
-                  onDragOver={(e) => handleDragOver(e, index)}
-                  onDrop={(e) => handleDrop(e, index)}
-                  onDragEnd={handleDragEnd}
-                  className={draggedIndex === index ? 'dragging' : ''}
-                >
+            <div className="features-list-grouped">
+              <FeatureGroup title="HAZARDS" icon={ICON_CONFIG.hazard.emoji} count={groupedFeatures.hazard.length}>
+                {groupedFeatures.hazard.map(feature => (
                   <FeatureItem
+                    key={feature.id}
                     feature={feature}
                     selected={feature.id === selectedFeatureId}
                     onSelect={onSelectFeature}
@@ -565,8 +627,83 @@ const ItineraryPanel = ({
                     onDoubleClick={onFlyToFeature}
                     readOnly={readOnly}
                   />
-                </div>
-              ))}
+                ))}
+              </FeatureGroup>
+
+              <FeatureGroup title="WATER SOURCES" icon={ICON_CONFIG.water.emoji} count={groupedFeatures.water.length}>
+                {groupedFeatures.water.map(feature => (
+                  <FeatureItem
+                    key={feature.id}
+                    feature={feature}
+                    selected={feature.id === selectedFeatureId}
+                    onSelect={onSelectFeature}
+                    onUpdate={onUpdateFeature}
+                    onDelete={onDeleteFeature}
+                    onDoubleClick={onFlyToFeature}
+                    readOnly={readOnly}
+                  />
+                ))}
+              </FeatureGroup>
+
+              <FeatureGroup title="CAMPSITES" icon={ICON_CONFIG.camp.emoji} count={groupedFeatures.camp.length}>
+                {groupedFeatures.camp.map(feature => (
+                  <FeatureItem
+                    key={feature.id}
+                    feature={feature}
+                    selected={feature.id === selectedFeatureId}
+                    onSelect={onSelectFeature}
+                    onUpdate={onUpdateFeature}
+                    onDelete={onDeleteFeature}
+                    onDoubleClick={onFlyToFeature}
+                    readOnly={readOnly}
+                  />
+                ))}
+              </FeatureGroup>
+
+              <FeatureGroup title="SIGNALS" icon={ICON_CONFIG.signal.emoji} count={groupedFeatures.signal.length}>
+                {groupedFeatures.signal.map(feature => (
+                  <FeatureItem
+                    key={feature.id}
+                    feature={feature}
+                    selected={feature.id === selectedFeatureId}
+                    onSelect={onSelectFeature}
+                    onUpdate={onUpdateFeature}
+                    onDelete={onDeleteFeature}
+                    onDoubleClick={onFlyToFeature}
+                    readOnly={readOnly}
+                  />
+                ))}
+              </FeatureGroup>
+
+              <FeatureGroup title="CHECK-INS" icon={ICON_CONFIG.checkin.emoji} count={groupedFeatures.checkin.length}>
+                {groupedFeatures.checkin.map(feature => (
+                  <FeatureItem
+                    key={feature.id}
+                    feature={feature}
+                    selected={feature.id === selectedFeatureId}
+                    onSelect={onSelectFeature}
+                    onUpdate={onUpdateFeature}
+                    onDelete={onDeleteFeature}
+                    onDoubleClick={onFlyToFeature}
+                    readOnly={readOnly}
+                  />
+                ))}
+              </FeatureGroup>
+
+              <FeatureGroup title="OTHER FEATURES" icon={ICON_CONFIG.generic.emoji} count={groupedFeatures.other.length}>
+                {groupedFeatures.other.map(feature => (
+                  <FeatureItem
+                    key={feature.id}
+                    feature={feature}
+                    selected={feature.id === selectedFeatureId}
+                    onSelect={onSelectFeature}
+                    onUpdate={onUpdateFeature}
+                    onDelete={onDeleteFeature}
+                    onDoubleClick={onFlyToFeature}
+                    readOnly={readOnly}
+                  />
+                ))}
+              </FeatureGroup>
             </div>
           )}
         </section>
