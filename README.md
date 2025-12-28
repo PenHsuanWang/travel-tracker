@@ -46,7 +46,7 @@ Travel Tracker lets outdoor enthusiasts upload trips, visualize GPX tracks, over
 ### Trip Planning Module
 
 - **Plan Mode**: Dedicated workspace for drafting itineraries before a trip occurs.
-- **Interactive Canvas**: Draw routes, place semantic markers (Water, Camp, Hazard), and define areas.
+- **Interactive Canvas**: Draw routes, place semantic markers (Water, Camp, Hazard) with distinct visual icons, and define areas.
 - **GPX Time Shift**: Import existing GPX tracks and project their timestamps onto a future start date for realistic scheduling.
 - **Logistics Management**: Manage team roster, transportation details, and gear checklists.
 - **Structured Itinerary**: Drag-and-drop timeline with day summaries and time-calculated checkpoints.

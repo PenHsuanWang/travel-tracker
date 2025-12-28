@@ -254,7 +254,7 @@ These components are specific to the `/plans/:planId` route.
     -   **Sections:**
         -   **Day Summaries:** Route overview and conditions per day.
         -   **Checkpoints:** Time-sorted waypoints (supports "Cascade Update" to shift subsequent times).
-        -   **Other Features:** Markers and routes, reorderable via drag-and-drop.
+        -   **Features & Markers:** Items grouped by semantic category (Hazards, Water Sources, Camps, etc.) using collapsible accordions.
         -   **Reference Tracks:** Toggle visibility of imported GPX baselines.
 
 -   **`PlanStatsHUD.js`**:
