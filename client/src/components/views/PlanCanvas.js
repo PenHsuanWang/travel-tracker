@@ -617,6 +617,11 @@ const PlanCanvas = () => {
     );
   }
 
+  // Compute grid columns so sidebars stay anchored to edges when resized
+  const leftWidth = leftSidebarOpen ? 300 : 0;
+  const rightWidth = itineraryOpen ? itineraryWidth : 0;
+  const gridTemplate = `${leftWidth}px 1fr ${rightWidth}px`;
+
   return (
     <div className="plan-canvas">
       {/* Header Bar */}
@@ -689,7 +694,10 @@ const PlanCanvas = () => {
       </header>
 
       {/* Main Content - Phase 2: Three-Column Grid Layout */}
-      <div className={`plan-canvas-content ${!leftSidebarOpen ? 'left-collapsed' : ''} ${!itineraryOpen ? 'right-collapsed' : ''}`}>
+      <div
+        className={`plan-canvas-content ${!leftSidebarOpen ? 'left-collapsed' : ''} ${!itineraryOpen ? 'right-collapsed' : ''}`}
+        style={{ gridTemplateColumns: gridTemplate }}
+      >
         
         {/* Zone A: Left Sidebar (Operations) */}
         {leftSidebarOpen && (

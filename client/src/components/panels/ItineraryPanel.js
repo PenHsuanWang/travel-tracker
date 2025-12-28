@@ -442,7 +442,10 @@ const ItineraryPanel = ({
       <div className="resize-handle" onMouseDown={handleResizeStart} />
 
       <div className="panel-header">
-        <h3>Itinerary</h3>
+        <div>
+          <h3>Itinerary</h3>
+          <p className="panel-subtitle">Journey Log</p>
+        </div>
         <span className="feature-count">
           {featuresArray.length} {featuresArray.length === 1 ? 'item' : 'items'}
         </span>
