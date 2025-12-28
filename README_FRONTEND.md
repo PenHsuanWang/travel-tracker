@@ -48,6 +48,30 @@ The application's primary navigation is defined in `App.js`, which sets up the f
     -   **Photo Viewer:** Opens `PhotoViewerOverlay` for full-size image viewing with navigation
     -   **Event Communication:** Uses custom events for cross-component updates (imageUploaded, imageDeleted, photoNoteUpdated, centerMapOnLocation, mapImageSelected)
 
+### `/plans` -> `PlansPage.js`
+
+-   **File:** `client/src/components/views/PlansPage.js`
+-   **Purpose:** Dashboard for managing trip plans.
+-   **Functionality:**
+    -   **Plan List:** Displays user's plans with status badges (Draft, Active, Archived).
+    -   **Creation Flows:** Supports creating fresh plans via `CreatePlanModal` or importing GPX via `ImportGpxModal`.
+    -   **Filtering:** Filter by status, search by name/region.
+
+### `/plans/:planId` -> `PlanCanvas.js`
+
+-   **File:** `client/src/components/views/PlanCanvas.js`
+-   **Purpose:** The core editing interface for trip planning, implementing a 3-zone layout.
+-   **Functionality:**
+    -   **Zone A (Operations - Left):**
+        -   **`OperationsPanel`**: Tabbed interface for Team (Roster), Logistics (Transport), and Gear (Checklist).
+        -   **`PlanToolbox`**: Embedded drawing tools for placing markers, routes, and areas.
+    -   **Zone B (Map - Center):**
+        -   **`PlanMapView`**: Interactive map allowing feature creation (drawing), editing, and semantic styling.
+        -   **`PlanStatsHUD`**: Real-time stats showing total distance, elevation, and counts of hazards/camps.
+    -   **Zone C (Itinerary - Right):**
+        -   **`ItineraryPanel`**: Manages time-based Checkpoints (waypoints) and non-time features. Supports drag-and-drop reordering for non-time items and day summaries.
+    -   **GPX Ingestion:** Features `GpxImportOptionsModal` to parse uploaded GPX files and apply "Time Shift" strategies (Relative vs Absolute).
+
 ### `/login` -> `LoginPage.js`
 
 -   **File:** `client/src/pages/LoginPage.js`
@@ -209,6 +233,33 @@ These components provide the primary features of the application, mostly within 
         5.  **Chronological Sorting:** Items automatically sorted by capture/waypoint timestamp
         6.  **Markdown Support:** Notes can include formatting like **bold**, *italic*, `code`, links, etc.
     -   **Expected Experience:** Story-like journey view that weaves together photos and location waypoints, allowing users to document their trip as a narrative timeline
+
+### Plan Mode Components (`client/src/components/panels/` & `views/`)
+
+These components are specific to the `/plans/:planId` route.
+
+-   **`PlanToolbox.js`**:
+    -   **Purpose:** Provides drawing tools for the map.
+    -   **Features:** Category-aware tools (Waypoint, Marker, Route, Area). Supports "Semantic Types" (Water, Camp, Hazard) to auto-style new features.
+
+-   **`OperationsPanel.js`**:
+    -   **Purpose:** Manages the "business" side of the plan.
+    -   **Tabs:**
+        -   **Team:** Roster management (Name, Role, Contact).
+        -   **Gear:** Packing checklists (Personal vs Group gear).
+        -   **Settings:** Plan metadata (Dates, Public visibility).
+
+-   **`ItineraryPanel.js`**:
+    -   **Purpose:** Displays the chronological and logical flow of the plan.
+    -   **Sections:**
+        -   **Day Summaries:** Route overview and conditions per day.
+        -   **Checkpoints:** Time-sorted waypoints (supports "Cascade Update" to shift subsequent times).
+        -   **Other Features:** Markers and routes, reorderable via drag-and-drop.
+        -   **Reference Tracks:** Toggle visibility of imported GPX baselines.
+
+-   **`PlanStatsHUD.js`**:
+    -   **Purpose:** Real-time statistics overlay for the plan.
+    -   **Features:** Shows total distance, reference track distance, and counts of semantic features (e.g., "3 Hazards").
 
 ### Common Components (`client/src/components/common/`)
 

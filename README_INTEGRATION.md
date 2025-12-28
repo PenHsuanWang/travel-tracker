@@ -87,6 +87,26 @@ The following sections detail the API endpoints exposed by the backend and consu
 | `GET`  | `/users/search`  | `searchUsers(q)`  | Searches for users by name or username. Used for adding trip members. |
 | `GET`  | `/users/{username}` | `getUserProfile(...)` | Retrieves the public profile of another user. |
 
+### Plans API
+
+-   **Prefix**: `/api/plans`
+-   **Frontend Service**: `client/src/services/planService.js`
+-   **Backend Router**: `server/src/routes/plan_routes.py`
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/` | Create a new plan (optionally with GPX data using `gpx_strategy`). |
+| `GET` | `/` | List plans. Filters: `user_id`, `status`. |
+| `GET` | `/{plan_id}` | Get full plan details, including features, roster, and logistics. |
+| `PUT` | `/{plan_id}` | Update plan metadata (name, dates, region). |
+| `DELETE` | `/{plan_id}` | Delete a plan. |
+| `POST` | `/{plan_id}/features` | Add a GeoJSON feature (Marker, Route, Area). |
+| `PUT` | `/{plan_id}/features/{feature_id}` | Update feature geometry or properties. |
+| `PUT` | `/{plan_id}/features/{feature_id}/cascade` | Update feature with "Time Cascade": shifts timestamps of subsequent checkpoints. |
+| `PUT` | `/{plan_id}/logistics` | Atomic update for `roster`, `logistics`, or `checklist`. |
+| `POST` | `/ingest-gpx` | Upload GPX for preview. Returns detected waypoints and time bounds for the "Time Shift" UI. |
+| `POST` | `/import-trip/{trip_id}` | Clone an existing Trip into a new Plan, converting GPX waypoints to checkpoints. |
+
 ### Trips API
 
 -   **Prefix**: `/api/trips`
@@ -395,7 +415,57 @@ This covers file uploads, metadata management, and raw file retrieval.
         ```
     -   Rivers appear/disappear instantly as user checks/unchecks boxes (pure client-side rendering, no backend calls)
 
+### Flow 6: Planning with GPX & Time Shift
+
+1.  **User Action**: Clicks "Import GPX" on Plans Page or "Add Reference Track" in Plan Canvas.
+2.  **Frontend**:
+    -   Uploads file to `/api/plans/ingest-gpx`.
+3.  **Backend**:
+    -   Parses GPX, extracts waypoints, and calculates duration stats.
+    -   Returns a `GpxIngestionPreview` with detected waypoints and original timestamps.
+4.  **Frontend (Modal)**:
+    -   Displays `GpxImportOptionsModal`.
+    -   User selects "Relative Time Shift" strategy and sets a "Planned Start Date".
+    -   User selects which waypoints to import as "Checkpoints".
+5.  **Frontend (Action)**:
+    -   Calls `createPlan` or `addFeature` (batch).
+    -   Applies the time shift formula: `New_Time = Plan_Start + (Original_Time - Original_Start)`.
+6.  **Result**: The Plan is populated with checkpoints scheduled relative to the new start date, preserving the original pacing.
+
 ## 5. Data Models
+
+### Plan Model
+```json
+{
+  "id": "uuid",
+  "name": "Summer Expedition",
+  "status": "draft",
+  "features": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry": { "type": "Point", "coordinates": [121.5, 25.0] },
+        "properties": {
+          "category": "waypoint",
+          "name": "Camp 1",
+          "estimated_arrival": "2025-07-15T16:00:00Z",
+          "semantic_type": "camp"
+        }
+      }
+    ]
+  },
+  "roster": [
+    { "name": "Alice", "role": "Leader", "phone": "..." }
+  ],
+  "logistics": {
+    "transport_provider": "Shuttle Co"
+  },
+  "reference_tracks": [
+    { "object_key": "...", "color": "#888888" }
+  ]
+}
+```
 
 ### Trip Model
 ```json
