@@ -1,5 +1,5 @@
 // client/src/components/panels/PlanStatsHUD.js
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { FEATURE_CATEGORY, ROUTE_TYPE, SEMANTIC_TYPE } from '../../services/planService';
 import './PlanStatsHUD.css';
 
@@ -37,7 +37,16 @@ const distanceForLatLngLineString = (coordinates) => {
   return total;
 };
 
-const PlanStatsHUD = ({ features = [], referenceTracks = [], trackData = {} }) => {
+const PlanStatsHUD = ({ 
+  features = [], 
+  referenceTracks = [], 
+  trackData = {},
+  onSelectFeature,
+  onFlyToFeature,
+  onFlyToTrack
+}) => {
+  const [activeCard, setActiveCard] = useState(null);
+
   const stats = useMemo(() => {
     const featuresArray = Array.isArray(features) ? features : features?.features || [];
 
@@ -48,6 +57,7 @@ const PlanStatsHUD = ({ features = [], referenceTracks = [], trackData = {} }) =
     const waterSources = featuresArray.filter((f) => f.properties?.semantic_type === SEMANTIC_TYPE.WATER);
     const camps = featuresArray.filter((f) => f.properties?.semantic_type === SEMANTIC_TYPE.CAMP);
     const escapeRoutes = featuresArray.filter((f) => f.properties?.route_type === ROUTE_TYPE.ESCAPE);
+    const routes = featuresArray.filter((f) => f.geometry?.type === 'LineString' && f.properties?.route_type !== ROUTE_TYPE.ESCAPE);
 
     const routeDistanceKm = featuresArray.reduce((total, feature) => {
       if (feature.geometry?.type !== 'LineString') return total;
@@ -69,57 +79,139 @@ const PlanStatsHUD = ({ features = [], referenceTracks = [], trackData = {} }) =
       waterCount: waterSources.length,
       campCount: camps.length,
       escapeCount: escapeRoutes.length,
+      // Lists for interaction
+      routesList: routes,
+      checkpointsList: checkpoints,
+      hazardsList: hazards,
+      waterList: waterSources,
+      campsList: camps,
+      escapeList: escapeRoutes,
+      referenceList: referenceTracks,
     };
   }, [features, referenceTracks, trackData]);
 
+  const toggleCard = (key) => {
+    if (activeCard === key) {
+      setActiveCard(null);
+    } else {
+      setActiveCard(key);
+    }
+  };
+
+  const handleFeatureClick = (e, featureId) => {
+    e.stopPropagation();
+    if (onSelectFeature) onSelectFeature(featureId);
+    if (onFlyToFeature) onFlyToFeature(featureId);
+    setActiveCard(null); // Close after selection
+  };
+
+  const handleTrackClick = (e, trackId) => {
+    e.stopPropagation();
+    if (onFlyToTrack) onFlyToTrack(trackId);
+    setActiveCard(null);
+  };
+
   const cards = [
     {
+      key: 'distance',
       label: 'Planned Distance',
       value: `${stats.totalDistanceKm.toFixed(1)} km`,
       meta: 'Routes',
+      items: stats.routesList,
+      type: 'feature'
     },
     {
+      key: 'reference',
       label: 'Reference Distance',
       value: `${stats.referenceDistanceKm.toFixed(1)} km`,
       meta: 'Baseline GPX',
+      items: stats.referenceList,
+      type: 'track'
     },
     {
+      key: 'checkpoints',
       label: 'Checkpoints',
       value: stats.checkpointCount,
       meta: 'Waypoints with time',
+      items: stats.checkpointsList,
+      type: 'feature'
     },
     {
+      key: 'water',
       label: 'Water Sources',
       value: stats.waterCount,
       meta: 'Semantic tag: Water',
+      items: stats.waterList,
+      type: 'feature'
     },
     {
+      key: 'camps',
       label: 'Camps',
       value: stats.campCount,
       meta: 'Semantic tag: Camp',
+      items: stats.campsList,
+      type: 'feature'
     },
     {
+      key: 'hazards',
       label: 'Hazards',
       value: stats.hazardCount,
       meta: 'Semantic tag: Hazard',
+      items: stats.hazardsList,
+      type: 'feature'
     },
     {
+      key: 'escape',
       label: 'Escape Routes',
       value: stats.escapeCount,
       meta: 'Route type: Escape',
+      items: stats.escapeList,
+      type: 'feature'
     },
   ];
 
   return (
     <div className="plan-stats-hud">
       <div className="hud-grid">
-        {cards.map((card) => (
-          <div key={card.label} className="hud-card">
-            <p className="hud-label">{card.label}</p>
-            <p className="hud-value">{card.value}</p>
-            <span className="hud-meta">{card.meta}</span>
-          </div>
-        ))}
+        {cards.map((card) => {
+          const hasItems = card.items && card.items.length > 0;
+          return (
+            <div 
+              key={card.key} 
+              className={`hud-card ${activeCard === card.key ? 'active' : ''} ${hasItems ? 'clickable' : ''}`}
+              onClick={() => hasItems && toggleCard(card.key)}
+              role={hasItems ? "button" : "article"}
+              tabIndex={hasItems ? 0 : undefined}
+            >
+              <p className="hud-label">{card.label}</p>
+              <p className="hud-value">{card.value}</p>
+              <span className="hud-meta">{card.meta}</span>
+              
+              {activeCard === card.key && hasItems && (
+                <div className="hud-dropdown">
+                  <div className="hud-dropdown-header">
+                    <span>{card.items.length} Items</span>
+                    <button className="hud-dropdown-close" onClick={(e) => { e.stopPropagation(); setActiveCard(null); }}>×</button>
+                  </div>
+                  <ul className="hud-dropdown-list">
+                    {card.items.map((item, idx) => {
+                      const name = item.properties?.name || item.display_name || item.filename || `Item ${idx + 1}`;
+                      return (
+                        <li 
+                          key={item.id || idx} 
+                          className="hud-dropdown-item"
+                          onClick={(e) => card.type === 'track' ? handleTrackClick(e, item.id) : handleFeatureClick(e, item.id)}
+                        >
+                          {name}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

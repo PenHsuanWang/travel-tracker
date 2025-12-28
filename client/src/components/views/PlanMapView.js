@@ -725,6 +725,7 @@ const PlanMapView = forwardRef(({
   const mapRef = useRef(null);
   // FR-051: Store refs to reference track polyline layers for snap-to-track
   const referenceTrackLayersRef = useRef([]);
+  const resizeObserverRef = useRef(null);
 
   // FR-051: Compute reference track coordinates for snap-to-track
   const referenceTrackCoords = useMemo(() => {
@@ -744,6 +745,31 @@ const PlanMapView = forwardRef(({
       onDrawingStateChange(drawingState);
     }
   }, [drawingState, onDrawingStateChange]);
+
+  // Invalidate map size when its container resizes (sidebar drag, etc.)
+  useEffect(() => {
+    const mapInstance = mapRef.current;
+    if (!mapInstance || typeof mapInstance.getContainer !== 'function' || typeof mapInstance.invalidateSize !== 'function') {
+      return undefined;
+    }
+    const container = mapInstance.getContainer();
+    if (!container || typeof ResizeObserver === 'undefined') return undefined;
+
+    let frame = null;
+    const observer = new ResizeObserver(() => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        mapInstance.invalidateSize({ debounceMoveend: true });
+      });
+    });
+    observer.observe(container);
+    resizeObserverRef.current = observer;
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, []);
 
   // Reset drawing state when tool changes
   useEffect(() => {
@@ -853,6 +879,22 @@ const PlanMapView = forwardRef(({
     centerOnCoords: (coords) => {
       if (mapRef.current && coords) {
         mapRef.current.flyTo(coords, 15, { duration: 0.5 });
+      }
+    },
+
+    // Fly to reference track bounds
+    flyToTrack: (trackId) => {
+      if (!mapRef.current || !referenceTracks || !trackData) return;
+      
+      const track = referenceTracks.find(t => t.id === trackId);
+      if (!track) return;
+      
+      const data = trackData[track.object_key];
+      if (!data || !data.coordinates || data.coordinates.length === 0) return;
+      
+      const bounds = L.latLngBounds(data.coordinates);
+      if (bounds.isValid()) {
+        mapRef.current.flyToBounds(bounds, { padding: [50, 50], duration: 1.0, maxZoom: 16 });
       }
     },
   }));

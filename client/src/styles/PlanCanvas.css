@@ -270,6 +270,22 @@
   overflow-y: auto;
   overflow-x: hidden;
   min-width: 0;
+  position: relative;
+}
+
+.left-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: ew-resize;
+  background: transparent;
+  z-index: 10;
+}
+
+.left-resize-handle:hover {
+  background: rgba(37, 99, 235, 0.08);
 }
 
 /* Zone B: Center Canvas (Map) */

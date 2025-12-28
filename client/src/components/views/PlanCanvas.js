@@ -45,6 +45,10 @@ const MIN_ITINERARY_WIDTH = 280;
 const MAX_ITINERARY_WIDTH = 500;
 const DEFAULT_ITINERARY_WIDTH = 340;
 
+const MIN_LEFT_WIDTH = 280;
+const MAX_LEFT_WIDTH = 500;
+const DEFAULT_LEFT_WIDTH = 300;
+
 const clampItineraryWidth = (value) =>
   Math.min(MAX_ITINERARY_WIDTH, Math.max(MIN_ITINERARY_WIDTH, value));
 
@@ -55,6 +59,18 @@ const getStoredItineraryWidth = () => {
     return clampItineraryWidth(stored);
   }
   return DEFAULT_ITINERARY_WIDTH;
+};
+
+const clampLeftWidth = (value) =>
+  Math.min(MAX_LEFT_WIDTH, Math.max(MIN_LEFT_WIDTH, value));
+
+const getStoredLeftWidth = () => {
+  if (typeof window === 'undefined') return DEFAULT_LEFT_WIDTH;
+  const stored = Number(window.localStorage.getItem('planLeftSidebarWidth'));
+  if (Number.isFinite(stored)) {
+    return clampLeftWidth(stored);
+  }
+  return DEFAULT_LEFT_WIDTH;
 };
 
 const PlanCanvas = () => {
@@ -75,6 +91,7 @@ const PlanCanvas = () => {
   const [selectedFeatureId, setSelectedFeatureId] = useState(null);
   const [itineraryOpen, setItineraryOpen] = useState(true);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true); // Phase 2: Left sidebar visibility
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => getStoredLeftWidth());
   const [itineraryWidth, setItineraryWidth] = useState(() => getStoredItineraryWidth());
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
@@ -171,6 +188,11 @@ const PlanCanvas = () => {
   useEffect(() => {
     window.localStorage.setItem('planItineraryWidth', String(itineraryWidth));
   }, [itineraryWidth]);
+
+  // Save left sidebar width preference
+  useEffect(() => {
+    window.localStorage.setItem('planLeftSidebarWidth', String(leftSidebarWidth));
+  }, [leftSidebarWidth]);
 
   // Helper to extract features array from FeatureCollection
   const getFeaturesArray = useCallback((planData) => {
@@ -595,6 +617,26 @@ const PlanCanvas = () => {
   // Get features array for passing to child components
   const featuresArray = useMemo(() => getFeaturesArray(plan), [plan, getFeaturesArray]);
 
+  const handleLeftResizeStart = useCallback((e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = leftSidebarWidth;
+
+    const handleMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const newWidth = clampLeftWidth(startWidth + delta);
+      setLeftSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [leftSidebarWidth]);
+
   // Loading state
   if (loading) {
     return (
@@ -618,7 +660,7 @@ const PlanCanvas = () => {
   }
 
   // Compute grid columns so sidebars stay anchored to edges when resized
-  const leftWidth = leftSidebarOpen ? 300 : 0;
+  const leftWidth = leftSidebarOpen ? leftSidebarWidth : 0;
   const rightWidth = itineraryOpen ? itineraryWidth : 0;
   const gridTemplate = `${leftWidth}px 1fr ${rightWidth}px`;
 
@@ -702,6 +744,7 @@ const PlanCanvas = () => {
         {/* Zone A: Left Sidebar (Operations) */}
         {leftSidebarOpen && (
           <div className="plan-left-sidebar">
+            <div className="left-resize-handle" onMouseDown={handleLeftResizeStart} />
             {/* Toolbox - Now embedded in Zone A */}
             {canEdit && (
               <PlanToolbox
@@ -769,6 +812,18 @@ const PlanCanvas = () => {
             features={featuresArray}
             referenceTracks={plan.reference_tracks || []}
             trackData={trackData}
+            onSelectFeature={setSelectedFeatureId}
+            onFlyToFeature={(featureId) => {
+              if (mapRef.current?.flyToFeature) {
+                mapRef.current.flyToFeature(featureId);
+              }
+              setSelectedFeatureId(featureId);
+            }}
+            onFlyToTrack={(trackId) => {
+              if (mapRef.current?.flyToTrack) {
+                mapRef.current.flyToTrack(trackId);
+              }
+            }}
           />
         </div>
 
