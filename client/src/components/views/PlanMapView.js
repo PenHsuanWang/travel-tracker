@@ -928,10 +928,20 @@ const PlanMapView = forwardRef(({
     const isSelected = feature.id === selectedFeatureId;
     const isFlashing = feature.id === flashingFeatureId;
     const semanticType = feature.properties?.semantic_type || SEMANTIC_TYPE.GENERIC;
+    
+    // Determine emoji based on hazard subtype
+    const hazardSubtype = feature.properties?.hazard_subtype;
+    let displayEmoji = null;
+    if (semanticType === SEMANTIC_TYPE.HAZARD && hazardSubtype) {
+      if (hazardSubtype === 'river_tracing') displayEmoji = '🌊';
+      else if (hazardSubtype === 'rock_climbing') displayEmoji = '🧗';
+      else displayEmoji = '⚠️';
+    }
+
     // Use cached icon or flashing icon
     const icon = isFlashing
       ? getFlashingMarkerIcon(semanticType, isSelected)
-      : getSemanticIcon(semanticType, { size: 36, selected: isSelected, highlighted: false });
+      : getSemanticIcon(semanticType, { size: 36, selected: isSelected, highlighted: false, emoji: displayEmoji });
     const isEditing = editingFeatureId === feature.id;
 
     // FE-07: Tooltip content for hover
@@ -939,6 +949,7 @@ const PlanMapView = forwardRef(({
 
     const semanticConfig = ICON_CONFIG[semanticType] || ICON_CONFIG[SEMANTIC_TYPE.GENERIC];
     const displayTitle = feature.properties?.name || semanticConfig.label.toUpperCase();
+    const headerEmoji = displayEmoji || semanticConfig.emoji;
 
     return (
       <Marker
@@ -974,7 +985,7 @@ const PlanMapView = forwardRef(({
             <div className="feature-popup">
               <div className="popup-header">
                 <strong>
-                  <span style={{ marginRight: '6px' }}>{semanticConfig.emoji}</span>
+                  <span style={{ marginRight: '6px' }}>{headerEmoji}</span>
                   {displayTitle}
                 </strong>
                 {!readOnly && (

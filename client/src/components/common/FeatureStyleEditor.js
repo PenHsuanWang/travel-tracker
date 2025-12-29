@@ -10,6 +10,7 @@
  * - Fill pattern (FE-05: Solid, Crosshatch, None)
  */
 import React, { useState, useEffect } from 'react';
+import { SEMANTIC_TYPE } from '../../services/planService';
 import './FeatureStyleEditor.css';
 
 // FE-05: Updated color presets per PRD (Red, Orange, Teal, Blue, Grey)
@@ -33,6 +34,27 @@ const FILL_PATTERNS = [
   { name: 'None', value: 'none', description: 'Outline only' },
 ];
 
+const HAZARD_TYPES = [
+  { value: 'other', label: 'Other (⚠️)' },
+  { value: 'river_tracing', label: 'River Tracing (🌊)' },
+  { value: 'rock_climbing', label: 'Rock Climbing (🧗)' },
+];
+
+const RIVER_TRACING_GRADES = [
+  { value: 'Class A', label: 'Class A (Experience)' },
+  { value: 'Class B', label: 'Class B (Challenge)' },
+  { value: 'Class C', label: 'Class C (Advanced)' },
+  { value: 'Class D', label: 'Class D (Expert)' },
+];
+
+const ROCK_CLIMBING_GRADES = [
+  { value: 'Novice', label: 'Novice (5.5-5.8)' },
+  { value: 'Intermediate', label: 'Intermediate (5.9)' },
+  { value: 'Advanced', label: 'Advanced (5.10)' },
+  { value: 'Expert', label: 'Expert (5.11)' },
+  { value: 'Elite', label: 'Elite (5.12+)' },
+];
+
 const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
   const [name, setName] = useState(feature.properties?.name || '');
   const [description, setDescription] = useState(feature.properties?.description || '');
@@ -43,6 +65,11 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
   const [fillOpacity, setFillOpacity] = useState(feature.properties?.fillOpacity ?? 0.2);
   // FE-05: Fill pattern state
   const [fillPattern, setFillPattern] = useState(feature.properties?.fillPattern || 'solid');
+  
+  // Hazard specific state
+  const [hazardSubtype, setHazardSubtype] = useState(feature.properties?.hazard_subtype || 'other');
+  const [difficultyGrade, setDifficultyGrade] = useState(feature.properties?.difficulty_grade || '');
+
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showFillColorPicker, setShowFillColorPicker] = useState(false);
   const [colorPickerType, setColorPickerType] = useState('stroke'); // 'stroke' or 'fill'
@@ -58,6 +85,8 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
     setOpacity(feature.properties?.opacity ?? 0.8);
     setFillOpacity(feature.properties?.fillOpacity ?? 0.2);
     setFillPattern(feature.properties?.fillPattern || 'solid');
+    setHazardSubtype(feature.properties?.hazard_subtype || 'other');
+    setDifficultyGrade(feature.properties?.difficulty_grade || '');
     // Reset color pickers
     setShowColorPicker(false);
     setShowFillColorPicker(false);
@@ -66,6 +95,7 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
   const isPolygon = feature.geometry?.type === 'Polygon';
   const isPolyline = feature.geometry?.type === 'LineString';
   const isPoint = feature.geometry?.type === 'Point';
+  const isHazard = feature.properties?.semantic_type === SEMANTIC_TYPE.HAZARD;
 
   const handleSave = () => {
     const updates = {
@@ -90,11 +120,18 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
       }
     }
 
+    // Hazard properties
+    if (isHazard) {
+      updates.properties.hazard_subtype = hazardSubtype;
+      updates.properties.difficulty_grade = difficultyGrade;
+    }
+
     onUpdate(feature.id, updates);
     onClose();
   };
 
   const getFeatureTypeLabel = () => {
+    if (isHazard) return '⚠️ Hazard';
     if (isPoint) return '📍 Marker';
     if (isPolyline) return '〰️ Route';
     if (isPolygon) {
@@ -104,6 +141,12 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
       return '⬡ Polygon';
     }
     return 'Feature';
+  };
+
+  const getDifficultyOptions = () => {
+    if (hazardSubtype === 'river_tracing') return RIVER_TRACING_GRADES;
+    if (hazardSubtype === 'rock_climbing') return ROCK_CLIMBING_GRADES;
+    return [];
   };
 
   return (
@@ -127,6 +170,48 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
             disabled={readOnly}
           />
         </div>
+
+        {/* Hazard Type Selector */}
+        {isHazard && (
+          <div className="form-group">
+            <label>Type</label>
+            <select
+              className="type-select"
+              value={hazardSubtype}
+              onChange={(e) => {
+                setHazardSubtype(e.target.value);
+                setDifficultyGrade(''); // Reset grade when type changes
+              }}
+              disabled={readOnly}
+            >
+              {HAZARD_TYPES.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Difficulty Grade Selector */}
+        {isHazard && hazardSubtype !== 'other' && (
+          <div className="form-group">
+            <label>Difficulty</label>
+            <select
+              className="grade-select"
+              value={difficultyGrade}
+              onChange={(e) => setDifficultyGrade(e.target.value)}
+              disabled={readOnly}
+            >
+              <option value="">Select grade...</option>
+              {getDifficultyOptions().map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Description field */}
         <div className="form-group">

@@ -16,6 +16,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import {
   FEATURE_CATEGORY,
+  SEMANTIC_TYPE,
   MARKER_ICON_TYPES,
   getCategoryLabel,
   getCategoryIcon,
@@ -23,6 +24,27 @@ import {
   formatCoordinates,
 } from '../../services/planService';
 import './SemanticPopupEditor.css';
+
+const HAZARD_TYPES = [
+  { value: 'other', label: 'Other', icon: '⚠️' },
+  { value: 'river_tracing', label: 'River Tracing', icon: '🌊' },
+  { value: 'rock_climbing', label: 'Rock Climbing', icon: '🧗' },
+];
+
+const RIVER_TRACING_GRADES = [
+  { value: 'Class A', label: 'Class A (Novice)' },
+  { value: 'Class B', label: 'Class B (Challenge)' },
+  { value: 'Class C', label: 'Class C (Advanced)' },
+  { value: 'Class D', label: 'Class D (Expert)' },
+];
+
+const ROCK_CLIMBING_GRADES = [
+  { value: 'Novice', label: 'Novice (5.5-5.8)' },
+  { value: 'Intermediate', label: 'Intermediate (5.9)' },
+  { value: 'Advanced', label: 'Advanced (5.10)' },
+  { value: 'Expert', label: 'Expert (5.11)' },
+  { value: 'Elite', label: 'Elite (5.12+)' },
+];
 
 /**
  * Convert datetime to datetime-local input format
@@ -49,11 +71,22 @@ const SemanticPopupEditor = ({
   onDelete,
   readOnly,
 }) => {
-  const { category, name, notes, icon_type, color, estimated_arrival, estimated_duration_minutes } =
-    feature.properties || {};
+  const { 
+    category, 
+    semantic_type,
+    name, 
+    notes, 
+    icon_type, 
+    color, 
+    estimated_arrival, 
+    estimated_duration_minutes,
+    hazard_subtype,
+    difficulty_grade 
+  } = feature.properties || {};
   
   const isWaypoint = category === FEATURE_CATEGORY.WAYPOINT;
   const isPointCategory = [FEATURE_CATEGORY.WAYPOINT, FEATURE_CATEGORY.MARKER].includes(category);
+  const isHazard = semantic_type === SEMANTIC_TYPE.HAZARD;
   
   // Extract coordinates for display
   const coordinates = feature.geometry?.coordinates;
@@ -66,6 +99,9 @@ const SemanticPopupEditor = ({
   const [formColor, setFormColor] = useState(color || '#3388ff');
   const [formArrival, setFormArrival] = useState(() => toDatetimeLocalValue(estimated_arrival));
   const [formDuration, setFormDuration] = useState(estimated_duration_minutes || '');
+  const [formHazardSubtype, setFormHazardSubtype] = useState(hazard_subtype || 'other');
+  const [formDifficultyGrade, setFormDifficultyGrade] = useState(difficulty_grade || '');
+  
   const [isDirty, setIsDirty] = useState(false);
 
   // Track changes
@@ -76,9 +112,16 @@ const SemanticPopupEditor = ({
       formIconType !== (icon_type || '') ||
       formColor !== (color || '#3388ff') ||
       formArrival !== toDatetimeLocalValue(estimated_arrival) ||
-      formDuration !== (estimated_duration_minutes || '');
+      formDuration !== (estimated_duration_minutes || '') ||
+      formHazardSubtype !== (hazard_subtype || 'other') ||
+      formDifficultyGrade !== (difficulty_grade || '');
     setIsDirty(hasChanges);
-  }, [formName, formNotes, formIconType, formColor, formArrival, formDuration, name, notes, icon_type, color, estimated_arrival, estimated_duration_minutes]);
+  }, [
+    formName, formNotes, formIconType, formColor, formArrival, formDuration, 
+    formHazardSubtype, formDifficultyGrade,
+    name, notes, icon_type, color, estimated_arrival, estimated_duration_minutes,
+    hazard_subtype, difficulty_grade
+  ]);
 
   const handleSave = useCallback(() => {
     const updates = {
@@ -104,6 +147,12 @@ const SemanticPopupEditor = ({
         typeof formDuration === 'number' && formDuration > 0 ? formDuration : null;
     }
 
+    // Update hazard specific fields
+    if (isHazard) {
+      updates.properties.hazard_subtype = formHazardSubtype;
+      updates.properties.difficulty_grade = formDifficultyGrade;
+    }
+
     onUpdate(feature.id, updates);
     onClose();
   }, [
@@ -114,8 +163,11 @@ const SemanticPopupEditor = ({
     formIconType,
     formArrival,
     formDuration,
+    formHazardSubtype,
+    formDifficultyGrade,
     isPointCategory,
     isWaypoint,
+    isHazard,
     onUpdate,
     onClose,
   ]);
@@ -136,6 +188,12 @@ const SemanticPopupEditor = ({
     if (value === '' || /^\d+$/.test(value)) {
       setFormDuration(value === '' ? '' : parseInt(value, 10));
     }
+  };
+
+  const getDifficultyOptions = () => {
+    if (formHazardSubtype === 'river_tracing') return RIVER_TRACING_GRADES;
+    if (formHazardSubtype === 'rock_climbing') return ROCK_CLIMBING_GRADES;
+    return [];
   };
 
   return (
@@ -167,8 +225,50 @@ const SemanticPopupEditor = ({
         />
       </div>
 
-      {/* Icon selector (points only) */}
-      {isPointCategory && (
+      {/* Hazard Type Selector */}
+      {isHazard && (
+        <div className="form-field">
+          <label htmlFor="popup-hazard-type">Type</label>
+          <select
+            id="popup-hazard-type"
+            value={formHazardSubtype}
+            onChange={(e) => {
+              setFormHazardSubtype(e.target.value);
+              setFormDifficultyGrade(''); // Reset grade when type changes
+            }}
+            disabled={readOnly}
+          >
+            {HAZARD_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.icon} {type.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Difficulty Grade Selector */}
+      {isHazard && formHazardSubtype !== 'other' && (
+        <div className="form-field">
+          <label htmlFor="popup-difficulty">Grade / Difficulty</label>
+          <select
+            id="popup-difficulty"
+            value={formDifficultyGrade}
+            onChange={(e) => setFormDifficultyGrade(e.target.value)}
+            disabled={readOnly}
+          >
+            <option value="">Select grade...</option>
+            {getDifficultyOptions().map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Icon selector (points only, non-hazard) */}
+      {isPointCategory && !isHazard && (
         <div className="form-field">
           <label htmlFor="popup-icon">Icon Type</label>
           <select

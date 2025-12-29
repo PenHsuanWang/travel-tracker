@@ -12,7 +12,7 @@ export const ICON_CONFIG = {
 
 export const getSemanticIcon = (type, options = {}) => {
   const config = ICON_CONFIG[type] || ICON_CONFIG.generic;
-  const { size = 32, selected = false, highlighted = false } = options;
+  const { size = 32, selected = false, highlighted = false, emoji = null } = options;
 
   // Use inline styles for dynamic dimensions to ensure reliability
   // (Tailwind arbitrary values like w-[${size}px] rely on static analysis)
@@ -24,9 +24,11 @@ export const getSemanticIcon = (type, options = {}) => {
   const selectedClass = selected ? 'ring-2 ring-offset-1 ring-red-500' : '';
   const highlightClass = highlighted ? 'scale-110' : '';
 
+  const displayEmoji = emoji || config.emoji;
+
   const html = `
     <div class="${baseClasses} ${colorClass} ${selectedClass} ${highlightClass}" style="${containerStyle}">
-      <span style="font-size:${Math.round(size * 0.6)}px; line-height: 1;">${config.emoji}</span>
+      <span style="font-size:${Math.round(size * 0.6)}px; line-height: 1;">${displayEmoji}</span>
     </div>
   `;
 

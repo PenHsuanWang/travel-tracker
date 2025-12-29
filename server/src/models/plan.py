@@ -174,6 +174,10 @@ class PlanFeatureProperties(BaseModel):
     route_type: RouteType = Field(default=RouteType.MAIN)  # FR-A03: Main vs Escape route
     is_safety_checkin: bool = Field(default=False)  # FR-A04: Safety check-in location flag
     
+    # Phase 2 - Hazard Grading (Module A)
+    hazard_subtype: Optional[str] = None  # e.g., 'river_tracing', 'rock_climbing', 'other'
+    difficulty_grade: Optional[str] = None  # e.g., 'Class C', '5.10a'
+    
     # Phase 2 - Export Support (Module E)
     decision_notes: Optional[str] = None  # FR-E01: If-Else logic notes for critical decisions
     

@@ -63,6 +63,14 @@ const FeatureItem = ({
   };
 
   const getFeatureIcon = () => {
+    // Priority 0: Hazard Subtype
+    if (feature.properties?.semantic_type === 'hazard' && feature.properties?.hazard_subtype) {
+       const subtype = feature.properties.hazard_subtype;
+       if (subtype === 'river_tracing') return '🌊';
+       if (subtype === 'rock_climbing') return '🧗';
+       return '⚠️';
+    }
+
     // Priority 1: Semantic Type (if specific)
     const semanticType = feature.properties?.semantic_type;
     if (semanticType && semanticType !== SEMANTIC_TYPE.GENERIC && ICON_CONFIG[semanticType]) {
@@ -146,6 +154,11 @@ const FeatureItem = ({
         <>
           <span className="feature-name" onDoubleClick={handleStartEdit}>
             {getFeatureLabel()}
+            {feature.properties?.difficulty_grade && (
+              <span style={{ fontSize: '0.85em', color: '#6b7280', marginLeft: '6px' }}>
+                ({feature.properties.difficulty_grade})
+              </span>
+            )}
           </span>
 
           {!readOnly && (
