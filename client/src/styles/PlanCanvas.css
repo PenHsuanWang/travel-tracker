@@ -267,10 +267,15 @@
   flex-direction: column;
   background: #ffffff;
   border-right: 1px solid #e2e8f0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden; /* Changed from overflow-y: auto to support nested scrolling */
   min-width: 0;
   position: relative;
+}
+
+/* Toolbox within sidebar */
+.plan-left-sidebar .plan-toolbox {
+  flex: 0 0 auto;
+  z-index: 20;
 }
 
 .left-resize-handle {
