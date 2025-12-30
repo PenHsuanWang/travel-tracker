@@ -10,6 +10,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { differenceInCalendarDays, format, parseISO, isValid } from 'date-fns';
 import CheckpointItem from './CheckpointItem';
+import DailyProfileCard from './DailyProfileCard';
 import {
   FEATURE_CATEGORY,
   getCategoryIcon,
@@ -190,49 +191,44 @@ const FeatureItem = ({
   );
 };
 
-const DaySummaryCard = ({ summary, onChange, readOnly }) => {
+// UI-04: Integrated Day Summary Editor
+const EmbeddedDaySummary = ({ dayNumber, summary, onChange, readOnly }) => {
   const handleFieldChange = (field, value) => {
     if (onChange) {
-      onChange(summary.day_number, field, value);
+      onChange(dayNumber, field, value);
     }
   };
 
+  const overviewValue = summary?.route_summary || '';
+  const conditionsValue = summary?.conditions || '';
+
+  if (readOnly && !overviewValue && !conditionsValue) {
+    return null;
+  }
+
   return (
-    <div className="day-summary-card">
-      <div className="day-summary-header">
-        <span className="day-pill">Day {summary.day_number}</span>
-        {!readOnly && (
-          <input
-            type="text"
-            value={summary.title || ''}
-            onChange={(e) => handleFieldChange('title', e.target.value)}
-            placeholder="Title (optional)"
-          />
-        )}
-        {readOnly && summary.title && <span className="day-title">{summary.title}</span>}
-      </div>
-      {!readOnly && (
-        <div className="day-summary-fields">
+    <div className="day-summary-embedded p-3 bg-gray-50 border-b border-gray-100">
+      {!readOnly ? (
+        <div className="day-summary-fields flex flex-col gap-2">
           <textarea
-            value={summary.route_summary || ''}
+            className="w-full text-sm border rounded p-1"
+            placeholder={`Day ${dayNumber} Overview (Route, key moves...)`}
+            rows="2"
+            value={overviewValue}
             onChange={(e) => handleFieldChange('route_summary', e.target.value)}
-            placeholder="Route summary, key moves, timing..."
-            rows={2}
           />
           <textarea
-            value={summary.conditions || ''}
+            className="w-full text-sm border rounded p-1"
+            placeholder="Conditions (Weather, water...)"
+            rows="1"
+            value={conditionsValue}
             onChange={(e) => handleFieldChange('conditions', e.target.value)}
-            placeholder="Conditions (weather, trail, avalanche, etc.)"
-            rows={2}
           />
         </div>
-      )}
-      {readOnly && (
-        <div className="day-summary-readonly">
-          {summary.route_summary && <p className="day-summary-text">{summary.route_summary}</p>}
-          {summary.conditions && (
-            <p className="day-summary-conditions">Conditions: {summary.conditions}</p>
-          )}
+      ) : (
+        <div className="day-summary-readonly text-sm text-gray-700">
+          {overviewValue && <p className="mb-1"><strong>Overview:</strong> {overviewValue}</p>}
+          {conditionsValue && <p><strong>Conditions:</strong> {conditionsValue}</p>}
         </div>
       )}
     </div>
@@ -489,31 +485,24 @@ const ItineraryPanel = ({
     return groups;
   }, [sortedOtherFeatures]);
 
-  const sortedDaySummaries = useMemo(() => {
-    const summaries = Array.isArray(daySummaries) ? daySummaries : [];
-    return [...summaries].sort((a, b) => (a.day_number || 0) - (b.day_number || 0));
-  }, [daySummaries]);
-
+  // Refactored to handle dynamic updates for embedded summaries
   const handleDaySummaryChange = (dayNumber, field, value) => {
     if (!onUpdateDaySummaries) return;
-    const base = Array.isArray(daySummaries) ? daySummaries : [];
-    const updated = base.map((day) =>
-      day.day_number === dayNumber ? { ...day, [field]: value } : day
-    );
-    onUpdateDaySummaries(updated);
-  };
-
-  const handleAddDay = () => {
-    if (!onUpdateDaySummaries) return;
-    const base = Array.isArray(daySummaries) ? daySummaries : [];
-    const nextDayNumber = base.reduce((max, day) => Math.max(max, day.day_number || 0), 0) + 1;
-    const newEntry = {
-      day_number: nextDayNumber,
-      title: `Day ${nextDayNumber}`,
-      route_summary: '',
-      conditions: '',
-    };
-    onUpdateDaySummaries([...base, newEntry]);
+    const base = Array.isArray(daySummaries) ? [...daySummaries] : [];
+    const existingIndex = base.findIndex(d => d.day_number === dayNumber);
+    
+    if (existingIndex >= 0) {
+      base[existingIndex] = { ...base[existingIndex], [field]: value };
+    } else {
+      base.push({
+        day_number: dayNumber,
+        title: `Day ${dayNumber}`,
+        route_summary: '',
+        conditions: '',
+        [field]: value,
+      });
+    }
+    onUpdateDaySummaries(base);
   };
 
   // Drag and drop handlers (for Other Features only, checkpoints are time-sorted)
@@ -592,58 +581,26 @@ const ItineraryPanel = ({
       </div>
 
       <div className="panel-content">
-        <section className="day-summary-section">
-          <div className="section-header-row">
-            <h4>
-              <span className="section-icon">📝</span>
-              Day Summaries
-              <span className="section-count">({sortedDaySummaries.length})</span>
-            </h4>
-            {!readOnly && (
-              <div className="day-summary-actions">
-                <button className="add-day-btn" onClick={handleAddDay} title="Add day summary">
-                  + Add Day
-                </button>
-                {daySummariesDirty && (
-                  <button
-                    className="save-day-btn"
-                    onClick={() => onSaveDaySummaries?.()}
-                    disabled={savingDaySummaries}
-                    title="Save day summaries"
-                  >
-                    {savingDaySummaries ? 'Saving...' : 'Save' }
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-          {sortedDaySummaries.length === 0 ? (
-            <p className="empty-message">
-              {readOnly
-                ? 'No day summaries added.'
-                : 'Add a quick summary for each day (route overview and conditions).'}
-            </p>
-          ) : (
-            <div className="day-summary-list">
-              {sortedDaySummaries.map((summary) => (
-                <DaySummaryCard
-                  key={summary.day_number}
-                  summary={summary}
-                  onChange={handleDaySummaryChange}
-                  readOnly={readOnly}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
         {/* Section 1: Checkpoints (time-sorted waypoints) - Grouped by Day */}
         <section className="checkpoints-section">
-          <h4>
-            <span className="section-icon">📍</span>
-            Checkpoints
-            <span className="section-count">({sortedCheckpoints.length})</span>
-          </h4>
+          <div className="section-header-row">
+            <h4>
+              <span className="section-icon">📍</span>
+              Checkpoints
+              <span className="section-count">({sortedCheckpoints.length})</span>
+            </h4>
+            {!readOnly && daySummariesDirty && (
+               <button
+                 className="save-day-btn"
+                 onClick={() => onSaveDaySummaries?.()}
+                 disabled={savingDaySummaries}
+                 title="Save itinerary changes"
+                 style={{ marginLeft: 'auto', fontSize: '11px', padding: '2px 8px' }}
+               >
+                 {savingDaySummaries ? 'Saving...' : 'Save Notes' }
+               </button>
+            )}
+          </div>
           {sortedCheckpoints.length === 0 ? (
             <p className="empty-message">
               {readOnly
@@ -667,6 +624,22 @@ const ItineraryPanel = ({
                          <span>{group.label}</span>
                        </div>
                      )
+                  )}
+
+                  {/* UI-04: Embedded Day Summary & Daily Profile */}
+                  {/* Only show for valid Day groups (not Unscheduled 999999) */}
+                  {group.dayNum >= 0 && group.dayNum < 900000 && (
+                    <>
+                      {/* Feature: Daily Profile Visualization */}
+                      <DailyProfileCard dailyCheckpoints={group.items} />
+                      
+                      <EmbeddedDaySummary
+                        dayNumber={group.dayNum}
+                        summary={daySummaries.find(d => d.day_number === group.dayNum)}
+                        onChange={handleDaySummaryChange}
+                        readOnly={readOnly}
+                      />
+                    </>
                   )}
 
                   {/* Items container */}
