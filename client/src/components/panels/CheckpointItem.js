@@ -36,6 +36,7 @@ const CheckpointItem = ({
   hasSubsequentCheckpoints, // Whether there are checkpoints after this one
 }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [editedName, setEditedName] = useState('');
   const [pendingTimeChange, setPendingTimeChange] = useState(null); // For cascade prompt
   
   const {
@@ -87,12 +88,21 @@ const CheckpointItem = ({
     }
   }, [isEditing, feature.id, onSelect]);
 
+  const handleEnterEditMode = useCallback((e) => {
+    e.stopPropagation();
+    if (!readOnly) {
+      setEditedName(name || '');
+      setIsEditing(true);
+    }
+  }, [readOnly, name]);
+
   const handleEditTime = useCallback((e) => {
     e.stopPropagation();
     if (!readOnly) {
+      setEditedName(name || '');
       setIsEditing(true);
     }
-  }, [readOnly]);
+  }, [readOnly, name]);
 
   const handleSaveTime = useCallback((newArrival, newDuration) => {
     const arrivalChanged = newArrival !== estimated_arrival;
@@ -106,13 +116,14 @@ const CheckpointItem = ({
       onUpdate(feature.id, {
         properties: {
           ...feature.properties,
+          name: editedName,
           estimated_arrival: newArrival,
           estimated_duration_minutes: newDuration,
         },
       });
       setIsEditing(false);
     }
-  }, [feature.id, feature.properties, estimated_arrival, onUpdate, onUpdateWithCascade, hasSubsequentCheckpoints]);
+  }, [feature.id, feature.properties, editedName, estimated_arrival, onUpdate, onUpdateWithCascade, hasSubsequentCheckpoints]);
 
   const handleCascadeConfirm = useCallback((shouldCascade) => {
     if (!pendingTimeChange) return;
@@ -124,6 +135,7 @@ const CheckpointItem = ({
       onUpdateWithCascade(feature.id, {
         properties: {
           ...feature.properties,
+          name: editedName,
           estimated_arrival: newArrival,
           estimated_duration_minutes: newDuration,
         },
@@ -133,6 +145,7 @@ const CheckpointItem = ({
       onUpdate(feature.id, {
         properties: {
           ...feature.properties,
+          name: editedName,
           estimated_arrival: newArrival,
           estimated_duration_minutes: newDuration,
         },
@@ -141,7 +154,7 @@ const CheckpointItem = ({
     
     setPendingTimeChange(null);
     setIsEditing(false);
-  }, [feature.id, feature.properties, pendingTimeChange, onUpdate, onUpdateWithCascade]);
+  }, [feature.id, feature.properties, editedName, pendingTimeChange, onUpdate, onUpdateWithCascade]);
 
   const handleCancelEdit = useCallback(() => {
     setIsEditing(false);
@@ -151,7 +164,9 @@ const CheckpointItem = ({
   const handleCenterMap = useCallback((e) => {
     e.stopPropagation();
     if (onCenter && coordinates) {
-      onCenter(feature.id, coordinates);
+      // Fix: Swap coordinates because GeoJSON is [Lon, Lat] but Leaflet expects [Lat, Lon]
+      const [lon, lat] = coordinates;
+      onCenter(feature.id, [lat, lon]);
     }
   }, [feature.id, coordinates, onCenter]);
 
@@ -162,20 +177,14 @@ const CheckpointItem = ({
     }
   }, [feature.id, onDelete]);
 
-  // FE-06: Handle double-click to fly to feature on map
-  const handleDoubleClick = useCallback((e) => {
-    e.stopPropagation();
-    if (onFlyTo) {
-      onFlyTo(feature.id);
-    }
-  }, [feature.id, onFlyTo]);
+  // FE-06: Handle double-click to navigate (Legacy/Removed)
+  // Now double-click triggers edit mode
 
   return (
     <div
       className={`checkpoint-item ${selected ? 'selected' : ''} ${isEditing ? 'editing' : ''}`}
       onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      title="Double-click to navigate on map"
+      onDoubleClick={handleEnterEditMode}
     >
       {/* Icon */}
       <span className="checkpoint-icon" title={iconTitle}>
@@ -188,15 +197,23 @@ const CheckpointItem = ({
           {name || 'Unnamed Checkpoint'}
         </span>
         
-        <span className="checkpoint-coords" title="Click to center map">
-          <button 
-            className="coords-button" 
-            onClick={handleCenterMap}
-            title="Center map on this checkpoint"
-          >
-            📍 {formattedCoords}
-          </button>
-        </span>
+        {/* Coordinates Row with Navigate Button */}
+        <div className="checkpoint-coords-row flex items-center gap-2 text-xs text-gray-500 mt-1">
+            <span>{formattedCoords}</span>
+            <button 
+                className="nav-btn text-blue-500 hover:text-blue-700 p-1 rounded" 
+                title="Navigate on map"
+                onClick={handleCenterMap}
+            >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="22" y1="12" x2="18" y2="12"></line>
+                    <line x1="6" y1="12" x2="2" y2="12"></line>
+                    <line x1="12" y1="6" x2="12" y2="2"></line>
+                    <line x1="12" y1="22" x2="12" y2="18"></line>
+                </svg>
+            </button>
+        </div>
         
         {!isEditing ? (
           /* Display mode */
@@ -212,12 +229,29 @@ const CheckpointItem = ({
           </div>
         ) : (
           /* Inline edit mode */
-          <CheckpointTimeEditor
-            arrival={estimated_arrival}
-            duration={estimated_duration_minutes}
-            onSave={handleSaveTime}
-            onCancel={handleCancelEdit}
-          />
+          <div className="checkpoint-edit-container">
+            <input
+              type="text"
+              className="checkpoint-name-edit"
+              value={editedName}
+              onChange={(e) => setEditedName(e.target.value)}
+              placeholder="Checkpoint name"
+              onClick={(e) => e.stopPropagation()}
+              style={{ 
+                width: '100%', 
+                marginBottom: '8px', 
+                padding: '4px', 
+                border: '1px solid #ddd', 
+                borderRadius: '4px' 
+              }}
+            />
+            <CheckpointTimeEditor
+              arrival={estimated_arrival}
+              duration={estimated_duration_minutes}
+              onSave={handleSaveTime}
+              onCancel={handleCancelEdit}
+            />
+          </div>
         )}
         
         {/* Cascade prompt - shown when time change affects subsequent checkpoints */}
@@ -252,7 +286,7 @@ const CheckpointItem = ({
           {!isEditing && (
             <button 
               className="action-btn edit-time-btn"
-              title="Edit time" 
+              title="Edit" 
               onClick={handleEditTime}
             >
               ⏰
