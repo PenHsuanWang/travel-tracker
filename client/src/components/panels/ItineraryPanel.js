@@ -11,6 +11,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { differenceInCalendarDays, format, parseISO, isValid } from 'date-fns';
 import CheckpointItem from './CheckpointItem';
 import DailyProfileCard from './DailyProfileCard';
+import DailyHazardCard from './DailyHazardCard';
 import {
   FEATURE_CATEGORY,
   getCategoryIcon,
@@ -632,6 +633,9 @@ const ItineraryPanel = ({
                     <>
                       {/* Feature: Daily Profile Visualization */}
                       <DailyProfileCard dailyCheckpoints={group.items} />
+                      
+                      {/* Feature: Daily Hazard Statistics */}
+                      <DailyHazardCard dailyCheckpoints={group.items} />
                       
                       <EmbeddedDaySummary
                         dayNumber={group.dayNum}
