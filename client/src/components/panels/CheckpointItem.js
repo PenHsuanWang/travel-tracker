@@ -43,6 +43,8 @@ const CheckpointItem = ({
     estimated_arrival,
     estimated_duration_minutes,
     icon_type,
+    semantic_type,
+    hazard_subtype,
   } = feature.properties || {};
   
   // Extract coordinates from geometry
@@ -53,8 +55,31 @@ const CheckpointItem = ({
   const formattedTime = formatArrivalTime(estimated_arrival);
   const formattedDuration = formatDuration(estimated_duration_minutes);
   
-  // Get icon emoji
-  const iconEmoji = getMarkerEmoji(icon_type);
+  // Determine icon and title based on semantic properties
+  let iconEmoji = '📍';
+  let iconTitle = icon_type || 'checkpoint';
+
+  if (hazard_subtype === 'rock_climbing') {
+    iconEmoji = '🧗';
+    iconTitle = 'Rock Climbing';
+  } else if (hazard_subtype === 'river_tracing') {
+    iconEmoji = '🌊';
+    iconTitle = 'River Tracing';
+  } else if (semantic_type === 'hazard') {
+    iconEmoji = '⚠️';
+    iconTitle = 'Hazard';
+  } else if (semantic_type === 'camp') {
+    iconEmoji = '⛺';
+    iconTitle = 'Camp';
+  } else if (semantic_type === 'water') {
+    iconEmoji = '💧';
+    iconTitle = 'Water';
+  } else if (semantic_type === 'checkin') {
+    iconEmoji = '🆘';
+    iconTitle = 'Check-in';
+  } else {
+    iconEmoji = getMarkerEmoji(icon_type);
+  }
 
   const handleClick = useCallback(() => {
     if (!isEditing) {
@@ -153,7 +178,7 @@ const CheckpointItem = ({
       title="Double-click to navigate on map"
     >
       {/* Icon */}
-      <span className="checkpoint-icon" title={icon_type || 'checkpoint'}>
+      <span className="checkpoint-icon" title={iconTitle}>
         {iconEmoji}
       </span>
       
@@ -256,6 +281,8 @@ CheckpointItem.propTypes = {
     properties: PropTypes.shape({
       name: PropTypes.string,
       icon_type: PropTypes.string,
+      semantic_type: PropTypes.string,
+      hazard_subtype: PropTypes.string,
       estimated_arrival: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date)]),
       estimated_duration_minutes: PropTypes.number,
     }),
