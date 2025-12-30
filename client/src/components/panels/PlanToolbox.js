@@ -200,7 +200,7 @@ const PlanToolbox = ({
           <button
             key={semantic.id}
             className={`toolbox-btn semantic-btn ${activeSemanticType === semantic.id ? 'active' : ''}`}
-            onClick={() => onSelectSemanticType?.(semantic.id)}
+            onClick={() => onSelectSemanticType?.(activeSemanticType === semantic.id ? null : semantic.id)}
             disabled={disabled}
             title={`${semantic.label} tag`}
             aria-pressed={activeSemanticType === semantic.id}
