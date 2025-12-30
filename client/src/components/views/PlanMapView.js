@@ -496,8 +496,12 @@ function DrawingPreview({ activeTool, drawingState }) {
 // Feature bounds controller - fits map to features
 function FeatureBoundsController({ features, referenceTracks, trackData }) {
   const map = useMap();
+  const hasFittedRef = useRef(false);
 
   useEffect(() => {
+    // Prevent auto-zooming on updates (e.g. adding markers)
+    if (hasFittedRef.current) return;
+
     const points = [];
 
     // Ensure features is an array
@@ -541,6 +545,7 @@ function FeatureBoundsController({ features, referenceTracks, trackData }) {
         const bounds = L.latLngBounds(points);
         if (bounds.isValid()) {
           map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+          hasFittedRef.current = true;
         }
       } catch (e) {
         console.error('Error fitting bounds:', e);

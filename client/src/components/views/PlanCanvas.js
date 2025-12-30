@@ -791,6 +791,7 @@ const PlanCanvas = () => {
         <div className="plan-center-canvas">
           <div className="plan-map-container">
             <PlanMapView
+              key={planId}
               ref={mapRef}
               features={featuresArray}
               referenceTracks={plan.reference_tracks || []}
