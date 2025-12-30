@@ -8,6 +8,7 @@
  * 3. Reference Tracks - Read-only GPX baselines
  */
 import React, { useState, useCallback, useMemo } from 'react';
+import { differenceInCalendarDays, format, parseISO, isValid } from 'date-fns';
 import CheckpointItem from './CheckpointItem';
 import {
   FEATURE_CATEGORY,
@@ -324,6 +325,7 @@ const FeatureGroup = ({ title, icon, count, children, defaultOpen = true }) => {
 const ItineraryPanel = ({
   features,
   referenceTracks,
+  planStartDate, // Added prop for day grouping
   selectedFeatureId,
   onSelectFeature,
   onUpdateFeature,
@@ -397,6 +399,62 @@ const ItineraryPanel = ({
       return 0;
     });
   }, [checkpoints]);
+
+  // Group checkpoints by Day (based on planStartDate)
+  const groupedCheckpoints = useMemo(() => {
+    if (!planStartDate) {
+      // Fallback: if no planStartDate, just return a single group or treat as flat
+      // But keeping consistent structure is better.
+      return [{
+        label: 'All Checkpoints',
+        subLabel: '',
+        dayNum: 0,
+        items: sortedCheckpoints
+      }];
+    }
+
+    const groupMap = new Map();
+    const groupList = [];
+    const startDate = parseISO(planStartDate);
+    const validStartDate = isValid(startDate);
+
+    sortedCheckpoints.forEach(cp => {
+      const arrival = cp.properties?.estimated_arrival;
+      let key = 'Unscheduled';
+      let label = 'Unscheduled';
+      let subLabel = '';
+      let dayNum = 999999; // Sort unscheduled last
+
+      if (arrival && validStartDate) {
+        const cpDate = parseISO(arrival);
+        if (isValid(cpDate)) {
+          // Calculate day offset
+          dayNum = differenceInCalendarDays(cpDate, startDate) + 1;
+          label = `Day ${dayNum}`;
+          subLabel = format(cpDate, 'MMM dd');
+          key = `${dayNum}_${subLabel}`;
+        }
+      }
+
+      if (!groupMap.has(key)) {
+        const group = {
+          key,
+          label,
+          subLabel,
+          dayNum,
+          items: []
+        };
+        groupMap.set(key, group);
+        groupList.push(group);
+      }
+      groupMap.get(key).items.push(cp);
+    });
+
+    // Sort groups: chronological days first, then Unscheduled
+    groupList.sort((a, b) => a.dayNum - b.dayNum);
+
+    return groupList;
+  }, [sortedCheckpoints, planStartDate]);
 
   // Sort other features by order_index
   const sortedOtherFeatures = useMemo(() => {
@@ -579,7 +637,7 @@ const ItineraryPanel = ({
           )}
         </section>
 
-        {/* Section 1: Checkpoints (time-sorted waypoints) */}
+        {/* Section 1: Checkpoints (time-sorted waypoints) - Grouped by Day */}
         <section className="checkpoints-section">
           <h4>
             <span className="section-icon">📍</span>
@@ -594,20 +652,42 @@ const ItineraryPanel = ({
             </p>
           ) : (
             <div className="checkpoints-list">
-              {sortedCheckpoints.map((checkpoint, index) => (
-                <CheckpointItem
-                  key={checkpoint.id}
-                  feature={checkpoint}
-                  selected={checkpoint.id === selectedFeatureId}
-                  onSelect={onSelectFeature}
-                  onUpdate={onUpdateFeature}
-                  onUpdateWithCascade={onUpdateFeatureWithCascade}
-                  onDelete={onDeleteFeature}
-                  onCenter={onCenterFeature}
-                  onFlyTo={onFlyToFeature}
-                  readOnly={readOnly}
-                  hasSubsequentCheckpoints={index < sortedCheckpoints.length - 1}
-                />
+              {groupedCheckpoints.map((group, groupIndex) => (
+                <div key={group.key || groupIndex} className="day-group-container mb-4">
+                  {/* Day Header */}
+                  {planStartDate ? (
+                    <div className="day-group-header sticky top-0 z-10 bg-gray-100 p-2 font-bold border-b flex justify-between">
+                      <span>{group.label}</span>
+                      <span className="text-gray-500 font-normal">{group.subLabel}</span>
+                    </div>
+                  ) : (
+                     /* If no plan start date, show simplified header or nothing if 'All Checkpoints' */
+                     group.label !== 'All Checkpoints' && (
+                       <div className="day-group-header sticky top-0 z-10 bg-gray-100 p-2 font-bold border-b">
+                         <span>{group.label}</span>
+                       </div>
+                     )
+                  )}
+
+                  {/* Items container */}
+                  <div className={planStartDate ? "day-items border-l-2 border-gray-200 ml-2 pl-2" : "day-items"}>
+                    {group.items.map((checkpoint, index) => (
+                      <CheckpointItem
+                        key={checkpoint.id}
+                        feature={checkpoint}
+                        selected={checkpoint.id === selectedFeatureId}
+                        onSelect={onSelectFeature}
+                        onUpdate={onUpdateFeature}
+                        onUpdateWithCascade={onUpdateFeatureWithCascade}
+                        onDelete={onDeleteFeature}
+                        onCenter={onCenterFeature}
+                        onFlyTo={onFlyToFeature}
+                        readOnly={readOnly}
+                        hasSubsequentCheckpoints={index < group.items.length - 1}
+                      />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}

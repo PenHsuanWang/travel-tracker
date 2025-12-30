@@ -833,6 +833,7 @@ const PlanCanvas = () => {
           <ItineraryPanel
             features={featuresArray}
             referenceTracks={plan.reference_tracks || []}
+            planStartDate={plan.planned_start_date}
             selectedFeatureId={selectedFeatureId}
             onSelectFeature={setSelectedFeatureId}
             onUpdateFeature={handleUpdateFeature}
@@ -875,7 +876,7 @@ const PlanCanvas = () => {
           onClose={handleGpxImportCancel}
           onImport={handleGpxImport}
           previewData={gpxPreviewData}
-          planStartDate={plan.start_date}
+          planStartDate={plan.planned_start_date}
         />
       )}
 
