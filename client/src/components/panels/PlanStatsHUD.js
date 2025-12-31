@@ -46,6 +46,7 @@ const PlanStatsHUD = ({
   onFlyToTrack
 }) => {
   const [activeCard, setActiveCard] = useState(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const stats = useMemo(() => {
     const featuresArray = Array.isArray(features) ? features : features?.features || [];
@@ -171,47 +172,79 @@ const PlanStatsHUD = ({
   ];
 
   return (
-    <div className="plan-stats-hud">
-      <div className="hud-grid">
-        {cards.map((card) => {
-          const hasItems = card.items && card.items.length > 0;
-          return (
-            <div 
-              key={card.key} 
-              className={`hud-card ${activeCard === card.key ? 'active' : ''} ${hasItems ? 'clickable' : ''}`}
-              onClick={() => hasItems && toggleCard(card.key)}
-              role={hasItems ? "button" : "article"}
-              tabIndex={hasItems ? 0 : undefined}
-            >
-              <p className="hud-label">{card.label}</p>
-              <p className="hud-value">{card.value}</p>
-              <span className="hud-meta">{card.meta}</span>
-              
-              {activeCard === card.key && hasItems && (
-                <div className="hud-dropdown">
-                  <div className="hud-dropdown-header">
-                    <span>{card.items.length} Items</span>
-                    <button className="hud-dropdown-close" onClick={(e) => { e.stopPropagation(); setActiveCard(null); }}>×</button>
+    <div className={`plan-stats-hud ${isCollapsed ? 'is-collapsed' : ''}`}>
+      <div 
+        className="hud-toggle-header" 
+        onClick={() => setIsCollapsed(!isCollapsed)}
+      >
+        <div className="hud-header-title">
+          <span className="hud-header-text">TRIP STATISTICS</span>
+          {isCollapsed && (
+            <span className="hud-header-summary">
+              {stats.totalDistanceKm.toFixed(1)} km • {stats.checkpointCount} Waypoints
+            </span>
+          )}
+        </div>
+        <button className="toggle-btn" title={isCollapsed ? "Show Stats" : "Hide Stats"}>
+          <svg 
+            viewBox="0 0 24 24" 
+            width="16" 
+            height="16" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2"
+            style={{ transform: isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }}
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+      </div>
+
+      <div className="hud-content-wrapper">
+        <div className="hud-grid">
+          {cards.map((card) => {
+            const hasItems = card.items && card.items.length > 0;
+            return (
+              <div 
+                key={card.key} 
+                className={`hud-card ${activeCard === card.key ? 'active' : ''} ${hasItems ? 'clickable' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent toggling HUD when clicking card
+                  hasItems && toggleCard(card.key);
+                }}
+                role={hasItems ? "button" : "article"}
+                tabIndex={hasItems ? 0 : undefined}
+              >
+                <p className="hud-label">{card.label}</p>
+                <p className="hud-value">{card.value}</p>
+                <span className="hud-meta">{card.meta}</span>
+                
+                {activeCard === card.key && hasItems && (
+                  <div className="hud-dropdown">
+                    <div className="hud-dropdown-header">
+                      <span>{card.items.length} Items</span>
+                      <button className="hud-dropdown-close" onClick={(e) => { e.stopPropagation(); setActiveCard(null); }}>×</button>
+                    </div>
+                    <ul className="hud-dropdown-list">
+                      {card.items.map((item, idx) => {
+                        const name = item.properties?.name || item.display_name || item.filename || `Item ${idx + 1}`;
+                        return (
+                          <li 
+                            key={item.id || idx} 
+                            className="hud-dropdown-item"
+                            onClick={(e) => card.type === 'track' ? handleTrackClick(e, item.id) : handleFeatureClick(e, item.id)}
+                          >
+                            {name}
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </div>
-                  <ul className="hud-dropdown-list">
-                    {card.items.map((item, idx) => {
-                      const name = item.properties?.name || item.display_name || item.filename || `Item ${idx + 1}`;
-                      return (
-                        <li 
-                          key={item.id || idx} 
-                          className="hud-dropdown-item"
-                          onClick={(e) => card.type === 'track' ? handleTrackClick(e, item.id) : handleFeatureClick(e, item.id)}
-                        >
-                          {name}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
