@@ -6,7 +6,7 @@ This document outlines the architecture and usage patterns for interacting with 
 
 The backend employs a hybrid data storage strategy, utilizing two distinct systems orchestrated by Docker Compose:
 
--   **MongoDB**: Serves as the primary database for storing structured **metadata**. This includes trip details, user information, and metadata about files (e.g., image filenames, creation dates, locations).
+-   **MongoDB**: Serves as the primary database for storing structured **metadata**. This includes trip details, trip plans, user information, and metadata about files (e.g., image filenames, creation dates, locations).
 -   **MinIO**: An S3-compatible object storage service used for storing unstructured **file data**. This includes user-uploaded assets like images, GPX tracks, and other binary files.
 
 ## 2. Core Design: The Adapter Pattern
@@ -88,6 +88,7 @@ retrieved = sm.load_data('mongodb', trip_id, collection_name=collection)
 - `gps-analysis-data`: serialized GPX analysis artifacts (pickled analyzed track objects).
 - `gis-data`: miscellaneous GIS assets (e.g., precomputed pickles used by map services).
 - `uploadedfiles`: generic uploaded files such as CSVs handled by `CSVHandler`.
+- `plan-assets`: assets specific to trip plans (e.g., covers).
 
 These are the bucket names used by the handlers and services in the `server/` codebase; you may change them in deployment but update the code or environment accordingly.
 
@@ -247,6 +248,26 @@ This section details which services interact with the storage layer and for what
     -   `delete_trip()`:
         -   **MongoDB:** Deletes the `Trip` document from the `trips` collection. It also queries and deletes all associated documents from the `file_metadata` collection.
         -   **MinIO:** Deletes all associated file objects (both original files and analysis artifacts) from their respective buckets based on the metadata retrieved before deletion.
+
+### `plan_service.py`
+
+-   **Class:** `PlanService`
+-   **Purpose:** Manages the lifecycle of Plans (itineraries), including features, logistics, members, and reference tracks.
+-   **Functions & Storage Interaction:**
+    -   `create_plan()` / `get_plan()` / `update_plan()` / `delete_plan()`:
+        -   **MongoDB:** Performs CRUD operations on the `plans` collection.
+    -   `update_logistics()` / `update_day_summaries()`:
+        -   **MongoDB:** Performs atomic updates on specific sub-documents (roster, logistics, day_summaries) within the `plans` collection.
+    -   `add_feature()` / `update_feature()`:
+        -   **MongoDB:** Pushes or updates GeoJSON feature objects within the `features.features` array of the plan document.
+    -   `upload_reference_track()`:
+        -   **MinIO:** Uploads GPX files to the `gps-data` bucket (path: `plans/{owner_id}/{plan_id}/reference-tracks/`).
+        -   **MongoDB:** Updates the `reference_tracks` array in the `Plan` document.
+    -   `ingest_gpx()`:
+        -   **MinIO:** Temporarily stores uploaded GPX files in `gps-data` (path: `temp/{user_id}/`) for preview before plan creation.
+    -   `import_trip_to_plan()`:
+        -   **MinIO:** Copies an existing Trip's GPX file to a new Plan reference path.
+        -   **MongoDB:** Creates a new `Plan` document decoupled from the original Trip.
 
 ### `file_retrieval_service.py`
 

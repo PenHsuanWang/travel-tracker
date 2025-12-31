@@ -73,8 +73,8 @@ Travel Tracker lets outdoor enthusiasts upload trips, visualize GPX tracks, over
 
 - **Frontend (React/Leaflet/Tailwind)** → served via Vite dev server locally or Nginx in Docker.
 - **Backend (FastAPI + Uvicorn)** → REST API, GPX parsing, EXIF extraction, stats, and event bus.
-- **MongoDB** → trip metadata, user profiles, file metadata, photo notes.
-- **MinIO S3 storage** → buckets for `gps-data`, `gps-analysis-data`, `images`, `gis-data`.
+- **MongoDB** → trip metadata, trip plans, user profiles, file metadata, photo notes.
+- **MinIO S3 storage** → buckets for `gps-data`, `gps-analysis-data`, `images`, `gis-data`, `plan-assets`.
 - **Storage adapters** → AdapterFactory issues MongoDB/MinIO clients wrapped by `StorageManager`.
 - **Docker network (`travel-tracker-network`)** → isolates backend, DB, storage; only frontend port 80 exposed in full stack mode while backend stays internal.
 
