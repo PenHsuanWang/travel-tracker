@@ -113,6 +113,16 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly, onPreviewUpd
     }
   };
 
+  // FIX: Helper specifically for range inputs that needs default behavior (dragging)
+  // but must stop propagation to Leaflet map
+  const stopDragPropagation = (e) => {
+    e.stopPropagation();
+    // Do NOT call e.preventDefault() here, or the slider won't move!
+    if (e.nativeEvent) {
+      e.nativeEvent.stopImmediatePropagation();
+    }
+  };
+
   // BUG FIX: Sync state when feature prop changes (e.g., modal reopened for same feature)
   // This ensures the modal displays current values, not stale initial state
   useEffect(() => {
@@ -439,15 +449,7 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly, onPreviewUpd
             {/* Stroke width */}
             <div className="form-group">
               <label>Stroke Width: {strokeWidth}px</label>
-              <div 
-                className="slider-container"
-                onClick={stopPropagation}
-                onMouseDown={stopPropagation}
-                onMouseUp={stopPropagation}
-                onMouseMove={stopPropagation}
-                onTouchStart={stopPropagation}
-                onTouchMove={stopPropagation}
-              >
+              <div className="slider-container">
                 <input
                   type="range"
                   min="1"
@@ -459,12 +461,9 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly, onPreviewUpd
                     setStrokeWidth(newStrokeWidth);
                     triggerPreview({ strokeWidth: newStrokeWidth });
                   }}
-                  onClick={stopAllEvents}
-                  onMouseDown={stopAllEvents}
-                  onMouseUp={stopAllEvents}
-                  onMouseMove={stopAllEvents}
-                  onTouchStart={stopAllEvents}
-                  onTouchMove={stopAllEvents}
+                  onMouseDown={stopDragPropagation}
+                  onTouchStart={stopDragPropagation}
+                  onClick={(e) => e.stopPropagation()}
                   disabled={readOnly}
                 />
               </div>
@@ -473,15 +472,7 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly, onPreviewUpd
             {/* Stroke opacity */}
             <div className="form-group">
               <label>Stroke Opacity: {Math.round(opacity * 100)}%</label>
-              <div 
-                className="slider-container"
-                onClick={stopPropagation}
-                onMouseDown={stopPropagation}
-                onMouseUp={stopPropagation}
-                onMouseMove={stopPropagation}
-                onTouchStart={stopPropagation}
-                onTouchMove={stopPropagation}
-              >
+              <div className="slider-container">
                 <input
                   type="range"
                   min="0"
@@ -493,12 +484,9 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly, onPreviewUpd
                     setOpacity(newOpacity);
                     triggerPreview({ opacity: newOpacity });
                   }}
-                  onClick={stopAllEvents}
-                  onMouseDown={stopAllEvents}
-                  onMouseUp={stopAllEvents}
-                  onMouseMove={stopAllEvents}
-                  onTouchStart={stopAllEvents}
-                  onTouchMove={stopAllEvents}
+                  onMouseDown={stopDragPropagation}
+                  onTouchStart={stopDragPropagation}
+                  onClick={(e) => e.stopPropagation()}
                   disabled={readOnly}
                 />
               </div>
@@ -508,15 +496,7 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly, onPreviewUpd
             {isPolygon && (
               <div className="form-group">
                 <label>Fill Opacity: {Math.round(fillOpacity * 100)}%</label>
-                <div 
-                  className="slider-container"
-                  onClick={stopPropagation}
-                  onMouseDown={stopPropagation}
-                  onMouseUp={stopPropagation}
-                  onMouseMove={stopPropagation}
-                  onTouchStart={stopPropagation}
-                  onTouchMove={stopPropagation}
-                >
+                <div className="slider-container">
                   <input
                     type="range"
                     min="0"
@@ -528,12 +508,9 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly, onPreviewUpd
                       setFillOpacity(newFillOpacity);
                       triggerPreview({ fillOpacity: newFillOpacity });
                     }}
-                    onClick={stopAllEvents}
-                    onMouseDown={stopAllEvents}
-                    onMouseUp={stopAllEvents}
-                    onMouseMove={stopAllEvents}
-                    onTouchStart={stopAllEvents}
-                    onTouchMove={stopAllEvents}
+                    onMouseDown={stopDragPropagation}
+                    onTouchStart={stopDragPropagation}
+                    onClick={(e) => e.stopPropagation()}
                     disabled={readOnly || fillPattern === 'none'}
                   />
                 </div>
