@@ -98,7 +98,7 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly, onPreviewUpd
   // when interacting with inputs inside the popup.
   const stopPropagation = (e) => {
     e.stopPropagation();
-    e.preventDefault(); // Also prevent default actions
+    // e.preventDefault(); // REMOVED: This prevents select dropdowns from working
     if (e.nativeEvent) {
       e.nativeEvent.stopImmediatePropagation();
     }
