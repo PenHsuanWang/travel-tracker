@@ -2,41 +2,27 @@
 /**
  * PlanToolbox - Drawing tools panel for the plan canvas.
  * 
+ * Unified Marker System (PRD v1.1):
  * Provides a vertical toolbar with category-aware drawing tools:
- * - Waypoint: Time-enabled point (creates "Checkpoint" in itinerary)
- * - Marker: Static POI marker (no time)
+ * - Marker: Place marker (use semantic tags to categorize)
  * - Polyline: Route path
  * - Rectangle/Polygon/Circle: Area features
  * 
- * Each tool sets the appropriate category on created features.
+ * NOTE: The separate "Waypoint" tool has been removed. All point features
+ * are now "Markers" that can optionally have time added via the UI.
  */
 import React from 'react';
 import { FEATURE_CATEGORY, SEMANTIC_TYPE } from '../../services/planService';
 import './PlanToolbox.css';
 
 // Tool definitions with SVG icons and category mapping
+// PRD v1.1: Removed separate 'waypoint' tool - all points are now 'marker'
 const DRAWING_TOOLS = [
-  {
-    id: 'waypoint',
-    label: 'Add Waypoint (Checkpoint)',
-    hint: 'Click to place a time-scheduled checkpoint',
-    category: FEATURE_CATEGORY.WAYPOINT,
-    timeEnabled: true,
-    icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-        {/* Clock badge */}
-        <circle cx="18" cy="6" r="5" fill="#10b981"/>
-        <path d="M18 4v2.5l1.5 1" stroke="white" strokeWidth="1.2" fill="none"/>
-      </svg>
-    ),
-  },
   {
     id: 'marker',
     label: 'Place Marker',
-    hint: 'Click to place a static marker (no time)',
+    hint: 'Click to place a marker. Use semantic tags or add to schedule later.',
     category: FEATURE_CATEGORY.MARKER,
-    timeEnabled: false,
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
@@ -48,7 +34,6 @@ const DRAWING_TOOLS = [
     label: 'Draw Route',
     hint: 'Click to add vertices, click existing marker to finish',
     category: FEATURE_CATEGORY.ROUTE,
-    timeEnabled: false,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
         <polyline points="4 17 10 11 13 14 20 7"/>
@@ -156,7 +141,10 @@ const EDIT_TOOLS = [
   },
 ];
 
+// Semantic type quick-select buttons
+// PRD v1.1: GENERIC added to allow untagged general markers
 const SEMANTIC_BUTTONS = [
+  { id: SEMANTIC_TYPE.GENERIC, label: 'Generic', emoji: '📍' },
   { id: SEMANTIC_TYPE.WATER, label: 'Water', emoji: '💧' },
   { id: SEMANTIC_TYPE.CAMP, label: 'Camp', emoji: '⛺' },
   { id: SEMANTIC_TYPE.SIGNAL, label: 'Signal', emoji: '📶' },
@@ -176,6 +164,8 @@ const PlanToolbox = ({
   embedded = false, // Phase 2: When true, renders in Zone A sidebar instead of floating
   activeSemanticType = SEMANTIC_TYPE.GENERIC,
   onSelectSemanticType,
+  selectedFeature,
+  onUpdateFeature,
 }) => {
   const handleToolClick = (toolId) => {
     if (disabled) return;
@@ -188,9 +178,35 @@ const PlanToolbox = ({
     }
   };
 
+  const handleToggleTime = (e) => {
+    if (!selectedFeature || !onUpdateFeature) return;
+    const isChecked = e.target.checked;
+    
+    if (isChecked) {
+      // Add time (default to now) if not present
+      onUpdateFeature(selectedFeature.id, {
+        properties: {
+          ...selectedFeature.properties,
+          estimated_arrival: new Date().toISOString()
+        }
+      });
+    } else {
+      // Remove time
+      onUpdateFeature(selectedFeature.id, {
+        properties: {
+          ...selectedFeature.properties,
+          estimated_arrival: null,
+          estimated_duration_minutes: null
+        }
+      });
+    }
+  };
+
   const activeToolInfo = [...DRAWING_TOOLS, ...EDIT_TOOLS].find((t) => t.id === activeTool);
   const canRemoveVertex = drawingVertices && drawingVertices > 0;
   const canFinish = drawingVertices && drawingVertices >= (activeTool === 'polygon' ? 3 : 2);
+  const isSelectedPoint = selectedFeature?.geometry?.type === 'Point';
+  const hasTime = selectedFeature?.properties?.estimated_arrival != null;
 
   return (
     <div className={`plan-toolbox ${embedded ? 'plan-toolbox--embedded' : ''}`}>
@@ -247,6 +263,24 @@ const PlanToolbox = ({
           </button>
         ))}
       </div>
+
+      {/* PRD v1.2: Time Inclusion Checkbox (Unified Marker System) */}
+      {isSelectedPoint && (
+        <>
+          <div className="toolbox-divider" />
+          <div className="toolbox-section toolbox-selection-info">
+            <label className="time-toggle-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 4px', cursor: 'pointer', fontSize: '13px', color: '#374151' }}>
+              <input 
+                type="checkbox" 
+                checked={hasTime} 
+                onChange={handleToggleTime}
+                disabled={disabled}
+              />
+              <span style={{ fontWeight: 500 }}>Time Info</span>
+            </label>
+          </div>
+        </>
+      )}
 
       {/* Drawing action buttons - shown when actively drawing */}
       {activeTool && (

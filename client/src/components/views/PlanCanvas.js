@@ -756,6 +756,8 @@ const PlanCanvas = () => {
                 }}
                 activeSemanticType={activeSemanticType}
                 onSelectSemanticType={setActiveSemanticType}
+                selectedFeature={selectedFeature}
+                onUpdateFeature={handleUpdateFeature}
                 disabled={saving}
                 isDrawing={drawingState.isDrawing}
                 drawingVertices={drawingState.vertices?.length || 0}

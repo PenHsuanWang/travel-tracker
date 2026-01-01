@@ -2,14 +2,15 @@
 /**
  * ItineraryPanel - Side panel showing plan features and reference tracks.
  * 
- * The panel has THREE sections:
- * 1. Checkpoints - Waypoint features sorted by estimated_arrival (time-sorted)
- * 2. Other Features - Markers, routes, areas sorted by order_index (drag-drop reorder)
+ * Unified Marker System (PRD v1.1):
+ * The panel has THREE sections based on time attribute presence:
+ * 1. Timeline - Point features with estimated_arrival (time-sorted)
+ * 2. Features List - Point features without time + Routes/Areas (reference items)
  * 3. Reference Tracks - Read-only GPX baselines
  */
 import React, { useState, useCallback, useMemo } from 'react';
 import { differenceInCalendarDays, format, parseISO, isValid } from 'date-fns';
-import CheckpointItem from './CheckpointItem';
+import MarkerCard from './MarkerCard';
 import DailyProfileCard from './DailyProfileCard';
 import DailyHazardCard from './DailyHazardCard';
 import {
@@ -350,52 +351,52 @@ const ItineraryPanel = ({
     return Array.isArray(features) ? features : (features?.features || []);
   }, [features]);
 
-  // Separate features by category: checkpoints (waypoints) vs other features
-  const { checkpoints, otherFeatures } = useMemo(() => {
-    const cp = [];
-    const other = [];
+  // =========================================================================
+  // Unified Marker System (PRD v1.1): Split by TIME presence, not CATEGORY
+  // =========================================================================
+  const { timelineItems, referenceItems, nonPointFeatures } = useMemo(() => {
+    const timeline = [];
+    const reference = [];
+    const nonPoints = [];
     
     featuresArray.forEach((feature) => {
-      const category = feature.properties?.category;
-      // Match both string 'waypoint' and constant FEATURE_CATEGORY.WAYPOINT
-      const isWaypoint = category === 'waypoint' || category === FEATURE_CATEGORY.WAYPOINT;
-      if (isWaypoint) {
-        cp.push(feature);
+      const geometryType = feature.geometry?.type;
+      
+      // Non-point features (Routes, Areas) → always go to non-point section
+      if (geometryType !== 'Point') {
+        nonPoints.push(feature);
+        return;
+      }
+      
+      // Point features: split by estimated_arrival presence (THE SWITCH)
+      const hasTime = feature.properties?.estimated_arrival != null;
+      
+      if (hasTime) {
+        timeline.push(feature);   // Scheduled → Timeline
       } else {
-        other.push(feature);
+        reference.push(feature);  // Unscheduled → Features List
       }
     });
     
-    return { checkpoints: cp, otherFeatures: other };
+    return { timelineItems: timeline, referenceItems: reference, nonPointFeatures: nonPoints };
   }, [featuresArray]);
 
-  // Sort checkpoints by estimated_arrival (ascending), nulls last
-  const sortedCheckpoints = useMemo(() => {
-    return [...checkpoints].sort((a, b) => {
+  // Sort timeline items by estimated_arrival (ascending) - replaces sortedCheckpoints
+  const sortedTimelineItems = useMemo(() => {
+    return [...timelineItems].sort((a, b) => {
       const aTime = a.properties?.estimated_arrival;
       const bTime = b.properties?.estimated_arrival;
-      
-      // Both have times - sort by time
       if (aTime && bTime) {
         return new Date(aTime) - new Date(bTime);
       }
-      // Only a has time - a comes first
-      if (aTime && !bTime) return -1;
-      // Only b has time - b comes first
-      if (!aTime && bTime) return 1;
-      // Neither has time - sort by order_index, then created_at
-      const aOrder = a.properties?.order_index ?? Infinity;
-      const bOrder = b.properties?.order_index ?? Infinity;
-      if (aOrder !== bOrder) return aOrder - bOrder;
-      
-      const aCreated = a.properties?.created_at;
-      const bCreated = b.properties?.created_at;
-      if (aCreated && bCreated) {
-        return new Date(aCreated) - new Date(bCreated);
-      }
       return 0;
     });
-  }, [checkpoints]);
+  }, [timelineItems]);
+
+  // Backward compatibility: alias for existing code that uses checkpoints
+  const checkpoints = timelineItems;
+  const sortedCheckpoints = sortedTimelineItems;
+  const otherFeatures = [...referenceItems, ...nonPointFeatures];
 
   // Group checkpoints by Day (based on planStartDate)
   const groupedCheckpoints = useMemo(() => {
@@ -453,16 +454,16 @@ const ItineraryPanel = ({
     return groupList;
   }, [sortedCheckpoints, planStartDate]);
 
-  // Sort other features by order_index
+  // Sort other features by order_index (for non-point features like routes/areas)
   const sortedOtherFeatures = useMemo(() => {
-    return [...otherFeatures].sort((a, b) => {
+    return [...nonPointFeatures].sort((a, b) => {
       const aOrder = a.properties?.order_index ?? Infinity;
       const bOrder = b.properties?.order_index ?? Infinity;
       return aOrder - bOrder;
     });
-  }, [otherFeatures]);
+  }, [nonPointFeatures]);
 
-  // Group otherFeatures by semantic type for display
+  // Group reference items (Point features without time) by semantic type
   const groupedFeatures = useMemo(() => {
     const groups = {
       hazard: [],
@@ -473,7 +474,8 @@ const ItineraryPanel = ({
       other: []
     };
 
-    sortedOtherFeatures.forEach(feature => {
+    // Only include Point features that have no time (referenceItems)
+    referenceItems.forEach(feature => {
       const type = feature.properties?.semantic_type;
       if (type === 'hazard') groups.hazard.push(feature);
       else if (type === 'water') groups.water.push(feature);
@@ -482,9 +484,14 @@ const ItineraryPanel = ({
       else if (type === 'checkin') groups.checkin.push(feature);
       else groups.other.push(feature);
     });
+    
+    // Also add non-point features to 'other' group
+    sortedOtherFeatures.forEach(feature => {
+      groups.other.push(feature);
+    });
 
     return groups;
-  }, [sortedOtherFeatures]);
+  }, [referenceItems, sortedOtherFeatures]);
 
   // Refactored to handle dynamic updates for embedded summaries
   const handleDaySummaryChange = (dayNumber, field, value) => {
@@ -574,7 +581,7 @@ const ItineraryPanel = ({
       <div className="panel-header">
         <div>
           <h3>Itinerary</h3>
-          <p className="panel-subtitle">Journey Log</p>
+          <p className="panel-subtitle">Unified Marker View</p>
         </div>
         <span className="feature-count">
           {featuresArray.length} {featuresArray.length === 1 ? 'item' : 'items'}
@@ -582,12 +589,12 @@ const ItineraryPanel = ({
       </div>
 
       <div className="panel-content">
-        {/* Section 1: Checkpoints (time-sorted waypoints) - Grouped by Day */}
-        <section className="checkpoints-section">
+        {/* Section 1: Timeline (Scheduled Items with estimated_arrival) */}
+        <section className="checkpoints-section timeline-section">
           <div className="section-header-row">
             <h4>
-              <span className="section-icon">📍</span>
-              Checkpoints
+              <span className="section-icon">📅</span>
+              Timeline
               <span className="section-count">({sortedCheckpoints.length})</span>
             </h4>
             {!readOnly && daySummariesDirty && (
@@ -605,8 +612,8 @@ const ItineraryPanel = ({
           {sortedCheckpoints.length === 0 ? (
             <p className="empty-message">
               {readOnly
-                ? 'No checkpoints added.'
-                : 'Use the Waypoint tool to add time-scheduled stops.'}
+                ? 'No scheduled items.'
+                : 'Place markers on map and use 📅+ to add them to the timeline.'}
             </p>
           ) : (
             <div className="checkpoints-list">
@@ -646,21 +653,23 @@ const ItineraryPanel = ({
                     </>
                   )}
 
-                  {/* Items container */}
-                  <div className={planStartDate ? "day-items border-l-2 border-gray-200 ml-2 pl-2" : "day-items"}>
-                    {group.items.map((checkpoint, index) => (
-                      <CheckpointItem
-                        key={checkpoint.id}
-                        feature={checkpoint}
-                        selected={checkpoint.id === selectedFeatureId}
+                  {/* Items container - Using MarkerCard (Unified Marker System) */}
+                  <div className={planStartDate ? "day-items border-l-2 border-green-200 ml-2 pl-2" : "day-items"}>
+                    {group.items.map((item, index) => (
+                      <MarkerCard
+                        key={item.id}
+                        feature={item}
+                        selected={item.id === selectedFeatureId}
+                        isScheduled={true}
                         onSelect={onSelectFeature}
                         onUpdate={onUpdateFeature}
                         onUpdateWithCascade={onUpdateFeatureWithCascade}
                         onDelete={onDeleteFeature}
-                        onCenter={onCenterFeature}
-                        onFlyTo={onFlyToFeature}
+                        onNavigate={onCenterFeature}
                         readOnly={readOnly}
-                        hasSubsequentCheckpoints={index < group.items.length - 1}
+                        showDeltaTime={index > 0}
+                        previousArrival={index > 0 ? group.items[index - 1].properties?.estimated_arrival : null}
+                        hasSubsequentItems={index < group.items.length - 1}
                       />
                     ))}
                   </div>
@@ -670,31 +679,32 @@ const ItineraryPanel = ({
           )}
         </section>
 
-        {/* Section 2: Other Features (markers, routes, areas) - Categorized */}
-        <section className="other-features-section">
+        {/* Section 2: Features List (Reference Items - no time) */}
+        <section className="other-features-section reference-section">
           <h4>
             <span className="section-icon">📌</span>
-            Features & Markers
-            <span className="section-count">({sortedOtherFeatures.length})</span>
+            Features List
+            <span className="section-count">({referenceItems.length})</span>
           </h4>
-          {sortedOtherFeatures.length === 0 ? (
+          {referenceItems.length === 0 ? (
             <p className="empty-message">
               {readOnly
-                ? 'No other features added.'
-                : 'Add markers, routes, and areas.'}
+                ? 'No reference markers.'
+                : 'Place markers on map. Use 📅+ to add them to timeline.'}
             </p>
           ) : (
             <div className="features-list-grouped">
               <FeatureGroup title="HAZARDS" icon={ICON_CONFIG.hazard.emoji} count={groupedFeatures.hazard.length}>
                 {groupedFeatures.hazard.map(feature => (
-                  <FeatureItem
+                  <MarkerCard
                     key={feature.id}
                     feature={feature}
                     selected={feature.id === selectedFeatureId}
+                    isScheduled={false}
                     onSelect={onSelectFeature}
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
-                    onDoubleClick={onFlyToFeature}
+                    onNavigate={onCenterFeature}
                     readOnly={readOnly}
                   />
                 ))}
@@ -702,14 +712,15 @@ const ItineraryPanel = ({
 
               <FeatureGroup title="WATER SOURCES" icon={ICON_CONFIG.water.emoji} count={groupedFeatures.water.length}>
                 {groupedFeatures.water.map(feature => (
-                  <FeatureItem
+                  <MarkerCard
                     key={feature.id}
                     feature={feature}
                     selected={feature.id === selectedFeatureId}
+                    isScheduled={false}
                     onSelect={onSelectFeature}
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
-                    onDoubleClick={onFlyToFeature}
+                    onNavigate={onCenterFeature}
                     readOnly={readOnly}
                   />
                 ))}
@@ -717,14 +728,15 @@ const ItineraryPanel = ({
 
               <FeatureGroup title="CAMPSITES" icon={ICON_CONFIG.camp.emoji} count={groupedFeatures.camp.length}>
                 {groupedFeatures.camp.map(feature => (
-                  <FeatureItem
+                  <MarkerCard
                     key={feature.id}
                     feature={feature}
                     selected={feature.id === selectedFeatureId}
+                    isScheduled={false}
                     onSelect={onSelectFeature}
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
-                    onDoubleClick={onFlyToFeature}
+                    onNavigate={onCenterFeature}
                     readOnly={readOnly}
                   />
                 ))}
@@ -732,14 +744,15 @@ const ItineraryPanel = ({
 
               <FeatureGroup title="SIGNALS" icon={ICON_CONFIG.signal.emoji} count={groupedFeatures.signal.length}>
                 {groupedFeatures.signal.map(feature => (
-                  <FeatureItem
+                  <MarkerCard
                     key={feature.id}
                     feature={feature}
                     selected={feature.id === selectedFeatureId}
+                    isScheduled={false}
                     onSelect={onSelectFeature}
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
-                    onDoubleClick={onFlyToFeature}
+                    onNavigate={onCenterFeature}
                     readOnly={readOnly}
                   />
                 ))}
@@ -747,31 +760,46 @@ const ItineraryPanel = ({
 
               <FeatureGroup title="CHECK-INS" icon={ICON_CONFIG.checkin.emoji} count={groupedFeatures.checkin.length}>
                 {groupedFeatures.checkin.map(feature => (
-                  <FeatureItem
+                  <MarkerCard
                     key={feature.id}
                     feature={feature}
                     selected={feature.id === selectedFeatureId}
+                    isScheduled={false}
                     onSelect={onSelectFeature}
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
-                    onDoubleClick={onFlyToFeature}
+                    onNavigate={onCenterFeature}
                     readOnly={readOnly}
                   />
                 ))}
               </FeatureGroup>
 
-              <FeatureGroup title="OTHER FEATURES" icon={ICON_CONFIG.generic.emoji} count={groupedFeatures.other.length}>
+              <FeatureGroup title="OTHER MARKERS" icon={ICON_CONFIG.generic.emoji} count={groupedFeatures.other.length}>
                 {groupedFeatures.other.map(feature => (
-                  <FeatureItem
-                    key={feature.id}
-                    feature={feature}
-                    selected={feature.id === selectedFeatureId}
-                    onSelect={onSelectFeature}
-                    onUpdate={onUpdateFeature}
-                    onDelete={onDeleteFeature}
-                    onDoubleClick={onFlyToFeature}
-                    readOnly={readOnly}
-                  />
+                  feature.geometry?.type === 'Point' ? (
+                    <MarkerCard
+                      key={feature.id}
+                      feature={feature}
+                      selected={feature.id === selectedFeatureId}
+                      isScheduled={false}
+                      onSelect={onSelectFeature}
+                      onUpdate={onUpdateFeature}
+                      onDelete={onDeleteFeature}
+                      onNavigate={onCenterFeature}
+                      readOnly={readOnly}
+                    />
+                  ) : (
+                    <FeatureItem
+                      key={feature.id}
+                      feature={feature}
+                      selected={feature.id === selectedFeatureId}
+                      onSelect={onSelectFeature}
+                      onUpdate={onUpdateFeature}
+                      onDelete={onDeleteFeature}
+                      onDoubleClick={onFlyToFeature}
+                      readOnly={readOnly}
+                    />
+                  )
                 ))}
               </FeatureGroup>
             </div>

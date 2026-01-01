@@ -5,40 +5,41 @@ import { ICON_CONFIG } from '../../utils/mapIcons';
 /**
  * DailyProfileCard
  * Visualizes a simplified timeline strip for a day's journey.
- * Shows Start -> [Water] -> End with time durations.
+ * 
+ * PRD v1.1 - Unified Marker System:
+ * Shows only essential nodes: Start -> [Water/Hazard] -> End
+ * - Water (💧): Critical for hydration planning
+ * - Hazard (⚠️): Safety-critical waypoints
+ * 
+ * Note: Camp is excluded from the profile strip (handled in itinerary)
+ * but total duration still includes ALL scheduled items.
  */
+
+// Types that appear in the simplified profile (besides Start/End)
+const PROFILE_VISIBLE_TYPES = new Set(['water', 'hazard', 'camp']);
+
 const DailyProfileCard = ({ dailyCheckpoints }) => {
   if (!dailyCheckpoints || dailyCheckpoints.length < 2) {
     return (
        <div className="daily-profile-card bg-white border border-gray-200 rounded-xl p-3 shadow-sm mb-3">
-         <div className="text-xs text-gray-400 text-center italic">Add checkpoints to see daily profile.</div>
+         <div className="text-xs text-gray-400 text-center italic">Add scheduled markers to see daily profile.</div>
        </div>
     );
   }
 
-  // 1. Filter Key Nodes
-  // We strictly follow the request: Start Node, End Node, and Water Source (Priority High).
-  // Camp is mentioned as 'mid-day' but let's stick to the example logic which filters specific semantic types.
-  
+  // 1. Filter Key Nodes for visualization
+  // PRD v1.1: Only Start, End, Water, Hazard appear in the strip
   const keyNodes = [];
   dailyCheckpoints.forEach((cp, index) => {
       const isStart = index === 0;
       const isEnd = index === dailyCheckpoints.length - 1;
       const type = cp.properties?.semantic_type;
       
-      // Include Start, End, Water. 
-      // Also optionally Camp if desired, but sticking to prompt's 'Water Source (Priority High)' emphasis.
-      // The prompt code snippet showed: 
-      // cp.properties.semantic_type === 'water'
-      if (isStart || isEnd || type === 'water' || type === 'camp') {
+      // Include Start, End, and only Water/Hazard semantic types
+      if (isStart || isEnd || PROFILE_VISIBLE_TYPES.has(type)) {
           keyNodes.push(cp);
       }
   });
-
-  // Ensure we don't have duplicates if start/end are also water/camp (though unlikely to duplicate logic-wise due to loop)
-  // Actually, if the first node is water, it's added as start. If we also add it as water, we duplicate?
-  // No, the loop iterates once per item. The condition is `isStart || isEnd || type === 'water'`. 
-  // So a node is added once if it meets ANY criteria.
 
   // Helper: Get formatted duration string
   const getDiffStr = (dateA, dateB) => {
@@ -70,6 +71,7 @@ const DailyProfileCard = ({ dailyCheckpoints }) => {
       return '📍';
   };
 
+  // Total duration uses original checkpoint list (includes ALL items, not just visible)
   const startNode = dailyCheckpoints[0];
   const endNode = dailyCheckpoints[dailyCheckpoints.length - 1];
   const totalDurationStr = getDiffStr(startNode.properties?.estimated_arrival, endNode.properties?.estimated_arrival);

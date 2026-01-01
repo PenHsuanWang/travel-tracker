@@ -10,6 +10,7 @@ import React, { useEffect, useMemo, useState, useRef, useCallback, forwardRef, u
 import { MapContainer, TileLayer, Polyline, Polygon, Marker, Popup, Circle, Rectangle, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import FeatureStyleEditor from '../common/FeatureStyleEditor';
+import SemanticPopupEditor from '../map/SemanticPopupEditor';
 import { SEMANTIC_TYPE, ROUTE_TYPE } from '../../services/planService';
 import { getSemanticIcon, ICON_CONFIG } from '../../utils/mapIcons';
 import 'leaflet/dist/leaflet.css';
@@ -976,14 +977,15 @@ const PlanMapView = forwardRef(({
           {tooltipContent}
         </Tooltip>
         <Popup
-          onOpen={() => setEditingFeatureId(null)}
+          onOpen={() => setEditingFeatureId(feature.id)}
           onClose={() => setEditingFeatureId(null)}
         >
           {isEditing ? (
-            <FeatureStyleEditor
+            <SemanticPopupEditor
               feature={feature}
               onUpdate={onUpdateFeature}
               onClose={() => setEditingFeatureId(null)}
+              onDelete={onDeleteFeature}
               readOnly={readOnly}
             />
           ) : (

@@ -399,10 +399,16 @@ export const ROUTE_TYPE = {
 
 /**
  * Feature categories determine behavior and allowed properties.
- * - WAYPOINT: Time-enabled point (displays as "Checkpoint" in UI)
- * - MARKER: Static POI point (no time fields)
+ * 
+ * PRD v1.1 - Unified Marker System:
+ * - WAYPOINT: Legacy category, now functionally equivalent to MARKER with time
+ * - MARKER: Unified point feature, can optionally have time (estimated_arrival)
  * - ROUTE: LineString path
  * - AREA: Polygon region
+ * 
+ * The presence of `estimated_arrival` determines UI placement:
+ * - With time → Timeline section (scheduled)
+ * - Without time → Features List section (reference)
  */
 export const FEATURE_CATEGORY = {
   WAYPOINT: 'waypoint',
@@ -413,8 +419,8 @@ export const FEATURE_CATEGORY = {
 };
 
 export const FEATURE_CATEGORY_LABELS = {
-  waypoint: 'Checkpoint',  // UI name for waypoint
-  marker: 'Marker',
+  waypoint: 'Marker',     // PRD v1.1: Unified as "Marker" in UI
+  marker: 'Marker',       // PRD v1.1: All points are now "Marker"
   route: 'Route',
   area: 'Area',
   reference_track: 'Reference Track',
@@ -422,7 +428,7 @@ export const FEATURE_CATEGORY_LABELS = {
 
 export const FEATURE_CATEGORY_ICONS = {
   waypoint: '📍',
-  marker: '📌',
+  marker: '📍',
   route: '〰️',
   area: '⬡',
   reference_track: '🗺️',
@@ -448,12 +454,31 @@ export const getCategoryIcon = (category) => {
 
 /**
  * Check if a feature category allows time fields.
- * Only WAYPOINT category supports estimated_arrival and estimated_duration_minutes.
+ * PRD v1.1: Both WAYPOINT and MARKER (Point-based) categories can have time.
  * @param {string} category - Feature category value
  * @returns {boolean}
  */
 export const categoryAllowsTime = (category) => {
-  return category === FEATURE_CATEGORY.WAYPOINT;
+  return category === FEATURE_CATEGORY.WAYPOINT || category === FEATURE_CATEGORY.MARKER;
+};
+
+/**
+ * Check if a feature is a point-based category (unified marker).
+ * @param {string} category - Feature category value
+ * @returns {boolean}
+ */
+export const isPointCategory = (category) => {
+  return category === FEATURE_CATEGORY.WAYPOINT || category === FEATURE_CATEGORY.MARKER;
+};
+
+/**
+ * Check if a feature has a scheduled time (belongs in Timeline).
+ * PRD v1.1: THE SWITCH - estimated_arrival presence determines placement.
+ * @param {Object} feature - Feature object with properties
+ * @returns {boolean}
+ */
+export const isScheduledFeature = (feature) => {
+  return feature?.properties?.estimated_arrival != null;
 };
 
 /**

@@ -8,7 +8,7 @@
  * - Coordinates display for Point features
  * - Name input
  * - Icon selector (for waypoint/marker categories)
- * - Time fields (only for waypoint category)
+ * - Time fields (for point categories that allow time)
  * - Color picker
  * - Notes textarea
  */
@@ -83,9 +83,19 @@ const SemanticPopupEditor = ({
     hazard_subtype,
     difficulty_grade 
   } = feature.properties || {};
-  
-  const isWaypoint = category === FEATURE_CATEGORY.WAYPOINT;
-  const isPointCategory = [FEATURE_CATEGORY.WAYPOINT, FEATURE_CATEGORY.MARKER].includes(category);
+
+  const hasInitialTime = estimated_arrival != null;
+
+  // Derive effective category when missing (legacy data may not set category on point features)
+  const geometryType = feature.geometry?.type;
+  const effectiveCategory = category
+    || (geometryType === 'Point' ? FEATURE_CATEGORY.MARKER
+        : geometryType === 'LineString' ? FEATURE_CATEGORY.ROUTE
+        : geometryType === 'Polygon' ? FEATURE_CATEGORY.AREA
+        : category);
+
+  const timeEnabled = categoryAllowsTime(effectiveCategory);
+  const isPointCategory = [FEATURE_CATEGORY.WAYPOINT, FEATURE_CATEGORY.MARKER].includes(effectiveCategory);
   const isHazard = semantic_type === SEMANTIC_TYPE.HAZARD;
   
   // Extract coordinates for display
@@ -101,6 +111,7 @@ const SemanticPopupEditor = ({
   const [formDuration, setFormDuration] = useState(estimated_duration_minutes || '');
   const [formHazardSubtype, setFormHazardSubtype] = useState(hazard_subtype || 'other');
   const [formDifficultyGrade, setFormDifficultyGrade] = useState(difficulty_grade || '');
+  const [timeEnabledToggle, setTimeEnabledToggle] = useState(hasInitialTime);
   
   const [isDirty, setIsDirty] = useState(false);
 
@@ -113,20 +124,26 @@ const SemanticPopupEditor = ({
       formColor !== (color || '#3388ff') ||
       formArrival !== toDatetimeLocalValue(estimated_arrival) ||
       formDuration !== (estimated_duration_minutes || '') ||
+      timeEnabledToggle !== hasInitialTime ||
       formHazardSubtype !== (hazard_subtype || 'other') ||
-      formDifficultyGrade !== (difficulty_grade || '');
+      formDifficultyGrade !== (difficulty_grade || '') ||
+      // Category fallback changed (legacy data lacked category)
+      category !== effectiveCategory;
     setIsDirty(hasChanges);
   }, [
     formName, formNotes, formIconType, formColor, formArrival, formDuration, 
-    formHazardSubtype, formDifficultyGrade,
+    timeEnabledToggle, formHazardSubtype, formDifficultyGrade,
     name, notes, icon_type, color, estimated_arrival, estimated_duration_minutes,
-    hazard_subtype, difficulty_grade
+    hazard_subtype, difficulty_grade,
+    category, effectiveCategory,
+    hasInitialTime
   ]);
 
   const handleSave = useCallback(() => {
     const updates = {
       properties: {
         ...feature.properties,
+        category: effectiveCategory, // ensure category persists for legacy data
         name: formName.trim() || null,
         notes: formNotes.trim() || null,
         color: formColor,
@@ -138,13 +155,16 @@ const SemanticPopupEditor = ({
       updates.properties.icon_type = formIconType || null;
     }
 
-    // Only update time fields for waypoint category
-    if (isWaypoint) {
-      updates.properties.estimated_arrival = formArrival
-        ? new Date(formArrival).toISOString()
-        : null;
-      updates.properties.estimated_duration_minutes =
-        typeof formDuration === 'number' && formDuration > 0 ? formDuration : null;
+    // Update time fields for time-enabled point categories (waypoint/marker)
+    if (timeEnabled) {
+      if (timeEnabledToggle && formArrival) {
+        updates.properties.estimated_arrival = new Date(formArrival).toISOString();
+        updates.properties.estimated_duration_minutes =
+          typeof formDuration === 'number' && formDuration > 0 ? formDuration : null;
+      } else {
+        updates.properties.estimated_arrival = null;
+        updates.properties.estimated_duration_minutes = null;
+      }
     }
 
     // Update hazard specific fields
@@ -166,7 +186,7 @@ const SemanticPopupEditor = ({
     formHazardSubtype,
     formDifficultyGrade,
     isPointCategory,
-    isWaypoint,
+    timeEnabled,
     isHazard,
     onUpdate,
     onClose,
@@ -200,8 +220,8 @@ const SemanticPopupEditor = ({
     <div className="semantic-popup-editor">
       {/* Category badge (read-only) */}
       <div className="category-badge">
-        <span className="category-icon">{getCategoryIcon(category)}</span>
-        <span className="category-label">{getCategoryLabel(category)}</span>
+        <span className="category-icon">{getCategoryIcon(effectiveCategory)}</span>
+        <span className="category-label">{getCategoryLabel(effectiveCategory)}</span>
       </div>
 
       {/* Coordinates display (read-only for points) */}
@@ -220,7 +240,7 @@ const SemanticPopupEditor = ({
           type="text"
           value={formName}
           onChange={(e) => setFormName(e.target.value)}
-          placeholder={`${getCategoryLabel(category)} name`}
+          placeholder={`${getCategoryLabel(effectiveCategory)} name`}
           disabled={readOnly}
         />
       </div>
@@ -287,33 +307,57 @@ const SemanticPopupEditor = ({
         </div>
       )}
 
-      {/* Time fields (WAYPOINT only) */}
-      {isWaypoint && (
-        <div className="time-fields">
+      {/* Time fields (time-enabled point categories) */}
+      {timeEnabled && (
+        <>
           <div className="form-field">
-            <label htmlFor="popup-arrival">Planned Arrival</label>
-            <input
-              id="popup-arrival"
-              type="datetime-local"
-              value={formArrival}
-              onChange={(e) => setFormArrival(e.target.value)}
-              disabled={readOnly}
-            />
+            <label htmlFor="popup-time-toggle" className="checkbox-label">
+              <input
+                id="popup-time-toggle"
+                type="checkbox"
+                checked={timeEnabledToggle}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setTimeEnabledToggle(checked);
+                  if (!checked) {
+                    setFormArrival('');
+                    setFormDuration('');
+                  }
+                }}
+                disabled={readOnly}
+              />
+              <span>Add to timeline (enable time)</span>
+            </label>
           </div>
-          <div className="form-field">
-            <label htmlFor="popup-duration">Stop Duration (min)</label>
-            <input
-              id="popup-duration"
-              type="number"
-              min="0"
-              step="5"
-              value={formDuration}
-              onChange={handleDurationChange}
-              placeholder="Optional"
-              disabled={readOnly}
-            />
-          </div>
-        </div>
+
+          {timeEnabledToggle && (
+            <div className="time-fields">
+              <div className="form-field">
+                <label htmlFor="popup-arrival">Planned Arrival</label>
+                <input
+                  id="popup-arrival"
+                  type="datetime-local"
+                  value={formArrival}
+                  onChange={(e) => setFormArrival(e.target.value)}
+                  disabled={readOnly}
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="popup-duration">Stop Duration (min)</label>
+                <input
+                  id="popup-duration"
+                  type="number"
+                  min="0"
+                  step="5"
+                  value={formDuration}
+                  onChange={handleDurationChange}
+                  placeholder="Optional"
+                  disabled={readOnly}
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Color picker */}

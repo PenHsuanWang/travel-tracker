@@ -206,26 +206,37 @@ class PlanFeatureProperties(BaseModel):
         return v
     
     @model_validator(mode='after')
-    def validate_time_only_for_waypoint(self):
-        """Ensure time-related fields are only set for WAYPOINT category."""
-        if self.estimated_arrival is not None and self.category != FeatureCategory.WAYPOINT:
+    def validate_time_only_for_points(self):
+        """Ensure time-related fields are only set for Point geometry features.
+        
+        With the Unified Marker System (PRD v1.1), any Point feature
+        (WAYPOINT or MARKER) can optionally have estimated_arrival.
+        The presence of the time attribute determines whether the marker
+        appears in the Timeline or Reference List in the UI.
+        
+        Routes (LineString) and Areas (Polygon) cannot have time attributes.
+        """
+        # Point-based categories that can have time (Unified Marker System)
+        point_categories = (FeatureCategory.WAYPOINT, FeatureCategory.MARKER)
+        
+        if self.estimated_arrival is not None and self.category not in point_categories:
             raise ValueError(
-                f'estimated_arrival is only allowed for WAYPOINT category, '
+                f'estimated_arrival is only allowed for Point features (WAYPOINT/MARKER), '
                 f'got category={self.category}'
             )
-        if self.estimated_duration_minutes is not None and self.category != FeatureCategory.WAYPOINT:
+        if self.estimated_duration_minutes is not None and self.category not in point_categories:
             raise ValueError(
-                f'estimated_duration_minutes is only allowed for WAYPOINT category, '
+                f'estimated_duration_minutes is only allowed for Point features (WAYPOINT/MARKER), '
                 f'got category={self.category}'
             )
-        if self.original_gpx_time is not None and self.category != FeatureCategory.WAYPOINT:
+        if self.original_gpx_time is not None and self.category not in point_categories:
             raise ValueError(
-                f'original_gpx_time is only allowed for WAYPOINT category, '
+                f'original_gpx_time is only allowed for Point features (WAYPOINT/MARKER), '
                 f'got category={self.category}'
             )
-        if self.time_offset_seconds is not None and self.category != FeatureCategory.WAYPOINT:
+        if self.time_offset_seconds is not None and self.category not in point_categories:
             raise ValueError(
-                f'time_offset_seconds is only allowed for WAYPOINT category, '
+                f'time_offset_seconds is only allowed for Point features (WAYPOINT/MARKER), '
                 f'got category={self.category}'
             )
         return self
