@@ -55,7 +55,7 @@ const ROCK_CLIMBING_GRADES = [
   { value: 'Elite', label: 'Elite (5.12+)' },
 ];
 
-const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
+const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly, onPreviewUpdate }) => {
   const [name, setName] = useState(feature.properties?.name || '');
   const [description, setDescription] = useState(feature.properties?.description || '');
   const [color, setColor] = useState(feature.properties?.color || '#3b82f6');
@@ -74,16 +74,59 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
   const [showFillColorPicker, setShowFillColorPicker] = useState(false);
   const [colorPickerType, setColorPickerType] = useState('stroke'); // 'stroke' or 'fill'
 
+  // Helper to trigger immediate preview updates for real-time feedback
+  const triggerPreview = (styleUpdates) => {
+    if (onPreviewUpdate && typeof onPreviewUpdate === 'function') {
+      const previewProperties = {
+        ...feature.properties,
+        ...styleUpdates,
+        _style: {
+          ...feature.properties._style,
+          color: styleUpdates.color || color,
+          weight: styleUpdates.strokeWidth || strokeWidth,
+          opacity: styleUpdates.opacity ?? opacity,
+          fillColor: styleUpdates.fillColor || fillColor,
+          fillOpacity: styleUpdates.fillOpacity ?? fillOpacity,
+        },
+      };
+      onPreviewUpdate(feature.id, { properties: previewProperties });
+    }
+  };
+
+  // Helper to stop event propagation to Leaflet map
+  // This is critical to prevent the popup from closing or the map from dragging
+  // when interacting with inputs inside the popup.
+  const stopPropagation = (e) => {
+    e.stopPropagation();
+    e.preventDefault(); // Also prevent default actions
+    if (e.nativeEvent) {
+      e.nativeEvent.stopImmediatePropagation();
+    }
+  };
+
+  // Comprehensive event stopper for drag-sensitive controls (sliders)
+  const stopAllEvents = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (e.nativeEvent) {
+      e.nativeEvent.stopImmediatePropagation();
+    }
+  };
+
   // BUG FIX: Sync state when feature prop changes (e.g., modal reopened for same feature)
   // This ensures the modal displays current values, not stale initial state
   useEffect(() => {
+    const style = feature.properties?._style || {};
     setName(feature.properties?.name || '');
     setDescription(feature.properties?.description || '');
-    setColor(feature.properties?.color || '#3b82f6');
-    setFillColor(feature.properties?.fillColor || feature.properties?.color || '#3b82f6');
-    setStrokeWidth(feature.properties?.strokeWidth || 3);
-    setOpacity(feature.properties?.opacity ?? 0.8);
-    setFillOpacity(feature.properties?.fillOpacity ?? 0.2);
+    
+    // Read from _style first, then flat properties
+    setColor(style.color || feature.properties?.color || '#3b82f6');
+    setFillColor(style.fillColor || feature.properties?.fillColor || feature.properties?.color || '#3b82f6');
+    setStrokeWidth(style.weight || feature.properties?.strokeWidth || 3);
+    setOpacity(style.opacity ?? feature.properties?.opacity ?? 0.8);
+    setFillOpacity(style.fillOpacity ?? feature.properties?.fillOpacity ?? 0.2);
+    
     setFillPattern(feature.properties?.fillPattern || 'solid');
     setHazardSubtype(feature.properties?.hazard_subtype || 'other');
     setDifficultyGrade(feature.properties?.difficulty_grade || '');
@@ -97,7 +140,9 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
   const isPoint = feature.geometry?.type === 'Point';
   const isHazard = feature.properties?.semantic_type === SEMANTIC_TYPE.HAZARD;
 
-  const handleSave = () => {
+  const handleSave = (e) => {
+    if (e) stopPropagation(e);
+
     const updates = {
       properties: {
         ...feature.properties,
@@ -108,11 +153,23 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
 
     // Only add style properties for non-point features
     if (!isPoint) {
+      // Create _style object per schema requirement
+      updates.properties._style = {
+        color: color,
+        weight: strokeWidth,
+        opacity: opacity,
+      };
+
+      // Maintain flat properties for backward compatibility
       updates.properties.color = color;
       updates.properties.strokeWidth = strokeWidth;
       updates.properties.opacity = opacity;
       
       if (isPolygon) {
+        // Ensure fill settings are saved to _style
+        updates.properties._style.fillColor = fillColor;
+        updates.properties._style.fillOpacity = fillOpacity;
+        
         updates.properties.fillColor = fillColor;
         updates.properties.fillOpacity = fillOpacity;
         // FE-05: Save fill pattern
@@ -150,7 +207,12 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
   };
 
   return (
-    <div className="feature-style-editor">
+    <div 
+      className="feature-style-editor"
+      onClick={stopPropagation}
+      onMouseDown={stopPropagation}
+      onDoubleClick={stopPropagation}
+    >
       <div className="editor-header">
         <h3>{getFeatureTypeLabel()}</h3>
         <button className="close-btn" onClick={onClose} title="Close">
@@ -168,6 +230,7 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
             onChange={(e) => setName(e.target.value)}
             placeholder="Enter feature name"
             disabled={readOnly}
+            onMouseDown={stopPropagation}
           />
         </div>
 
@@ -183,6 +246,7 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
                 setDifficultyGrade(''); // Reset grade when type changes
               }}
               disabled={readOnly}
+              onMouseDown={stopPropagation}
             >
               {HAZARD_TYPES.map((type) => (
                 <option key={type.value} value={type.value}>
@@ -202,6 +266,7 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
               value={difficultyGrade}
               onChange={(e) => setDifficultyGrade(e.target.value)}
               disabled={readOnly}
+              onMouseDown={stopPropagation}
             >
               <option value="">Select grade...</option>
               {getDifficultyOptions().map((opt) => (
@@ -222,6 +287,7 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
             placeholder="Enter description (optional)"
             rows={2}
             disabled={readOnly}
+            onMouseDown={stopPropagation}
           />
         </div>
 
@@ -237,40 +303,61 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
                 <div
                   className="color-preview"
                   style={{ backgroundColor: color }}
-                  onClick={() => {
+                  onClick={(e) => {
+                    stopPropagation(e);
                     setColorPickerType('stroke');
                     setShowColorPicker(!showColorPicker);
                     setShowFillColorPicker(false);
                   }}
+                  onMouseDown={stopPropagation}
                 />
                 <input
                   type="text"
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
                   disabled={readOnly}
+                  onMouseDown={stopPropagation}
                 />
               </div>
               {showColorPicker && colorPickerType === 'stroke' && (
-                <div className="color-picker-popup">
+                <div 
+                  className="color-picker-popup" 
+                  onClick={stopPropagation} 
+                  onMouseDown={stopPropagation}
+                  onMouseUp={stopPropagation}
+                  onMouseMove={stopPropagation}
+                  onTouchStart={stopPropagation}
+                  onTouchMove={stopPropagation}
+                >
                   <div className="color-presets">
                     {COLOR_PRESETS.map((preset) => (
-                      <button
-                        key={preset.value}
-                        className="color-preset-btn"
-                        style={{ backgroundColor: preset.value }}
-                        onClick={() => {
-                          setColor(preset.value);
-                          setShowColorPicker(false);
-                        }}
-                        title={preset.name}
-                      />
+                        <button
+                          key={preset.value}
+                          className="color-preset-btn"
+                          style={{ backgroundColor: preset.value }}
+                          onClick={(e) => {
+                            stopAllEvents(e);
+                            setColor(preset.value);
+                            triggerPreview({ color: preset.value });
+                            setShowColorPicker(false);
+                          }}
+                          onMouseDown={stopAllEvents}
+                          onMouseUp={stopAllEvents}
+                          title={preset.name}
+                        />
                     ))}
                   </div>
                   <div className="custom-color-input">
                     <input
                       type="color"
                       value={color}
-                      onChange={(e) => setColor(e.target.value)}
+                      onChange={(e) => {
+                        setColor(e.target.value);
+                        triggerPreview({ color: e.target.value });
+                      }}
+                      onClick={stopAllEvents}
+                      onMouseDown={stopAllEvents}
+                      onMouseUp={stopAllEvents}
                     />
                     <span>Custom</span>
                   </div>
@@ -286,44 +373,65 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
                   <div
                     className="color-preview"
                     style={{ backgroundColor: fillColor }}
-                    onClick={() => {
+                    onClick={(e) => {
+                      stopPropagation(e);
                       setColorPickerType('fill');
                       setShowFillColorPicker(!showFillColorPicker);
                       setShowColorPicker(false);
                     }}
+                    onMouseDown={stopPropagation}
                   />
                   <input
                     type="text"
                     value={fillColor}
                     onChange={(e) => setFillColor(e.target.value)}
                     disabled={readOnly}
+                    onMouseDown={stopPropagation}
                   />
                 </div>
                 {showFillColorPicker && colorPickerType === 'fill' && (
-                  <div className="color-picker-popup">
+                  <div 
+                    className="color-picker-popup" 
+                    onClick={stopPropagation} 
+                    onMouseDown={stopPropagation}
+                    onMouseUp={stopPropagation}
+                    onMouseMove={stopPropagation}
+                    onTouchStart={stopPropagation}
+                    onTouchMove={stopPropagation}
+                  >
                     <div className="color-presets">
                       {COLOR_PRESETS.map((preset) => (
                         <button
                           key={preset.value}
                           className="color-preset-btn"
                           style={{ backgroundColor: preset.value }}
-                          onClick={() => {
+                          onClick={(e) => {
+                            stopAllEvents(e);
                             setFillColor(preset.value);
+                            triggerPreview({ fillColor: preset.value });
                             setShowFillColorPicker(false);
                           }}
+                          onMouseDown={stopAllEvents}
+                          onMouseUp={stopAllEvents}
                           title={preset.name}
                         />
                       ))}
                     </div>
-                    <div className="custom-color-input">
-                      <input
-                        type="color"
-                        value={fillColor}
-                        onChange={(e) => setFillColor(e.target.value)}
-                      />
-                      <span>Custom</span>
-                    </div>
+                  <div className="custom-color-input">
+                    <input
+                      type="color"
+                      value={fillColor}
+                      onChange={(e) => {
+                        setFillColor(e.target.value);
+                        triggerPreview({ fillColor: e.target.value });
+                      }}
+                      onClick={stopAllEvents}
+                      onMouseDown={stopAllEvents}
+                      onMouseUp={stopAllEvents}
+                    />
+                    <span>Custom</span>
                   </div>
+                </div>
                 )}
               </div>
             )}
@@ -331,44 +439,104 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
             {/* Stroke width */}
             <div className="form-group">
               <label>Stroke Width: {strokeWidth}px</label>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                step="1"
-                value={strokeWidth}
-                onChange={(e) => setStrokeWidth(Number(e.target.value))}
-                disabled={readOnly}
-              />
+              <div 
+                className="slider-container"
+                onClick={stopPropagation}
+                onMouseDown={stopPropagation}
+                onMouseUp={stopPropagation}
+                onMouseMove={stopPropagation}
+                onTouchStart={stopPropagation}
+                onTouchMove={stopPropagation}
+              >
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  step="1"
+                  value={strokeWidth}
+                  onChange={(e) => {
+                    const newStrokeWidth = Number(e.target.value);
+                    setStrokeWidth(newStrokeWidth);
+                    triggerPreview({ strokeWidth: newStrokeWidth });
+                  }}
+                  onClick={stopAllEvents}
+                  onMouseDown={stopAllEvents}
+                  onMouseUp={stopAllEvents}
+                  onMouseMove={stopAllEvents}
+                  onTouchStart={stopAllEvents}
+                  onTouchMove={stopAllEvents}
+                  disabled={readOnly}
+                />
+              </div>
             </div>
 
             {/* Stroke opacity */}
             <div className="form-group">
               <label>Stroke Opacity: {Math.round(opacity * 100)}%</label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={opacity}
-                onChange={(e) => setOpacity(Number(e.target.value))}
-                disabled={readOnly}
-              />
+              <div 
+                className="slider-container"
+                onClick={stopPropagation}
+                onMouseDown={stopPropagation}
+                onMouseUp={stopPropagation}
+                onMouseMove={stopPropagation}
+                onTouchStart={stopPropagation}
+                onTouchMove={stopPropagation}
+              >
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={opacity}
+                  onChange={(e) => {
+                    const newOpacity = Number(e.target.value);
+                    setOpacity(newOpacity);
+                    triggerPreview({ opacity: newOpacity });
+                  }}
+                  onClick={stopAllEvents}
+                  onMouseDown={stopAllEvents}
+                  onMouseUp={stopAllEvents}
+                  onMouseMove={stopAllEvents}
+                  onTouchStart={stopAllEvents}
+                  onTouchMove={stopAllEvents}
+                  disabled={readOnly}
+                />
+              </div>
             </div>
 
             {/* Fill opacity for polygons */}
             {isPolygon && (
               <div className="form-group">
                 <label>Fill Opacity: {Math.round(fillOpacity * 100)}%</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={fillOpacity}
-                  onChange={(e) => setFillOpacity(Number(e.target.value))}
-                  disabled={readOnly || fillPattern === 'none'}
-                />
+                <div 
+                  className="slider-container"
+                  onClick={stopPropagation}
+                  onMouseDown={stopPropagation}
+                  onMouseUp={stopPropagation}
+                  onMouseMove={stopPropagation}
+                  onTouchStart={stopPropagation}
+                  onTouchMove={stopPropagation}
+                >
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={fillOpacity}
+                    onChange={(e) => {
+                      const newFillOpacity = Number(e.target.value);
+                      setFillOpacity(newFillOpacity);
+                      triggerPreview({ fillOpacity: newFillOpacity });
+                    }}
+                    onClick={stopAllEvents}
+                    onMouseDown={stopAllEvents}
+                    onMouseUp={stopAllEvents}
+                    onMouseMove={stopAllEvents}
+                    onTouchStart={stopAllEvents}
+                    onTouchMove={stopAllEvents}
+                    disabled={readOnly || fillPattern === 'none'}
+                  />
+                </div>
               </div>
             )}
 
@@ -381,7 +549,11 @@ const FeatureStyleEditor = ({ feature, onUpdate, onClose, readOnly }) => {
                     <button
                       key={pattern.value}
                       className={`pattern-option ${fillPattern === pattern.value ? 'active' : ''}`}
-                      onClick={() => setFillPattern(pattern.value)}
+                      onClick={(e) => {
+                        stopPropagation(e);
+                        setFillPattern(pattern.value);
+                      }}
+                      onMouseDown={stopPropagation}
                       disabled={readOnly}
                       title={pattern.description}
                     >

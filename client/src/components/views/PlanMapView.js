@@ -1027,11 +1027,14 @@ const PlanMapView = forwardRef(({
     const semanticType = feature.properties?.semantic_type || SEMANTIC_TYPE.GENERIC;
     const palette = getSemanticPalette(semanticType);
     const routeType = feature.properties?.route_type;
-    const color = routeType === ROUTE_TYPE.ESCAPE ? '#16a34a' : (feature.properties?.color || palette.stroke || '#3b82f6');
-    const strokeWidth = feature.properties?.strokeWidth || feature.properties?.stroke_width || 3;
+    
+    // Read style from _style object first, then flat properties
+    const style = feature.properties?._style || {};
+    const color = routeType === ROUTE_TYPE.ESCAPE ? '#16a34a' : (style.color || feature.properties?.color || palette.stroke || '#3b82f6');
+    const strokeWidth = style.weight || feature.properties?.strokeWidth || feature.properties?.stroke_width || 3;
     const dashArray = routeType === ROUTE_TYPE.ESCAPE ? '8, 6' : (semanticType === SEMANTIC_TYPE.SIGNAL ? '4, 6' : feature.properties?.dashArray);
     // FE-06: Flashing effect - alternate opacity
-    const opacity = isFlashing ? 0.4 : (feature.properties?.opacity ?? 0.8);
+    const opacity = isFlashing ? 0.4 : (style.opacity ?? feature.properties?.opacity ?? 0.8);
     const isEditing = editingFeatureId === feature.id;
 
     // FE-07: Tooltip content for hover
@@ -1111,18 +1114,21 @@ const PlanMapView = forwardRef(({
     const isFlashing = feature.id === flashingFeatureId;
     const semanticType = feature.properties?.semantic_type || SEMANTIC_TYPE.GENERIC;
     const palette = getSemanticPalette(semanticType);
-    const color = feature.properties?.color || palette.stroke || '#16a34a';
-    const fillColor = feature.properties?.fillColor || feature.properties?.fill_color || palette.fill || color;
-    const strokeWidth = feature.properties?.strokeWidth || feature.properties?.stroke_width || 2;
+    
+    // Read style from _style object first, then flat properties
+    const style = feature.properties?._style || {};
+    const color = style.color || feature.properties?.color || palette.stroke || '#16a34a';
+    const fillColor = style.fillColor || feature.properties?.fillColor || feature.properties?.fill_color || palette.fill || color;
+    const strokeWidth = style.weight || feature.properties?.strokeWidth || feature.properties?.stroke_width || 2;
     // FE-05: Fill pattern support
     const fillPattern =
       semanticType === SEMANTIC_TYPE.HAZARD
         ? 'crosshatch'
         : (feature.properties?.fillPattern || feature.properties?.fill_pattern || 'solid');
     // FE-06: Flashing effect
-    const opacity = isFlashing ? 0.4 : (feature.properties?.opacity ?? 0.8);
+    const opacity = isFlashing ? 0.4 : (style.opacity ?? feature.properties?.opacity ?? 0.8);
     // FE-05: Apply fill opacity based on pattern
-    let fillOpacity = isFlashing ? 0.1 : (feature.properties?.fillOpacity ?? feature.properties?.fill_opacity ?? 0.2);
+    let fillOpacity = isFlashing ? 0.1 : (style.fillOpacity ?? feature.properties?.fillOpacity ?? feature.properties?.fill_opacity ?? 0.2);
     if (semanticType === SEMANTIC_TYPE.HAZARD) {
       fillOpacity = 0.18;
     }

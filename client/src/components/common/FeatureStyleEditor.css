@@ -183,6 +183,14 @@
 }
 
 /* Range sliders */
+.slider-container {
+  width: 100%;
+  padding: 4px 0;
+  /* Ensure the container captures all mouse events */
+  position: relative;
+  touch-action: none; /* Prevent touch scrolling/zooming */
+}
+
 .form-group input[type="range"] {
   width: 100%;
   height: 6px;
@@ -190,6 +198,8 @@
   background: #e5e7eb;
   outline: none;
   -webkit-appearance: none;
+  /* Ensure slider captures all pointer events */
+  pointer-events: auto;
 }
 
 .form-group input[type="range"]::-webkit-slider-thumb {
