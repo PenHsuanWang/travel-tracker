@@ -11,6 +11,8 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { differenceInCalendarDays, format, parseISO, isValid } from 'date-fns';
 import MarkerCard from './MarkerCard';
+import RouteCard from './RouteCard';
+import AreaCard from './AreaCard';
 import DailyProfileCard from './DailyProfileCard';
 import DailyHazardCard from './DailyHazardCard';
 import {
@@ -21,6 +23,21 @@ import {
 } from '../../services/planService';
 import { ICON_CONFIG } from '../../utils/mapIcons';
 import './ItineraryPanel.css';
+
+// Helper: derive arrival time from multiple possible fields to avoid type-specific coupling
+const getArrivalTime = (feature) => {
+  if (!feature) return null;
+  const props = feature.properties || {};
+  return (
+    props.estimated_arrival ||
+    props.arrival_time ||
+    props.start_time ||
+    props.startTime ||
+    props.departure_time ||
+    props.time ||
+    null
+  );
+};
 
 /**
  * FeatureItem - Generic item for non-checkpoint features (markers, routes, areas).
@@ -167,6 +184,25 @@ const FeatureItem = ({
 
           {!readOnly && (
             <div className="feature-actions">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Add to schedule (defaults: Route=1h, Area=30m)
+                  const now = new Date().toISOString();
+                  const isRoute = feature.geometry?.type === 'LineString';
+                  const defaultDuration = isRoute ? 60 : 30;
+                  onUpdate(feature.id, {
+                    properties: {
+                      ...feature.properties,
+                      estimated_arrival: now,
+                      estimated_duration_minutes: defaultDuration,
+                    },
+                  });
+                }}
+                title="Add to schedule"
+              >
+                📅+
+              </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -362,20 +398,20 @@ const ItineraryPanel = ({
     
     featuresArray.forEach((feature) => {
       const geometryType = feature.geometry?.type;
-      
-      // Non-point features (Routes, Areas) → always go to non-point section
-      if (geometryType !== 'Point') {
-        nonPoints.push(feature);
-        return;
-      }
-      
-      // Point features: split by estimated_arrival presence (THE SWITCH)
-      const hasTime = feature.properties?.estimated_arrival != null;
-      
+      const arrival = getArrivalTime(feature);
+      // Fix: Ensure we catch any feature that claims to be scheduled via has_time_stamp
+      // or has a detectable time value.
+      const hasTime = (feature.properties?.has_time_stamp === true) || (arrival != null);
+
       if (hasTime) {
-        timeline.push(feature);   // Scheduled → Timeline
+        timeline.push(feature);   // Scheduled → Timeline (Points, Routes, Areas)
       } else {
-        reference.push(feature);  // Unscheduled → Features List
+        // Unscheduled
+        if (geometryType === 'Point') {
+          reference.push(feature); // Unscheduled Points
+        } else {
+          nonPoints.push(feature); // Unscheduled Routes/Areas
+        }
       }
     });
     
@@ -385,8 +421,8 @@ const ItineraryPanel = ({
   // Sort timeline items by estimated_arrival (ascending) - replaces sortedCheckpoints
   const sortedTimelineItems = useMemo(() => {
     return [...timelineItems].sort((a, b) => {
-      const aTime = a.properties?.estimated_arrival;
-      const bTime = b.properties?.estimated_arrival;
+      const aTime = getArrivalTime(a);
+      const bTime = getArrivalTime(b);
       if (aTime && bTime) {
         return new Date(aTime) - new Date(bTime);
       }
@@ -397,38 +433,56 @@ const ItineraryPanel = ({
   // Backward compatibility: alias for existing code that uses checkpoints
   const checkpoints = timelineItems;
   const sortedCheckpoints = sortedTimelineItems;
+  // Combined list of reference points and non-point features (routes/areas)
   const otherFeatures = [...referenceItems, ...nonPointFeatures];
 
-  // Group checkpoints by Day (based on planStartDate)
+  // Derive an effective trip start date: prefer planStartDate; otherwise use earliest scheduled item (any geometry).
+  const effectiveStartDate = useMemo(() => {
+    const explicit = planStartDate ? parseISO(planStartDate) : null;
+    if (explicit && isValid(explicit)) return explicit;
+
+    let earliest = null;
+    sortedTimelineItems.forEach((item) => {
+      const arrival = getArrivalTime(item);
+      if (!arrival) return;
+      const dt = parseISO(arrival);
+      if (!isValid(dt)) return;
+      if (!earliest || dt < earliest) {
+        earliest = dt;
+      }
+    });
+    return earliest;
+  }, [planStartDate, sortedTimelineItems]);
+
+  // Group checkpoints by Day (based on effectiveStartDate)
   const groupedCheckpoints = useMemo(() => {
-    if (!planStartDate) {
-      // Fallback: if no planStartDate, just return a single group or treat as flat
-      // But keeping consistent structure is better.
+    // If no viable start date, keep a flat group but still render items
+    const hasStart = !!effectiveStartDate;
+
+    if (!hasStart) {
       return [{
         label: 'All Checkpoints',
         subLabel: '',
         dayNum: 0,
-        items: sortedCheckpoints
+        items: sortedCheckpoints,
       }];
     }
 
     const groupMap = new Map();
     const groupList = [];
-    const startDate = parseISO(planStartDate);
-    const validStartDate = isValid(startDate);
 
-    sortedCheckpoints.forEach(cp => {
-      const arrival = cp.properties?.estimated_arrival;
+    sortedCheckpoints.forEach((cp) => {
+      const arrival = getArrivalTime(cp);
       let key = 'Unscheduled';
       let label = 'Unscheduled';
       let subLabel = '';
       let dayNum = 999999; // Sort unscheduled last
 
-      if (arrival && validStartDate) {
+      if (arrival) {
         const cpDate = parseISO(arrival);
-        if (isValid(cpDate)) {
-          // Calculate day offset
-          dayNum = differenceInCalendarDays(cpDate, startDate) + 1;
+        if (isValid(cpDate) && isValid(effectiveStartDate)) {
+          // Calculate day offset from the effective start (could be derived from Route/Area)
+          dayNum = differenceInCalendarDays(cpDate, effectiveStartDate) + 1;
           label = `Day ${dayNum}`;
           subLabel = format(cpDate, 'MMM dd');
           key = `${dayNum}_${subLabel}`;
@@ -441,7 +495,7 @@ const ItineraryPanel = ({
           label,
           subLabel,
           dayNum,
-          items: []
+          items: [],
         };
         groupMap.set(key, group);
         groupList.push(group);
@@ -453,7 +507,7 @@ const ItineraryPanel = ({
     groupList.sort((a, b) => a.dayNum - b.dayNum);
 
     return groupList;
-  }, [sortedCheckpoints, planStartDate]);
+  }, [sortedCheckpoints, effectiveStartDate]);
 
   // Sort other features by order_index (for non-point features like routes/areas)
   const sortedOtherFeatures = useMemo(() => {
@@ -620,14 +674,14 @@ const ItineraryPanel = ({
             <div className="checkpoints-list">
               {groupedCheckpoints.map((group, groupIndex) => (
                 <div key={group.key || groupIndex} className="day-group-container mb-4">
-                  {/* Day Header */}
-                  {planStartDate ? (
+                  {/* Day Header - use effectiveStartDate (derived from any scheduled item) */}
+                  {effectiveStartDate ? (
                     <div className="day-group-header sticky top-0 z-10 bg-gray-100 p-2 font-bold border-b flex justify-between">
                       <span>{group.label}</span>
                       <span className="text-gray-500 font-normal">{group.subLabel}</span>
                     </div>
                   ) : (
-                     /* If no plan start date, show simplified header or nothing if 'All Checkpoints' */
+                     /* If no start date at all, show simplified header or nothing if 'All Checkpoints' */
                      group.label !== 'All Checkpoints' && (
                        <div className="day-group-header sticky top-0 z-10 bg-gray-100 p-2 font-bold border-b">
                          <span>{group.label}</span>
@@ -654,26 +708,67 @@ const ItineraryPanel = ({
                     </>
                   )}
 
-                  {/* Items container - Using MarkerCard (Unified Marker System) */}
-                  <div className={planStartDate ? "day-items border-l-2 border-green-200 ml-2 pl-2" : "day-items"}>
-                    {group.items.map((item, index) => (
-                      <MarkerCard
-                        key={item.id}
-                        feature={item}
-                        selected={item.id === selectedFeatureId}
-                        isScheduled={true}
-                        onSelect={onSelectFeature}
-                        onUpdate={onUpdateFeature}
-                        onUpdateWithCascade={onUpdateFeatureWithCascade}
-                        onDelete={onDeleteFeature}
-                        onNavigate={onCenterFeature}
-                        onEdit={onEditFeature}
-                        readOnly={readOnly}
-                        showDeltaTime={index > 0}
-                        previousArrival={index > 0 ? group.items[index - 1].properties?.estimated_arrival : null}
-                        hasSubsequentItems={index < group.items.length - 1}
-                      />
-                    ))}
+                  {/* Items container - Polymorphic rendering */}
+                  <div className={effectiveStartDate ? "day-items border-l-2 border-green-200 ml-2 pl-2" : "day-items"}>
+                    {group.items.map((item, index) => {
+                      const type = item.geometry?.type;
+                      const normalizedType = typeof type === 'string' ? type.toLowerCase() : '';
+                      const arrival = getArrivalTime(item);
+                      // Ensure downstream cards receive a consistent arrival field
+                      const itemForRender = arrival && !item.properties?.estimated_arrival
+                        ? { ...item, properties: { ...item.properties, estimated_arrival: arrival } }
+                        : item;
+
+                      const commonProps = {
+                        feature: itemForRender,
+                        selected: item.id === selectedFeatureId,
+                        isScheduled: true,
+                        onSelect: onSelectFeature,
+                        onUpdate: onUpdateFeature,
+                        onDelete: onDeleteFeature,
+                        onNavigate: onCenterFeature,
+                        onEdit: onEditFeature,
+                        readOnly,
+                      };
+
+                      switch (normalizedType) {
+                        case 'linestring':
+                        case 'multilinestring':
+                          return <RouteCard key={item.id} {...commonProps} />;
+
+                        case 'polygon':
+                        case 'multipolygon':
+                          return <AreaCard key={item.id} {...commonProps} />;
+
+                        case 'point':
+                        case 'multipoint':
+                          return (
+                            <MarkerCard
+                              key={item.id}
+                              {...commonProps}
+                              onUpdateWithCascade={onUpdateFeatureWithCascade}
+                              showDeltaTime={index > 0}
+                              previousArrival={index > 0 ? getArrivalTime(group.items[index - 1]) : null}
+                              hasSubsequentItems={index < group.items.length - 1}
+                            />
+                          );
+
+                        default:
+                          // Render a generic feature item instead of dropping the card so all scheduled items stay visible.
+                          return (
+                            <FeatureItem
+                              key={item.id}
+                              feature={itemForRender}
+                              selected={item.id === selectedFeatureId}
+                              onSelect={onSelectFeature}
+                              onUpdate={onUpdateFeature}
+                              onDelete={onDeleteFeature}
+                              onDoubleClick={onFlyToFeature}
+                              readOnly={readOnly}
+                            />
+                          );
+                      }
+                    })}
                   </div>
                 </div>
               ))}
@@ -684,11 +779,11 @@ const ItineraryPanel = ({
         {/* Section 2: Features List (Reference Items - no time) */}
         <section className="other-features-section reference-section">
           <h4>
-            <span className="section-icon">📌</span>
-            Features List
-            <span className="section-count">({referenceItems.length})</span>
-          </h4>
-          {referenceItems.length === 0 ? (
+              <span className="section-icon">📌</span>
+              Features List
+              <span className="section-count">({otherFeatures.length})</span>
+            </h4>
+            {(otherFeatures.length === 0) ? (
             <p className="empty-message">
               {readOnly
                 ? 'No reference markers.'

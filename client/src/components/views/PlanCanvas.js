@@ -38,6 +38,7 @@ import {
   ROUTE_TYPE,
 } from '../../services/planService';
 import { fetchGpxAnalysis } from '../../services/api';
+import { calculateLengthKm, calculateAreaSqM } from '../../utils/geoUtils';
 import GpxImportOptionsModal from '../common/GpxImportOptionsModal';
 import '../../styles/PlanCanvas.css';
 
@@ -217,6 +218,13 @@ const PlanCanvas = () => {
           ...properties,
         };
 
+        // Calculate geometric stats
+        if (geometry.type === 'LineString') {
+          featureProps.distance_km = calculateLengthKm(geometry);
+        } else if (geometry.type === 'Polygon') {
+          featureProps.area_sq_m = calculateAreaSqM(geometry);
+        }
+
         // Default route type for lines
         if (!featureProps.route_type && featureProps.category === FEATURE_CATEGORY.ROUTE) {
           featureProps.route_type = ROUTE_TYPE.MAIN;
@@ -251,6 +259,21 @@ const PlanCanvas = () => {
       if (!canEdit || !plan) return;
       try {
         setSaving(true);
+        
+        // Recalculate stats if geometry changes
+        const geometry = updates.geometry;
+        if (geometry) {
+           if (!updates.properties) updates.properties = {};
+           
+           // We need to merge with existing properties to check category? 
+           // Or just trust geometry type.
+           if (geometry.type === 'LineString') {
+             updates.properties.distance_km = calculateLengthKm(geometry);
+           } else if (geometry.type === 'Polygon') {
+             updates.properties.area_sq_m = calculateAreaSqM(geometry);
+           }
+        }
+
         const updated = await updateFeature(planId, featureId, updates);
         setPlan((prev) => {
           const currentFeatures = getFeaturesArray(prev);

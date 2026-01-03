@@ -153,6 +153,12 @@ class PlanFeatureProperties(BaseModel):
     original_gpx_time: Optional[datetime] = None  # Preserved from source GPX
     time_offset_seconds: Optional[float] = None   # Delta from original GPX start time
     
+    # Geometric Stats (Routes & Areas)
+    distance_km: Optional[float] = None       # Length for Routes
+    elevation_gain_m: Optional[float] = None  # Ascent for Routes
+    elevation_loss_m: Optional[float] = None  # Descent for Routes
+    area_sq_m: Optional[float] = None         # Area size for Polygons
+
     # Styling
     color: str = Field(default="#3388ff", pattern=r"^#[0-9A-Fa-f]{6}$")
     stroke_width: int = Field(default=3, ge=1, le=10, alias="strokeWidth")
@@ -207,38 +213,32 @@ class PlanFeatureProperties(BaseModel):
     
     @model_validator(mode='after')
     def validate_time_only_for_points(self):
-        """Ensure time-related fields are only set for Point geometry features.
+        """Ensure time-related fields are allowed for Points, Routes, and Areas.
         
-        With the Unified Marker System (PRD v1.1), any Point feature
-        (WAYPOINT or MARKER) can optionally have estimated_arrival.
-        The presence of the time attribute determines whether the marker
-        appears in the Timeline or Reference List in the UI.
-        
-        Routes (LineString) and Areas (Polygon) cannot have time attributes.
+        With the Universal Scheduling update, all feature types (Marker, Route, Area)
+        can be scheduled with estimated_arrival and duration.
         """
-        # Point-based categories that can have time (Unified Marker System)
-        point_categories = (FeatureCategory.WAYPOINT, FeatureCategory.MARKER)
+        # All main categories can now have time
+        allowed_categories = (
+            FeatureCategory.WAYPOINT, 
+            FeatureCategory.MARKER,
+            FeatureCategory.ROUTE,
+            FeatureCategory.AREA
+        )
         
-        if self.estimated_arrival is not None and self.category not in point_categories:
+        if self.estimated_arrival is not None and self.category not in allowed_categories:
             raise ValueError(
-                f'estimated_arrival is only allowed for Point features (WAYPOINT/MARKER), '
-                f'got category={self.category}'
+                f'estimated_arrival is not allowed for category={self.category}'
             )
-        if self.estimated_duration_minutes is not None and self.category not in point_categories:
+        if self.estimated_duration_minutes is not None and self.category not in allowed_categories:
             raise ValueError(
-                f'estimated_duration_minutes is only allowed for Point features (WAYPOINT/MARKER), '
-                f'got category={self.category}'
+                f'estimated_duration_minutes is not allowed for category={self.category}'
             )
-        if self.original_gpx_time is not None and self.category not in point_categories:
-            raise ValueError(
-                f'original_gpx_time is only allowed for Point features (WAYPOINT/MARKER), '
-                f'got category={self.category}'
-            )
-        if self.time_offset_seconds is not None and self.category not in point_categories:
-            raise ValueError(
-                f'time_offset_seconds is only allowed for Point features (WAYPOINT/MARKER), '
-                f'got category={self.category}'
-            )
+        
+        # GPX time shift fields still only relevant for points (waypoints) usually, 
+        # but technically could apply to anything. Keeping strict for now unless needed.
+        # But 'original_gpx_time' is specific to waypoints usually.
+        
         return self
     
     @model_validator(mode='after')

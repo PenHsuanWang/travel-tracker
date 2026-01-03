@@ -23,6 +23,7 @@ import {
   categoryAllowsTime,
   formatCoordinates,
 } from '../../services/planService';
+import { formatArea } from '../../utils/geoUtils';
 import './SemanticPopupEditor.css';
 
 const HAZARD_TYPES = [
@@ -101,6 +102,12 @@ const SemanticPopupEditor = ({
   // Extract coordinates for display
   const coordinates = feature.geometry?.coordinates;
   const isPoint = feature.geometry?.type === 'Point';
+  const isRoute = feature.geometry?.type === 'LineString';
+  const isArea = feature.geometry?.type === 'Polygon';
+
+  // Stats
+  const distanceKm = feature.properties?.distance_km;
+  const areaSqM = feature.properties?.area_sq_m;
   
   // Form state
   const [formName, setFormName] = useState(name || '');
@@ -224,11 +231,23 @@ const SemanticPopupEditor = ({
         <span className="category-label">{getCategoryLabel(effectiveCategory)}</span>
       </div>
 
-      {/* Coordinates display (read-only for points) */}
+      {/* Stats display */}
       {isPoint && coordinates && (
         <div className="coords-display">
           <span className="coords-icon">📍</span>
           <span className="coords-value">{formatCoordinates(coordinates, 5)}</span>
+        </div>
+      )}
+      {isRoute && distanceKm && (
+        <div className="coords-display">
+          <span className="coords-icon">📏</span>
+          <span className="coords-value">{distanceKm.toFixed(2)} km</span>
+        </div>
+      )}
+      {isArea && areaSqM && (
+        <div className="coords-display">
+          <span className="coords-icon">⬡</span>
+          <span className="coords-value">{formatArea(areaSqM)}</span>
         </div>
       )}
 
@@ -326,14 +345,16 @@ const SemanticPopupEditor = ({
                 }}
                 disabled={readOnly}
               />
-              <span>Add to timeline (enable time)</span>
+              <span>Add to timeline (Schedule)</span>
             </label>
           </div>
 
           {timeEnabledToggle && (
             <div className="time-fields">
               <div className="form-field">
-                <label htmlFor="popup-arrival">Planned Arrival</label>
+                <label htmlFor="popup-arrival">
+                  {isPoint ? 'Planned Arrival' : 'Start Time'}
+                </label>
                 <input
                   id="popup-arrival"
                   type="datetime-local"
@@ -343,7 +364,9 @@ const SemanticPopupEditor = ({
                 />
               </div>
               <div className="form-field">
-                <label htmlFor="popup-duration">Stop Duration (min)</label>
+                <label htmlFor="popup-duration">
+                   {isPoint ? 'Stop Duration (min)' : 'Duration (min)'}
+                </label>
                 <input
                   id="popup-duration"
                   type="number"

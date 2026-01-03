@@ -454,12 +454,17 @@ export const getCategoryIcon = (category) => {
 
 /**
  * Check if a feature category allows time fields.
- * PRD v1.1: Both WAYPOINT and MARKER (Point-based) categories can have time.
+ * PRD v1.1: Now supports all feature types (Markers, Routes, Areas).
  * @param {string} category - Feature category value
  * @returns {boolean}
  */
 export const categoryAllowsTime = (category) => {
-  return category === FEATURE_CATEGORY.WAYPOINT || category === FEATURE_CATEGORY.MARKER;
+  return (
+    category === FEATURE_CATEGORY.WAYPOINT ||
+    category === FEATURE_CATEGORY.MARKER ||
+    category === FEATURE_CATEGORY.ROUTE ||
+    category === FEATURE_CATEGORY.AREA
+  );
 };
 
 /**
@@ -548,6 +553,24 @@ export const formatDuration = (minutes) => {
     return `${hours}h stop`;
   }
   return `${minutes} min stop`;
+};
+
+/**
+ * Format duration simply (e.g. "2h" or "30m").
+ * @param {number} minutes - Duration in minutes
+ * @returns {string} Formatted string
+ */
+export const formatDurationSimple = (minutes) => {
+  if (!minutes || minutes <= 0) return '';
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (mins > 0) {
+      return `${hours}h${mins}m`;
+    }
+    return `${hours}h`;
+  }
+  return `${minutes}m`;
 };
 
 export default apiClient;

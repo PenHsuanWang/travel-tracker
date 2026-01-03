@@ -516,3 +516,68 @@
     z-index: 400;
   }
 }
+
+/* Unified Timeline Cards (Route & Area) */
+.timeline-card {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 6px;
+  border: 1px solid rgba(0,0,0,0.05);
+  position: relative;
+}
+
+.timeline-card:hover {
+  filter: brightness(0.97);
+}
+
+.timeline-card.selected {
+  box-shadow: 0 0 0 2px #2563eb;
+  z-index: 1;
+}
+
+/* Route Card Defaults (Fallback for Tailwind) */
+.route-card {
+  background-color: #eff6ff; /* blue-50 */
+  border-left: 4px solid #60a5fa; /* blue-400 */
+}
+
+/* Area Card Defaults (Fallback for Tailwind) */
+.area-card {
+  background-color: #f9fafb; /* gray-50 */
+  border-left: 4px solid #9ca3af; /* gray-400 */
+}
+
+.timeline-card .header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.timeline-card .card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.timeline-card:hover .card-actions {
+  opacity: 1;
+}
+
+.timeline-card .card-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.timeline-card .card-actions button:hover {
+  opacity: 1;
+  background-color: rgba(255,255,255,0.5);
+  border-radius: 4px;
+}
