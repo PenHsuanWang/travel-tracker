@@ -608,8 +608,11 @@ const getSemanticMarkerIcon = (semanticType, isSelected = false, isHighlighted =
 // FE-05: Polygon component with SVG pattern fill support
 // Standard Leaflet pathOptions don't support SVG patterns, so we use a ref
 // to directly manipulate the SVG path element after render
-const PatternPolygon = ({ positions, pathOptions, fillPattern, fillColor, children, eventHandlers }) => {
+const PatternPolygon = forwardRef(({ positions, pathOptions, fillPattern, fillColor, children, eventHandlers }, ref) => {
   const polygonRef = useRef(null);
+
+  // Forward the ref to the parent
+  useImperativeHandle(ref, () => polygonRef.current);
 
   // Apply SVG pattern fill directly to the path element when fillPattern is 'crosshatch'
   useEffect(() => {
@@ -683,7 +686,7 @@ const PatternPolygon = ({ positions, pathOptions, fillPattern, fillColor, childr
       {children}
     </Polygon>
   );
-};
+});
 
 // Create small grey marker icon for reference waypoints
 const createReferenceWaypointIcon = () => {
@@ -731,6 +734,8 @@ const PlanMapView = forwardRef(({
   const mapRef = useRef(null);
   // FR-051: Store refs to reference track polyline layers for snap-to-track
   const referenceTrackLayersRef = useRef([]);
+  // Store refs to feature layers for programmatic popup access
+  const featureLayersRef = useRef({});
   const resizeObserverRef = useRef(null);
 
   // FR-051: Compute reference track coordinates for snap-to-track
@@ -880,6 +885,14 @@ const PlanMapView = forwardRef(({
         flashFeature(featureId);
       }, 1000); // Wait for flyTo to complete
     },
+
+    // Programmatically open a feature's popup
+    openFeaturePopup: (featureId) => {
+      const layer = featureLayersRef.current[featureId];
+      if (layer && layer.openPopup) {
+        layer.openPopup();
+      }
+    },
     
     // Center on coordinates (for simple centering without flash)
     centerOnCoords: (coords) => {
@@ -960,6 +973,7 @@ const PlanMapView = forwardRef(({
     return (
       <Marker
         key={feature.id}
+        ref={(r) => { if (r) featureLayersRef.current[feature.id] = r; }}
         position={[lat, lng]}
         icon={icon}
         eventHandlers={{
@@ -1045,6 +1059,7 @@ const PlanMapView = forwardRef(({
     return (
       <Polyline
         key={feature.id}
+        ref={(r) => { if (r) featureLayersRef.current[feature.id] = r; }}
         positions={positions}
         pathOptions={{
           color: isSelected ? '#ef4444' : color,
@@ -1151,6 +1166,7 @@ const PlanMapView = forwardRef(({
     return (
       <PatternPolygon
         key={feature.id}
+        ref={(r) => { if (r) featureLayersRef.current[feature.id] = r; }}
         positions={positions}
         fillPattern={fillPattern}
         fillColor={fillColor}

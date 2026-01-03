@@ -29,6 +29,7 @@ const MarkerCard = ({
   onUpdateWithCascade,
   onDelete,
   onNavigate,
+  onEdit,
   readOnly,
   showDeltaTime,
   previousArrival,
@@ -93,6 +94,14 @@ const MarkerCard = ({
   const handleClick = useCallback(() => {
     onSelect(feature.id);
   }, [feature.id, onSelect]);
+
+  // Handle double click
+  const handleDoubleClick = useCallback((e) => {
+    e.preventDefault();
+    if (onEdit) {
+      onEdit(feature.id);
+    }
+  }, [feature.id, onEdit]);
   
   // Handle navigate to map
   const handleNavigate = useCallback((e) => {
@@ -155,6 +164,7 @@ const MarkerCard = ({
     <div 
       className={`marker-card ${selected ? 'marker-card--selected' : ''} ${isScheduled ? 'marker-card--scheduled' : 'marker-card--reference'}`}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
     >
       {/* Icon */}
       <div className="marker-card__icon" title={iconConfig.label}>
@@ -262,6 +272,7 @@ MarkerCard.propTypes = {
   onUpdateWithCascade: PropTypes.func,
   onDelete: PropTypes.func,
   onNavigate: PropTypes.func,
+  onEdit: PropTypes.func,
   readOnly: PropTypes.bool,
   showDeltaTime: PropTypes.bool,
   previousArrival: PropTypes.string,

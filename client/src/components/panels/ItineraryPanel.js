@@ -332,6 +332,7 @@ const ItineraryPanel = ({
   onReorderFeatures,
   onCenterFeature,
   onFlyToFeature, // FE-06: Navigate map to feature with flyTo + flash
+  onEditFeature, // Open feature popup for editing
   onAddReferenceTrack,
   onRemoveReferenceTrack,
   onToggleTrackVisibility, // UI-03: Toggle track/waypoint visibility
@@ -666,6 +667,7 @@ const ItineraryPanel = ({
                         onUpdateWithCascade={onUpdateFeatureWithCascade}
                         onDelete={onDeleteFeature}
                         onNavigate={onCenterFeature}
+                        onEdit={onEditFeature}
                         readOnly={readOnly}
                         showDeltaTime={index > 0}
                         previousArrival={index > 0 ? group.items[index - 1].properties?.estimated_arrival : null}
@@ -705,6 +707,7 @@ const ItineraryPanel = ({
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
                     onNavigate={onCenterFeature}
+                        onEdit={onEditFeature}
                     readOnly={readOnly}
                   />
                 ))}
@@ -721,6 +724,7 @@ const ItineraryPanel = ({
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
                     onNavigate={onCenterFeature}
+                        onEdit={onEditFeature}
                     readOnly={readOnly}
                   />
                 ))}
@@ -737,6 +741,7 @@ const ItineraryPanel = ({
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
                     onNavigate={onCenterFeature}
+                        onEdit={onEditFeature}
                     readOnly={readOnly}
                   />
                 ))}
@@ -753,6 +758,7 @@ const ItineraryPanel = ({
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
                     onNavigate={onCenterFeature}
+                        onEdit={onEditFeature}
                     readOnly={readOnly}
                   />
                 ))}
@@ -769,6 +775,7 @@ const ItineraryPanel = ({
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
                     onNavigate={onCenterFeature}
+                        onEdit={onEditFeature}
                     readOnly={readOnly}
                   />
                 ))}
@@ -786,6 +793,7 @@ const ItineraryPanel = ({
                       onUpdate={onUpdateFeature}
                       onDelete={onDeleteFeature}
                       onNavigate={onCenterFeature}
+                        onEdit={onEditFeature}
                       readOnly={readOnly}
                     />
                   ) : (

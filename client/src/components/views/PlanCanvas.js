@@ -856,6 +856,13 @@ const PlanCanvas = () => {
               }
               setSelectedFeatureId(featureId);
             }}
+            onEditFeature={(featureId) => {
+              // Open feature popup for editing
+              if (mapRef.current?.openFeaturePopup) {
+                mapRef.current.openFeaturePopup(featureId);
+              }
+              setSelectedFeatureId(featureId);
+            }}
             onAddReferenceTrack={handleAddReferenceTrack}
             onRemoveReferenceTrack={handleRemoveReferenceTrack}
             onToggleTrackVisibility={handleToggleTrackVisibility}
