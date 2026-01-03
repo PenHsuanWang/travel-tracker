@@ -44,7 +44,11 @@ const MarkerCard = ({
     hazard_subtype,
     estimated_arrival,
     estimated_duration_minutes,
+    note,
+    notes,
   } = feature.properties || {};
+
+  const displayNote = notes || note;
   
   const coordinates = feature.geometry?.coordinates;
   
@@ -162,96 +166,93 @@ const MarkerCard = ({
 
   return (
     <div 
-      className={`marker-card ${selected ? 'marker-card--selected' : ''} ${isScheduled ? 'marker-card--scheduled' : 'marker-card--reference'}`}
+      className={`marker-card group ${selected ? 'marker-card--selected' : ''} ${isScheduled ? 'marker-card--scheduled' : 'marker-card--reference'}`}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
     >
-      {/* Icon */}
-      <div className="marker-card__icon" title={iconConfig.label}>
-        <span>{iconConfig.emoji}</span>
-      </div>
-      
-      {/* Content */}
-      <div className="marker-card__content">
-        {/* Name */}
-        <div className="marker-card__name">
-          {name || iconConfig.label || 'Marker'}
+      {/* ROW 1: Header */}
+      <div className="marker-card__header flex justify-between items-start w-full">
+        <div className="flex items-center gap-2">
+          <div className="marker-card__icon" title={iconConfig.label}>
+            <span>{iconConfig.emoji}</span>
+          </div>
+          <h4 className="marker-card__name font-bold text-gray-900">
+            {name || iconConfig.label || 'Marker'}
+          </h4>
         </div>
         
-        {/* GPS Coordinates - ALWAYS VISIBLE (PRD FR-3.4) */}
-        <div className="marker-card__coords">
-          <span className="marker-card__coords-icon">📍</span>
-          <span className="marker-card__coords-text">{coordsDisplay || 'No coordinates'}</span>
-          <button 
-            className="marker-card__nav-btn"
-            onClick={handleNavigate}
-            title="Center map on this location"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="22" y1="12" x2="18" y2="12"/>
-              <line x1="6" y1="12" x2="2" y2="12"/>
-              <line x1="12" y1="6" x2="12" y2="2"/>
-              <line x1="12" y1="22" x2="12" y2="18"/>
-            </svg>
-          </button>
+        <div className="text-right">
+            {isEditingTime ? (
+              <div className="marker-card__time-editor" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="datetime-local"
+                  value={timeInputValue}
+                  onChange={(e) => setTimeInputValue(e.target.value)}
+                  autoFocus
+                  className="text-xs p-1 border rounded"
+                />
+                <button className="btn-save ml-1" onClick={handleSaveTime}>✓</button>
+                <button className="btn-cancel ml-1" onClick={() => setIsEditingTime(false)}>✕</button>
+              </div>
+            ) : (
+                isScheduled && estimated_arrival && (
+                    <div className="flex flex-col items-end">
+                      <div className="marker-card__time-absolute font-mono font-bold text-blue-600">
+                        {formatArrivalTime(estimated_arrival)}
+                      </div>
+                      {deltaTime && (
+                        <div className="marker-card__time-delta text-xs text-gray-400">
+                          {deltaTime}
+                        </div>
+                      )}
+                    </div>
+                )
+            )}
         </div>
-        
-        {/* Time Row (for scheduled items) */}
-        {isScheduled && estimated_arrival && !isEditingTime && (
-          <div className="marker-card__time">
-            <span className="marker-card__time-icon">🕐</span>
-            <span className="marker-card__time-absolute">
-              {formatArrivalTime(estimated_arrival)}
-            </span>
-            {deltaTime && (
-              <span className="marker-card__time-delta">({deltaTime})</span>
-            )}
-            {estimated_duration_minutes && (
-              <span className="marker-card__time-duration">
-                • {formatDuration(estimated_duration_minutes)}
-              </span>
-            )}
-          </div>
-        )}
-        
-        {/* Time Editor */}
-        {isEditingTime && (
-          <div className="marker-card__time-editor" onClick={(e) => e.stopPropagation()}>
-            <input
-              type="datetime-local"
-              value={timeInputValue}
-              onChange={(e) => setTimeInputValue(e.target.value)}
-              autoFocus
-            />
-            <button className="btn-save" onClick={handleSaveTime}>✓</button>
-            <button className="btn-cancel" onClick={() => setIsEditingTime(false)}>✕</button>
-          </div>
-        )}
       </div>
-      
-      {/* Actions */}
-      {!readOnly && (
-        <div className="marker-card__actions">
-          {/* Schedule Toggle */}
-          <button
-            className={`marker-card__schedule-btn ${isScheduled ? 'is-scheduled' : ''}`}
-            onClick={handleToggleSchedule}
-            title={isScheduled ? 'Remove from schedule' : 'Add to schedule'}
-          >
-            {isScheduled ? '📅✓' : '📅+'}
-          </button>
-          
-          {/* Delete */}
-          <button
-            className="marker-card__delete-btn"
-            onClick={handleDelete}
-            title="Delete marker"
-          >
-            🗑️
-          </button>
+
+      {/* ROW 2: Notes (Conditional) */}
+      {displayNote && (
+        <div className="marker-card__notes mt-2 mb-2 pl-8 w-full">
+          <div className="text-xs text-gray-600 bg-gray-50 border border-gray-100 p-2 rounded leading-snug break-words">
+            <span className="mr-1">📝</span>
+            {displayNote}
+          </div>
         </div>
       )}
+
+      {/* ROW 3: Footer */}
+      <div className="marker-card__footer flex justify-between items-center mt-1 pt-1 border-t border-gray-100 pl-8 w-full">
+        <div 
+          className="marker-card__coords flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 cursor-pointer"
+          onClick={handleNavigate}
+          title="Center map on this location"
+        >
+          <span className="marker-card__coords-icon">📍</span>
+          <span className="font-mono">{coordsDisplay || 'No coordinates'}</span>
+        </div>
+        
+        {/* Actions */}
+        {!readOnly && (
+          <div className="marker-card__actions opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+            <button
+              className={`marker-card__schedule-btn ${isScheduled ? 'is-scheduled' : ''}`}
+              onClick={handleToggleSchedule}
+              title={isScheduled ? 'Remove from schedule' : 'Add to schedule'}
+            >
+              {isScheduled ? '📅✓' : '📅+'}
+            </button>
+            
+            <button
+              className="marker-card__delete-btn"
+              onClick={handleDelete}
+              title="Delete marker"
+            >
+              🗑️
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

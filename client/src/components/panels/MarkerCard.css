@@ -5,8 +5,9 @@
 
 .marker-card {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   padding: 10px 12px;
   margin-bottom: 6px;
   background: white;
@@ -184,8 +185,8 @@
 /* Actions */
 .marker-card__actions {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row;
+  gap: 8px;
   opacity: 0;
   transition: opacity 0.15s;
 }

@@ -705,6 +705,14 @@ const createReferenceWaypointIcon = () => {
   });
 };
 
+// Helper component for Rich Tooltips (Title + Note)
+const RichTooltip = ({ title, note }) => (
+  <div className="tooltip-content">
+    <div className="tooltip-title">{title}</div>
+    {note && <div className="tooltip-note">{note}</div>}
+  </div>
+);
+
 const PlanMapView = forwardRef(({
   features,
   referenceTracks,
@@ -963,12 +971,13 @@ const PlanMapView = forwardRef(({
       : getSemanticIcon(semanticType, { size: 36, selected: isSelected, highlighted: false, emoji: displayEmoji });
     const isEditing = editingFeatureId === feature.id;
 
-    // FE-07: Tooltip content for hover
-    const tooltipContent = feature.properties?.name || 'Marker';
-
     const semanticConfig = ICON_CONFIG[semanticType] || ICON_CONFIG[SEMANTIC_TYPE.GENERIC];
     const displayTitle = feature.properties?.name || semanticConfig.label.toUpperCase();
     const headerEmoji = displayEmoji || semanticConfig.emoji;
+
+    // FE-07: Rich Tooltip Content
+    const tooltipTitle = feature.properties?.name || 'Marker';
+    const tooltipNote = feature.properties?.description || feature.properties?.note;
 
     return (
       <Marker
@@ -980,18 +989,19 @@ const PlanMapView = forwardRef(({
           click: () => onSelectFeature(feature.id),
         }}
       >
-        {/* FE-07: Hover tooltip for glanceability */}
+        {/* FE-07: Rich Hover Tooltip */}
         <Tooltip
-          direction="auto"
-          offset={[0, -20]}
+          direction="top"
+          offset={[0, -35]}
           opacity={1}
           className="plan-feature-tooltip"
           interactive={false}
         >
-          {tooltipContent}
+          <RichTooltip title={tooltipTitle} note={tooltipNote} />
         </Tooltip>
+        
+        {/* FE-07: Quick-View Popup (Read-Only first, Edit via button) */}
         <Popup
-          onOpen={() => setEditingFeatureId(feature.id)}
           onClose={() => setEditingFeatureId(null)}
         >
           {isEditing ? (
@@ -1053,8 +1063,9 @@ const PlanMapView = forwardRef(({
     const opacity = isFlashing ? 0.4 : (style.opacity ?? feature.properties?.opacity ?? 0.8);
     const isEditing = editingFeatureId === feature.id;
 
-    // FE-07: Tooltip content for hover
-    const tooltipContent = feature.properties?.name || '〰️ Route';
+    // FE-07: Rich Tooltip Content
+    const tooltipTitle = feature.properties?.name || '〰️ Route';
+    const tooltipNote = feature.properties?.description || feature.properties?.note;
 
     return (
       <Polyline
@@ -1072,7 +1083,7 @@ const PlanMapView = forwardRef(({
           click: () => onSelectFeature(feature.id),
         }}
       >
-        {/* FE-07: Hover tooltip for glanceability */}
+        {/* FE-07: Rich Hover Tooltip */}
         <Tooltip
           direction="auto"
           offset={[0, 0]}
@@ -1081,10 +1092,10 @@ const PlanMapView = forwardRef(({
           interactive={false}
           sticky={true}
         >
-          {tooltipContent}
+          <RichTooltip title={tooltipTitle} note={tooltipNote} />
         </Tooltip>
+        
         <Popup
-          onOpen={() => setEditingFeatureId(null)}
           onClose={() => setEditingFeatureId(null)}
         >
           {isEditing ? (
@@ -1159,8 +1170,9 @@ const PlanMapView = forwardRef(({
     if (shapeType === 'rectangle') label = '▭ Rectangle';
     else if (shapeType === 'circle') label = '◯ Circle';
 
-    // FE-07: Tooltip content for hover
-    const tooltipContent = feature.properties?.name || label;
+    // FE-07: Rich Tooltip Content
+    const tooltipTitle = feature.properties?.name || label;
+    const tooltipNote = feature.properties?.description || feature.properties?.note;
 
     // FE-05: Use PatternPolygon for crosshatch support
     return (
@@ -1182,7 +1194,7 @@ const PlanMapView = forwardRef(({
           click: () => onSelectFeature(feature.id),
         }}
       >
-        {/* FE-07: Hover tooltip for glanceability */}
+        {/* FE-07: Rich Hover Tooltip */}
         <Tooltip
           direction="auto"
           offset={[0, 0]}
@@ -1191,10 +1203,10 @@ const PlanMapView = forwardRef(({
           interactive={false}
           sticky={true}
         >
-          {tooltipContent}
+          <RichTooltip title={tooltipTitle} note={tooltipNote} />
         </Tooltip>
+        
         <Popup
-          onOpen={() => setEditingFeatureId(null)}
           onClose={() => setEditingFeatureId(null)}
         >
           {isEditing ? (
