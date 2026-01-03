@@ -171,17 +171,17 @@ const MarkerCard = ({
       onDoubleClick={handleDoubleClick}
     >
       {/* ROW 1: Header */}
-      <div className="marker-card__header flex justify-between items-start w-full">
-        <div className="flex items-center gap-2">
-          <div className="marker-card__icon" title={iconConfig.label}>
+      <div className="marker-card__header flex justify-between items-start w-full gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="marker-card__icon flex-shrink-0" title={iconConfig.label}>
             <span>{iconConfig.emoji}</span>
           </div>
-          <h4 className="marker-card__name font-bold text-gray-900">
+          <h4 className="marker-card__name font-bold text-gray-900 truncate">
             {name || iconConfig.label || 'Marker'}
           </h4>
         </div>
         
-        <div className="text-right">
+        <div className="text-right flex-shrink-0">
             {isEditingTime ? (
               <div className="marker-card__time-editor" onClick={(e) => e.stopPropagation()}>
                 <input
@@ -197,11 +197,11 @@ const MarkerCard = ({
             ) : (
                 isScheduled && estimated_arrival && (
                     <div className="flex flex-col items-end">
-                      <div className="marker-card__time-absolute font-mono font-bold text-blue-600">
+                      <div className="marker-card__time-absolute font-mono font-bold text-blue-600 whitespace-nowrap">
                         {formatArrivalTime(estimated_arrival)}
                       </div>
                       {deltaTime && (
-                        <div className="marker-card__time-delta text-xs text-gray-400">
+                        <div className="marker-card__time-delta text-xs text-gray-400 whitespace-nowrap">
                           {deltaTime}
                         </div>
                       )}
