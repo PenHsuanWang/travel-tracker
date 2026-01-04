@@ -46,8 +46,8 @@ const AreaCard = ({
   const noteColor = isHazard ? 'text-red-700' : 'text-gray-600';
 
   // For Area (non-point) features use date-granularity scheduling.
+  // Display only the scheduled date (no duration shown in card header)
   const startDateStr = estimated_arrival ? format(new Date(estimated_arrival), 'MMM d') : '';
-  const durationDisplay = estimated_duration_minutes ? `(${formatDurationSimple(estimated_duration_minutes)})` : '';
 
   const handleToggleSchedule = useCallback((e) => {
     e.stopPropagation();
@@ -152,13 +152,6 @@ const AreaCard = ({
                    value={dateValue || (estimated_arrival ? format(new Date(estimated_arrival), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))}
                    onChange={handleDateChange}
                  />
-                 <input 
-                  type="number" 
-                  className="w-16 text-xs border rounded px-1 ml-2" 
-                  value={durationValue} 
-                  onChange={handleDurationChange}
-                  placeholder="duration min"
-                 />
                  <button className="ml-1 text-green-600 font-bold" onClick={saveDateTime}>✓</button>
                </div>
              ) : (
@@ -168,10 +161,9 @@ const AreaCard = ({
                   e.stopPropagation();
                   if (!readOnly) setIsEditingTime(true);
                 }}
-                title="Click to edit date/duration"
+                title="Click to edit date"
               >
-                {startDateStr} 
-                {durationDisplay && <span className="text-xs ml-1 opacity-75">{durationDisplay}</span>}
+                {startDateStr}
               </div>
              )}
         </div>

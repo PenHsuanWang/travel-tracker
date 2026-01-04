@@ -699,6 +699,38 @@ const ItineraryPanel = ({
                       {/* Feature: Daily Hazard Statistics */}
                       <DailyHazardCard dailyCheckpoints={group.items} />
                       
+                      {/* Day Route & Area Cards - shown before Overview as terrain/route context */}
+                      <div className="day-context-cards mb-3">
+                        {group.items
+                          .filter(item => {
+                            const t = item.geometry?.type?.toLowerCase();
+                            return t === 'linestring' || t === 'multilinestring' || t === 'polygon' || t === 'multipolygon';
+                          })
+                          .map(item => {
+                            const t = item.geometry?.type?.toLowerCase();
+                            const arrival = getArrivalTime(item);
+                            const itemForRender = arrival && !item.properties?.estimated_arrival
+                              ? { ...item, properties: { ...item.properties, estimated_arrival: arrival } }
+                              : item;
+                            const commonProps = {
+                              feature: itemForRender,
+                              selected: item.id === selectedFeatureId,
+                              isScheduled: true,
+                              onSelect: onSelectFeature,
+                              onUpdate: onUpdateFeature,
+                              onDelete: onDeleteFeature,
+                              onNavigate: onCenterFeature,
+                              onEdit: onEditFeature,
+                              readOnly,
+                            };
+                            if (t === 'linestring' || t === 'multilinestring') {
+                              return <RouteCard key={item.id} {...commonProps} />;
+                            }
+                            return <AreaCard key={item.id} {...commonProps} />;
+                          })
+                        }
+                      </div>
+
                       <EmbeddedDaySummary
                         dayNumber={group.dayNum}
                         summary={daySummaries.find(d => d.day_number === group.dayNum)}
@@ -708,67 +740,40 @@ const ItineraryPanel = ({
                     </>
                   )}
 
-                  {/* Items container - Polymorphic rendering */}
+                  {/* Items container - Only Point markers in timeline (Route/Area shown above) */}
                   <div className={effectiveStartDate ? "day-items border-l-2 border-green-200 ml-2 pl-2" : "day-items"}>
-                    {group.items.map((item, index) => {
-                      const type = item.geometry?.type;
-                      const normalizedType = typeof type === 'string' ? type.toLowerCase() : '';
-                      const arrival = getArrivalTime(item);
-                      // Ensure downstream cards receive a consistent arrival field
-                      const itemForRender = arrival && !item.properties?.estimated_arrival
-                        ? { ...item, properties: { ...item.properties, estimated_arrival: arrival } }
-                        : item;
+                    {group.items
+                      .filter(item => {
+                        const t = item.geometry?.type?.toLowerCase();
+                        // Only render Point types here; Route/Area are rendered above in day-context-cards
+                        return t === 'point' || t === 'multipoint';
+                      })
+                      .map((item, index, filteredItems) => {
+                        const arrival = getArrivalTime(item);
+                        // Ensure downstream cards receive a consistent arrival field
+                        const itemForRender = arrival && !item.properties?.estimated_arrival
+                          ? { ...item, properties: { ...item.properties, estimated_arrival: arrival } }
+                          : item;
 
-                      const commonProps = {
-                        feature: itemForRender,
-                        selected: item.id === selectedFeatureId,
-                        isScheduled: true,
-                        onSelect: onSelectFeature,
-                        onUpdate: onUpdateFeature,
-                        onDelete: onDeleteFeature,
-                        onNavigate: onCenterFeature,
-                        onEdit: onEditFeature,
-                        readOnly,
-                      };
-
-                      switch (normalizedType) {
-                        case 'linestring':
-                        case 'multilinestring':
-                          return <RouteCard key={item.id} {...commonProps} />;
-
-                        case 'polygon':
-                        case 'multipolygon':
-                          return <AreaCard key={item.id} {...commonProps} />;
-
-                        case 'point':
-                        case 'multipoint':
-                          return (
-                            <MarkerCard
-                              key={item.id}
-                              {...commonProps}
-                              onUpdateWithCascade={onUpdateFeatureWithCascade}
-                              showDeltaTime={index > 0}
-                              previousArrival={index > 0 ? getArrivalTime(group.items[index - 1]) : null}
-                              hasSubsequentItems={index < group.items.length - 1}
-                            />
-                          );
-
-                        default:
-                          // Render a generic feature item instead of dropping the card so all scheduled items stay visible.
-                          return (
-                            <FeatureItem
-                              key={item.id}
-                              feature={itemForRender}
-                              selected={item.id === selectedFeatureId}
-                              onSelect={onSelectFeature}
-                              onUpdate={onUpdateFeature}
-                              onDelete={onDeleteFeature}
-                              onDoubleClick={onFlyToFeature}
-                              readOnly={readOnly}
-                            />
-                          );
-                      }
-                    })}
+                        return (
+                          <MarkerCard
+                            key={item.id}
+                            feature={itemForRender}
+                            selected={item.id === selectedFeatureId}
+                            isScheduled={true}
+                            onSelect={onSelectFeature}
+                            onUpdate={onUpdateFeature}
+                            onUpdateWithCascade={onUpdateFeatureWithCascade}
+                            onDelete={onDeleteFeature}
+                            onNavigate={onCenterFeature}
+                            onEdit={onEditFeature}
+                            readOnly={readOnly}
+                            showDeltaTime={index > 0}
+                            previousArrival={index > 0 ? getArrivalTime(filteredItems[index - 1]) : null}
+                            hasSubsequentItems={index < filteredItems.length - 1}
+                          />
+                        );
+                      })}
                   </div>
                 </div>
               ))}
