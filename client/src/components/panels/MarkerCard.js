@@ -37,6 +37,9 @@ const MarkerCard = ({
 }) => {
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [timeInputValue, setTimeInputValue] = useState('');
+  const [isEditingCard, setIsEditingCard] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [noteInput, setNoteInput] = useState('');
   
   const {
     name,
@@ -102,10 +105,13 @@ const MarkerCard = ({
   // Handle double click
   const handleDoubleClick = useCallback((e) => {
     e.preventDefault();
-    if (onEdit) {
-      onEdit(feature.id);
-    }
-  }, [feature.id, onEdit]);
+    e.stopPropagation();
+    // Enter inline edit mode for the card
+    setNameInput(name || '');
+    setNoteInput(displayNote || '');
+    setIsEditingCard(true);
+    if (onEdit) onEdit(feature.id);
+  }, [feature.id, onEdit, name, displayNote]);
   
   // Handle navigate to map
   const handleNavigate = useCallback((e) => {
@@ -120,14 +126,16 @@ const MarkerCard = ({
   const handleToggleSchedule = useCallback((e) => {
     e.stopPropagation();
     if (isScheduled) {
-      // Remove from schedule - clear time
-      onUpdate(feature.id, {
-        properties: {
-          ...feature.properties,
-          estimated_arrival: null,
-          estimated_duration_minutes: null,
-        },
-      });
+      // Instead of immediately removing time, open time editor pre-filled
+      // so the user can edit the existing scheduled time.
+      const existing = feature.properties?.estimated_arrival;
+      if (existing) {
+        setTimeInputValue(format(new Date(existing), "yyyy-MM-dd'T'HH:mm"));
+      } else {
+        const now = new Date();
+        setTimeInputValue(format(now, "yyyy-MM-dd'T'HH:mm"));
+      }
+      setIsEditingTime(true);
     } else {
       // Add to schedule - show time picker
       setIsEditingTime(true);
@@ -176,9 +184,17 @@ const MarkerCard = ({
           <div className="marker-card__icon flex-shrink-0" title={iconConfig.label}>
             <span>{iconConfig.emoji}</span>
           </div>
-          <h4 className="marker-card__name font-bold text-gray-900 truncate">
-            {name || iconConfig.label || 'Marker'}
-          </h4>
+          {isEditingCard ? (
+            <input
+              className="marker-card__name font-bold text-gray-900 truncate"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+            />
+          ) : (
+            <h4 className="marker-card__name font-bold text-gray-900 truncate">
+              {name || iconConfig.label || 'Marker'}
+            </h4>
+          )}
         </div>
         
         <div className="text-right flex-shrink-0">
@@ -193,13 +209,29 @@ const MarkerCard = ({
                 />
                 <button className="btn-save ml-1" onClick={handleSaveTime}>✓</button>
                 <button className="btn-cancel ml-1" onClick={() => setIsEditingTime(false)}>✕</button>
+                <button
+                  className="btn-remove ml-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // remove scheduled time
+                    onUpdate(feature.id, {
+                      properties: {
+                        ...feature.properties,
+                        estimated_arrival: null,
+                        estimated_duration_minutes: null,
+                      },
+                    });
+                    setIsEditingTime(false);
+                  }}
+                  title="Remove scheduled time"
+                >Remove</button>
               </div>
             ) : (
                 isScheduled && estimated_arrival && (
                     <div className="flex flex-col items-end">
-                      <div className="marker-card__time-absolute font-mono font-bold text-blue-600 whitespace-nowrap">
-                        {formatArrivalTime(estimated_arrival)}
-                      </div>
+                              <div className="marker-card__time-absolute font-mono font-bold text-blue-600 whitespace-nowrap">
+                                {formatArrivalTime(estimated_arrival)}
+                              </div>
                       {deltaTime && (
                         <div className="marker-card__time-delta text-xs text-gray-400 whitespace-nowrap">
                           {deltaTime}
@@ -212,13 +244,49 @@ const MarkerCard = ({
       </div>
 
       {/* ROW 2: Notes (Conditional) */}
-      {displayNote && (
+      {isEditingCard ? (
         <div className="marker-card__notes mt-2 mb-2 pl-8 w-full">
-          <div className="text-xs text-gray-600 bg-gray-50 border border-gray-100 p-2 rounded leading-snug break-words">
-            <span className="mr-1">📝</span>
-            {displayNote}
+          <input
+            className="w-full text-sm border rounded p-1 mb-2"
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+          />
+          <textarea
+            className="w-full text-sm border rounded p-1"
+            value={noteInput}
+            onChange={(e) => setNoteInput(e.target.value)}
+            rows={2}
+          />
+          <div className="mt-2 flex gap-2">
+            <button
+              className="btn-save"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdate(feature.id, {
+                  properties: {
+                    ...feature.properties,
+                    name: nameInput,
+                    notes: noteInput,
+                  },
+                });
+                setIsEditingCard(false);
+              }}
+            >Save</button>
+            <button
+              className="btn-cancel"
+              onClick={(e) => { e.stopPropagation(); setIsEditingCard(false); }}
+            >Cancel</button>
           </div>
         </div>
+      ) : (
+        displayNote && (
+          <div className="marker-card__notes mt-2 mb-2 pl-8 w-full">
+            <div className="text-xs text-gray-600 bg-gray-50 border border-gray-100 p-2 rounded leading-snug break-words">
+              <span className="mr-1">📝</span>
+              {displayNote}
+            </div>
+          </div>
+        )
       )}
 
       {/* ROW 3: Footer */}
