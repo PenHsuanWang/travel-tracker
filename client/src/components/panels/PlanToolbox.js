@@ -19,17 +19,6 @@ import './PlanToolbox.css';
 // PRD v1.1: Removed separate 'waypoint' tool - all points are now 'marker'
 const DRAWING_TOOLS = [
   {
-    id: 'marker',
-    label: 'Place Marker',
-    hint: 'Click to place a marker. Use semantic tags or add to schedule later.',
-    category: FEATURE_CATEGORY.MARKER,
-    icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-      </svg>
-    ),
-  },
-  {
     id: 'polyline',
     label: 'Draw Route',
     hint: 'Click to add vertices, click existing marker to finish',
@@ -174,7 +163,26 @@ const PlanToolbox = ({
     } else {
       // Find the tool definition to pass category info
       const tool = DRAWING_TOOLS.find(t => t.id === toolId);
+      // If selecting a drawing tool that is NOT a point/marker, clear semantic selection
+      // so routes/areas do not inherit semantic tags (UX requirement).
+      const isPointTool = toolId === 'marker' || tool?.category === FEATURE_CATEGORY.MARKER;
+      if (!isPointTool) {
+        onSelectSemanticType && onSelectSemanticType(null);
+      }
       onSelectTool(toolId, tool?.category || null);
+    }
+  };
+
+  const handleSemanticClick = (semanticId) => {
+    if (disabled) return;
+    const isSame = activeSemanticType === semanticId;
+    if (isSame) {
+      onSelectSemanticType && onSelectSemanticType(null);
+      onSelectTool && onSelectTool(null, null);
+    } else {
+      onSelectSemanticType && onSelectSemanticType(semanticId);
+      // activate marker placement immediately when semantic chosen
+      onSelectTool && onSelectTool('marker', null);
     }
   };
 
@@ -216,7 +224,7 @@ const PlanToolbox = ({
           <button
             key={semantic.id}
             className={`toolbox-btn semantic-btn ${activeSemanticType === semantic.id ? 'active' : ''}`}
-            onClick={() => onSelectSemanticType?.(activeSemanticType === semantic.id ? null : semantic.id)}
+            onClick={() => handleSemanticClick(semantic.id)}
             disabled={disabled}
             title={`${semantic.label} tag`}
             aria-pressed={activeSemanticType === semantic.id}
