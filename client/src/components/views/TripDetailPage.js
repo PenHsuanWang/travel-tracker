@@ -113,7 +113,7 @@ const normalizeWaypoint = (waypoint, gpxFileName, index, gpxMetadataId = null) =
         capturedSource: 'gpx',
         lat,
         lon,
-        elev: waypoint.elev !== null && waypoint.elev !== undefined ? Number(waypoint.elev) : null,
+        elevation: waypoint.elev !== null && waypoint.elev !== undefined ? Number(waypoint.elev) : null,
         note: rawNote,
         noteTitle: waypointTitle,
     };
