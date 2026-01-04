@@ -24,6 +24,10 @@ const AreaCard = ({
 }) => {
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [durationValue, setDurationValue] = useState(feature.properties?.estimated_duration_minutes || 30);
+  const [dateValue, setDateValue] = useState('');
+  const [isEditingCard, setIsEditingCard] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [descInput, setDescInput] = useState('');
 
   const {
     name,
@@ -32,6 +36,7 @@ const AreaCard = ({
     notes,
     semantic_type,
     area_sq_m,
+    description,
   } = feature.properties || {};
 
   const isHazard = semantic_type === 'hazard';
@@ -40,21 +45,9 @@ const AreaCard = ({
   const textColor = isHazard ? 'text-red-900' : 'text-gray-900';
   const noteColor = isHazard ? 'text-red-700' : 'text-gray-600';
 
-  // Calculate End Time
-  const getEndTime = () => {
-    if (!estimated_arrival || !estimated_duration_minutes) return null;
-    try {
-      const start = new Date(estimated_arrival);
-      const end = new Date(start.getTime() + estimated_duration_minutes * 60000);
-      return format(end, 'HH:mm');
-    } catch {
-      return null;
-    }
-  };
-
-  const startTimeStr = estimated_arrival ? format(new Date(estimated_arrival), 'HH:mm') : '';
-  const endTimeStr = getEndTime();
-  const timeRange = startTimeStr && endTimeStr ? `${startTimeStr} - ${endTimeStr}` : startTimeStr;
+  // For Area (non-point) features use date-granularity scheduling.
+  const startDateStr = estimated_arrival ? format(new Date(estimated_arrival), 'MMM d') : '';
+  const durationDisplay = estimated_duration_minutes ? `(${formatDurationSimple(estimated_duration_minutes)})` : '';
 
   const handleToggleSchedule = useCallback((e) => {
     e.stopPropagation();
@@ -67,14 +60,15 @@ const AreaCard = ({
             }
         });
     } else {
-        const now = new Date().toISOString();
-        onUpdate(feature.id, {
-            properties: {
-                ...feature.properties,
-                estimated_arrival: now,
-                estimated_duration_minutes: 30 // Default 30m
-            }
-        });
+      const today = new Date();
+      const isoDateMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0).toISOString();
+      onUpdate(feature.id, {
+        properties: {
+          ...feature.properties,
+          estimated_arrival: isoDateMidnight,
+          estimated_duration_minutes: 30
+        }
+      });
     }
   }, [isScheduled, feature.id, feature.properties, onUpdate]);
 
@@ -82,54 +76,103 @@ const AreaCard = ({
       setDurationValue(parseInt(e.target.value) || 0);
   };
 
-  const saveDuration = (e) => {
+  const handleDateChange = (e) => {
+      setDateValue(e.target.value);
+  };
+
+  const saveDateTime = (e) => {
       e.stopPropagation();
+      const finalDate = dateValue || (estimated_arrival ? format(new Date(estimated_arrival), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
+      const iso = new Date(finalDate + 'T00:00:00').toISOString();
       onUpdate(feature.id, {
           properties: {
               ...feature.properties,
+              estimated_arrival: iso,
               estimated_duration_minutes: durationValue
           }
       });
       setIsEditingTime(false);
+      setDateValue('');
   };
+
+  const handleDoubleClick = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setNameInput(name || '');
+    setDescInput(notes || description || '');
+    setIsEditingCard(true);
+  }, [name, notes, description]);
+
+  const handleSaveCard = useCallback((e) => {
+    e.stopPropagation();
+    onUpdate(feature.id, {
+      properties: {
+        ...feature.properties,
+        name: nameInput,
+        notes: descInput,
+      }
+    });
+    setIsEditingCard(false);
+  }, [feature.id, feature.properties, nameInput, descInput, onUpdate]);
+
+  const handleCancelCard = useCallback((e) => {
+    e.stopPropagation();
+    setIsEditingCard(false);
+  }, []);
 
   return (
     <div 
       className={`timeline-card area-card border-l-4 ${borderColor} ${bgColor} ${selected ? 'selected' : ''}`}
       onClick={() => onSelect(feature.id)}
-      onDoubleClick={() => onEdit && onEdit(feature.id)}
+      onDoubleClick={handleDoubleClick}
     >
       <div className="header flex justify-between items-start">
         <div className="flex items-center gap-2 overflow-hidden">
             <span>{isHazard ? '⚠️' : '⬠'}</span>
-            <span className={`font-bold ${textColor} truncate`}>{name || 'Area'}</span>
+            {isEditingCard ? (
+              <input
+                type="text"
+                className={`font-bold ${textColor} truncate border-b ${isHazard ? 'border-red-300' : 'border-gray-300'} bg-transparent px-1`}
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                autoFocus
+              />
+            ) : (
+              <span className={`font-bold ${textColor} truncate`}>{name || 'Area'}</span>
+            )}
         </div>
         
         <div className="text-right flex-shrink-0">
              {isEditingTime ? (
-                 <div className="flex items-center bg-white p-1 rounded shadow" onClick={e => e.stopPropagation()}>
-                     <input 
-                        type="number" 
-                        className="w-12 text-xs border rounded px-1" 
-                        value={durationValue} 
-                        onChange={handleDurationChange}
-                        placeholder="min"
-                     />
-                     <span className="text-xs ml-1">min</span>
-                     <button className="ml-1 text-green-600 font-bold" onClick={saveDuration}>✓</button>
-                 </div>
+               <div className="flex items-center bg-white p-1 rounded shadow" onClick={e => e.stopPropagation()}>
+                 <input
+                   type="date"
+                   className="text-xs p-1 border rounded"
+                   value={dateValue || (estimated_arrival ? format(new Date(estimated_arrival), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))}
+                   onChange={handleDateChange}
+                 />
+                 <input 
+                  type="number" 
+                  className="w-16 text-xs border rounded px-1 ml-2" 
+                  value={durationValue} 
+                  onChange={handleDurationChange}
+                  placeholder="duration min"
+                 />
+                 <button className="ml-1 text-green-600 font-bold" onClick={saveDateTime}>✓</button>
+               </div>
              ) : (
-                <div 
-                    className={`time-range text-sm font-mono ${textColor} cursor-pointer hover:bg-white/50 rounded px-1`}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        if (!readOnly) setIsEditingTime(true);
-                    }}
-                    title="Click to edit duration"
-                >
-                    {timeRange} 
-                    {estimated_duration_minutes && <span className="text-xs ml-1 opacity-75">({formatDurationSimple(estimated_duration_minutes)})</span>}
-                </div>
+              <div 
+                className={`time-range text-sm font-mono ${textColor} cursor-pointer hover:bg-white/50 rounded px-1`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!readOnly) setIsEditingTime(true);
+                }}
+                title="Click to edit date/duration"
+              >
+                {startDateStr} 
+                {durationDisplay && <span className="text-xs ml-1 opacity-75">{durationDisplay}</span>}
+              </div>
              )}
         </div>
       </div>
@@ -138,10 +181,36 @@ const AreaCard = ({
         {area_sq_m && <span>📐 {formatArea(area_sq_m)}</span>}
       </div>
 
-      {notes && (
-          <div className={`notes text-xs ${noteColor} mt-1`}>
-            📝 {notes}
+      {isEditingCard && (
+        <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+          <textarea
+            className="w-full text-xs border rounded p-2 bg-white"
+            placeholder="Description (optional)"
+            value={descInput}
+            onChange={(e) => setDescInput(e.target.value)}
+            rows={2}
+          />
+          <div className="flex justify-end gap-2 mt-1">
+            <button
+              className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+              onClick={handleSaveCard}
+            >
+              Save
+            </button>
+            <button
+              className="px-2 py-1 text-xs bg-gray-400 text-white rounded hover:bg-gray-500"
+              onClick={handleCancelCard}
+            >
+              Cancel
+            </button>
           </div>
+        </div>
+      )}
+
+      {!isEditingCard && (notes || description) && (
+        <div className={`notes text-xs ${noteColor} mt-1`}>
+          📝 {notes || description}
+        </div>
       )}
 
       {!readOnly && (
