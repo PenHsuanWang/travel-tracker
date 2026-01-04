@@ -1,0 +1,123 @@
+/* client/src/components/panels/CheckpointTimeEditor.css */
+/**
+ * Styles for CheckpointTimeEditor inline component.
+ * Provides datetime-local and duration inputs with save/cancel buttons.
+ */
+
+.checkpoint-time-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  background-color: var(--editor-background, #fffbeb);
+  border: 1px solid var(--warning-color, #f59e0b);
+  border-radius: 6px;
+}
+
+.time-field,
+.duration-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.time-field label,
+.duration-field label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.datetime-input,
+.duration-input {
+  padding: 6px 8px;
+  font-size: 0.9rem;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 4px;
+  background-color: var(--input-background, #ffffff);
+  color: var(--text-primary, #1f2937);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.datetime-input:focus,
+.duration-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.duration-input {
+  max-width: 120px;
+}
+
+.duration-input::placeholder {
+  color: var(--text-muted, #9ca3af);
+}
+
+/* Editor actions */
+.editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.save-btn,
+.cancel-btn {
+  flex: 1;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.save-btn {
+  background-color: var(--success-color, #10b981);
+  color: white;
+}
+
+.save-btn:hover {
+  background-color: var(--success-hover, #059669);
+}
+
+.save-btn:active {
+  transform: scale(0.98);
+}
+
+.cancel-btn {
+  background-color: var(--gray-light, #e5e7eb);
+  color: var(--text-secondary, #6b7280);
+}
+
+.cancel-btn:hover {
+  background-color: var(--gray-medium, #d1d5db);
+}
+
+.cancel-btn:active {
+  transform: scale(0.98);
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .checkpoint-time-editor {
+    padding: 8px;
+  }
+  
+  .editor-actions {
+    flex-direction: column;
+  }
+  
+  .save-btn,
+  .cancel-btn {
+    justify-content: center;
+  }
+}

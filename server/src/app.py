@@ -29,6 +29,7 @@ from src.routes.gis_routes import router as gis_router
 from src.routes.file_upload_routes import router as file_upload_router
 from src.routes.file_retrieval_routes import router as file_retrieval_router
 from src.routes.trip_routes import router as trip_router
+from src.routes.plan_routes import router as plan_router
 from src.routes.auth_routes import router as auth_router
 from src.routes.user_routes import router as user_router
 from src.events.event_bus import EventBus
@@ -65,6 +66,8 @@ app.include_router(file_upload_router, prefix="/api/map")
 app.include_router(file_retrieval_router, prefix="/api")
 # Trip routes
 app.include_router(trip_router, prefix="/api/trips")
+# Plan routes
+app.include_router(plan_router, prefix="/api/plans")
 # Auth routes
 app.include_router(auth_router, prefix="/api/auth")
 # User routes

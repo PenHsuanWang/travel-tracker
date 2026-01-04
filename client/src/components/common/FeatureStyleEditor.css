@@ -1,0 +1,351 @@
+/* client/src/components/common/FeatureStyleEditor.css */
+
+.feature-style-editor {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 280px;
+  max-width: 320px;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.editor-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.close-btn:hover {
+  color: #1f2937;
+}
+
+.editor-body {
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.form-group {
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.form-group input[type="text"],
+.form-group textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+
+.form-group input[type="text"]:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.form-group input[type="text"]:disabled,
+.form-group textarea:disabled {
+  background: #f9fafb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.form-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 16px 0;
+}
+
+/* Color input group */
+.color-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-preview {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 2px solid #d1d5db;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.color-preview:hover {
+  transform: scale(1.05);
+  border-color: #3b82f6;
+}
+
+.color-input-group input[type="text"] {
+  flex: 1;
+  font-family: 'Courier New', monospace;
+}
+
+/* Color picker popup */
+.color-picker-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 240px;
+}
+
+.color-presets {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.color-preset-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 2px solid #e5e7eb;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+  padding: 0;
+}
+
+.color-preset-btn:hover {
+  transform: scale(1.1);
+  border-color: #3b82f6;
+}
+
+.custom-color-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.custom-color-input input[type="color"] {
+  width: 48px;
+  height: 32px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.custom-color-input span {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Range sliders */
+.slider-container {
+  width: 100%;
+  padding: 4px 0;
+  /* Ensure the container captures all mouse events */
+  position: relative;
+  touch-action: none; /* Prevent touch scrolling/zooming */
+}
+
+.form-group input[type="range"] {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #e5e7eb;
+  outline: none;
+  -webkit-appearance: none;
+  /* Ensure slider captures all pointer events */
+  pointer-events: auto;
+}
+
+.form-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.form-group input[type="range"]::-webkit-slider-thumb:hover {
+  background: #2563eb;
+}
+
+.form-group input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s;
+}
+
+.form-group input[type="range"]::-moz-range-thumb:hover {
+  background: #2563eb;
+}
+
+.form-group input[type="range"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Footer buttons */
+.editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-cancel,
+.btn-save {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.btn-cancel {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.btn-cancel:hover {
+  background: #e5e7eb;
+}
+
+.btn-save {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.btn-save:hover {
+  background: #2563eb;
+}
+
+/* Scrollbar styling */
+.editor-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.editor-body::-webkit-scrollbar-track {
+  background: #f9fafb;
+}
+
+.editor-body::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.editor-body::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* FE-05: Fill pattern selector */
+.fill-pattern-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.pattern-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pattern-option:hover {
+  border-color: #3b82f6;
+  background: #f0f9ff;
+}
+
+.pattern-option.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.pattern-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pattern-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.pattern-icon.pattern-solid {
+  color: #3b82f6;
+}
+
+.pattern-icon.pattern-crosshatch {
+  color: #f97316;
+}
+
+.pattern-icon.pattern-none {
+  color: #6b7280;
+}
+
+.pattern-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: #374151;
+}

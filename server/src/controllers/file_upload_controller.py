@@ -18,18 +18,24 @@ class FileUploadController:
     """
 
     @staticmethod
-    def upload_file(file: UploadFile, uploader_id: Optional[str] = None, trip_id: Optional[str] = None) -> Dict[str, Any]:
+    def upload_file(
+        file: UploadFile,
+        uploader_id: Optional[str] = None,
+        trip_id: Optional[str] = None,
+        plan_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Upload a file and return metadata.
 
         Args:
             file (UploadFile): The uploaded file object.
             uploader_id (Optional[str]): Optional uploader user id.
             trip_id (Optional[str]): Optional trip id to associate the file.
+            plan_id (Optional[str]): Optional plan id to associate the file.
 
         Returns:
             Dict[str, Any]: Metadata and analysis results produced by the handler.
         """
-        return FileUploadService.save_file(file, uploader_id, trip_id)
+        return FileUploadService.save_file(file, uploader_id, trip_id, plan_id)
 
     @staticmethod
     def get_file_metadata(metadata_id: str) -> Optional[Dict[str, Any]]:

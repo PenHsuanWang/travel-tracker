@@ -1,0 +1,482 @@
+/* client/src/components/panels/OperationsPanel.css */
+
+.operations-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;            /* Occupy all remaining vertical space */
+  min-height: 0;      /* Critical hack for nested flex scrolling */
+  overflow: hidden;
+  background: #ffffff;
+}
+
+/* Tab Navigation */
+.ops-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  flex: 0 0 auto;
+}
+
+.ops-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.2s ease;
+}
+
+.ops-tab:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.ops-tab.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+  background: #ffffff;
+}
+
+.ops-tab .tab-icon {
+  font-size: 18px;
+}
+
+.ops-tab .tab-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Tab Content */
+.ops-content {
+  flex: 1;          /* Push footer down, fill space */
+  overflow-y: auto; /* Enable vertical scrolling here only */
+  padding: 16px;
+}
+
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Form Section Title */
+.form-section-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Form Group */
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="date"],
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1e293b;
+  background: #ffffff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.form-group input:disabled,
+.form-group textarea:disabled,
+.form-group select:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.help-text {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* Roster Form */
+.roster-form {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.roster-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.roster-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.roster-name {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.roster-role {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.roster-phone {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.roster-item-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.roster-item-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.roster-item-actions button:hover {
+  opacity: 1;
+}
+
+.roster-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roster-add-form input {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.btn-add-member {
+  padding: 10px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-add-member:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btn-add-member:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+/* Logistics Form */
+.logistics-form {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+/* Gear Checklist */
+.gear-checklist {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.gear-category {
+  margin-bottom: 16px;
+}
+
+.category-header {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.gear-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gear-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.gear-item.checked {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.gear-item.checked .gear-name {
+  color: #16a34a;
+  text-decoration: line-through;
+}
+
+.gear-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.gear-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #16a34a;
+}
+
+.gear-name {
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.gear-name .quantity {
+  font-weight: 600;
+  color: #2563eb;
+  margin-right: 4px;
+}
+
+.btn-remove-gear {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.gear-item:hover .btn-remove-gear {
+  opacity: 1;
+}
+
+.btn-remove-gear:hover {
+  color: #ef4444;
+}
+
+.gear-add-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.gear-add-form .select-category {
+  width: 100px;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.gear-add-form input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.btn-add-gear {
+  width: 36px;
+  height: 36px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.btn-add-gear:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btn-add-gear:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.gear-progress {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.progress-bar {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #16a34a, #22c55e);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* Settings Panel */
+.settings-panel {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+/* Footer */
+.ops-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+  flex: 0 0 auto;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.btn-save-ops {
+  padding: 12px 16px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-save-ops:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btn-save-ops:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.save-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: #6b7280;
+  flex: 1;
+}
+
+.status.saving { color: #2563eb; }
+.status.saved { color: #059669; }
+.status.error { color: #b91c1c; }
+.status.dirty { color: #d97706; }
+
+.roster-item-edit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  align-items: center;
+}
+
+.roster-item-edit input {
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+}

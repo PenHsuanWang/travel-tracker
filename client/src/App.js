@@ -6,6 +6,8 @@ import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
 import TripsPage from './components/views/TripsPage';
 import TripDetailPage from './components/views/TripDetailPage';
+import PlansPage from './components/views/PlansPage';
+import PlanCanvas from './components/views/PlanCanvas';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
@@ -24,6 +26,25 @@ function App() {
             <Route path="/" element={<Navigate to="/trips" replace />} />
             <Route path="/trips" element={<TripsPage />} />
             <Route path="/trips/:tripId" element={<TripDetailPage />} />
+            
+            {/* Plan Routes */}
+            <Route 
+              path="/plans" 
+              element={
+                <ProtectedRoute>
+                  <PlansPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/plans/:planId" 
+              element={
+                <ProtectedRoute>
+                  <PlanCanvas />
+                </ProtectedRoute>
+              } 
+            />
+            
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             

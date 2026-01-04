@@ -1,0 +1,290 @@
+/* client/src/components/views/PlanMapView.css */
+
+.plan-map-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.plan-map-container {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Layer switcher */
+.layer-switcher {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+}
+
+.layer-switcher-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.layer-switcher-btn:hover {
+  background: #f4f4f4;
+}
+
+.layer-switcher-btn svg {
+  color: #333;
+}
+
+.layer-menu {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  min-width: 150px;
+}
+
+.layer-option {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.layer-option:hover {
+  background: #f0f0f0;
+}
+
+.layer-option.active {
+  background: #e8f4fc;
+  color: #0066cc;
+  font-weight: 500;
+}
+
+.layer-option + .layer-option {
+  border-top: 1px solid #eee;
+}
+
+/* Plan markers - blue teardrop style */
+.plan-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.plan-marker svg {
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+  transition: transform 0.15s ease;
+}
+
+.plan-marker.selected svg {
+  transform: scale(1.1);
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.4));
+}
+
+.plan-marker.highlighted svg {
+  transform: scale(1.15);
+}
+
+/* FE-06: Flashing animation for navigation confirmation */
+.plan-marker.flashing svg {
+  animation: markerFlash 0.5s ease-in-out 3;
+}
+
+@keyframes markerFlash {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1.2);
+  }
+}
+
+/* FE-06: Flashing animation for polylines and polygons */
+.feature-flashing {
+  animation: featureFlash 0.5s ease-in-out 3;
+}
+
+@keyframes featureFlash {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* FE-07: Hover tooltip styling to match Trip Page */
+.plan-feature-tooltip {
+  background-color: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+  padding: 8px 12px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #1f2937 !important;
+  opacity: 1 !important;
+}
+
+.plan-feature-tooltip::before {
+  border: none !important;
+  display: none !important;
+}
+
+.tooltip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tooltip-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: #111827;
+  line-height: 1.4;
+}
+
+.tooltip-note {
+  font-size: 12px;
+  color: #4b5563;
+  max-width: 200px;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
+}
+
+/* FE-07: Pointer cursor for interactive features on hover */
+.leaflet-interactive {
+  cursor: pointer !important;
+}
+
+/* Feature popup */
+.feature-popup {
+  min-width: 200px;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.popup-header strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  flex: 1;
+}
+
+.popup-edit-btn {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  line-height: 1;
+}
+
+.popup-edit-btn:hover {
+  opacity: 1;
+}
+
+.popup-description {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* Drawing mode cursor */
+.leaflet-container[style*="crosshair"] {
+  cursor: crosshair !important;
+}
+
+/* Fix leaflet popup styles */
+.leaflet-popup-content-wrapper {
+  border-radius: 10px;
+  padding: 0;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.25);
+  border: 1px solid #e5e7eb;
+}
+
+.leaflet-popup-content {
+  margin: 14px 16px;
+  min-width: 220px;
+}
+
+.leaflet-popup-close-button {
+  font-size: 18px !important;
+  padding: 6px 8px 0 0 !important;
+  color: #6b7280 !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #111827 !important;
+}
+
+/* Leaflet controls positioning - move zoom below layer switcher */
+.leaflet-top.leaflet-left {
+  top: 10px;
+}
+
+.leaflet-control-zoom {
+  border: 2px solid rgba(0, 0, 0, 0.2) !important;
+  border-radius: 4px !important;
+}
+
+.leaflet-control-zoom a {
+  width: 30px !important;
+  height: 30px !important;
+  line-height: 30px !important;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .layer-switcher {
+    top: 6px;
+    right: 6px;
+  }
+
+  .layer-switcher-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .layer-menu {
+    min-width: 130px;
+  }
+
+  .layer-option {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
