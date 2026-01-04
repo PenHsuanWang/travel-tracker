@@ -49,7 +49,7 @@ Travel Tracker lets outdoor enthusiasts upload trips, visualize GPX tracks, over
 - **Interactive Canvas**: Draw routes, place semantic markers (Water, Camp, Hazard) with distinct visual icons, and define areas.
 - **GPX Time Shift**: Import existing GPX tracks and project their timestamps onto a future start date for realistic scheduling.
 - **Logistics Management**: Manage team roster, transportation details, and gear checklists.
-- **Structured Itinerary**: Drag-and-drop timeline with day summaries and time-calculated checkpoints.
+- **Structured Itinerary**: Unified timeline supporting scheduled markers, routes, and areas with daily contexts and automatic stats.
 
 ### Collaborative Journaling
 

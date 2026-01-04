@@ -68,8 +68,8 @@ The application's primary navigation is defined in `App.js`, which sets up the f
     -   **Zone B (Map - Center):**
         -   **`PlanMapView`**: Interactive map allowing feature creation (drawing), editing, and semantic styling.
         -   **`PlanStatsHUD`**: Real-time stats showing total distance, elevation, and counts of hazards/camps.
-    -   **Zone C (Itinerary - Right):**
-        -   **`ItineraryPanel`**: Manages time-based Checkpoints (waypoints) and non-time features. Supports drag-and-drop reordering for non-time items and day summaries.
+        - **Zone C (Itinerary - Right):**
+            -   **`ItineraryPanel`**: Manages the **Unified Timeline** (scheduled Markers, Routes, and Areas) and **Reference Features** (unscheduled items). Supports day summaries and context-aware grouping for routes/areas.
     -   **GPX Ingestion:** Features `GpxImportOptionsModal` to parse uploaded GPX files and apply "Time Shift" strategies (Relative vs Absolute).
 
 ### `/login` -> `LoginPage.js`
@@ -240,7 +240,7 @@ These components are specific to the `/plans/:planId` route.
 
 -   **`PlanToolbox.js`**:
     -   **Purpose:** Provides drawing tools for the map.
-    -   **Features:** Category-aware tools (Waypoint, Marker, Route, Area). Supports "Semantic Types" (Water, Camp, Hazard) to auto-style new features.
+    -   **Features:** Category-aware tools (Marker, Route, Area). Selecting "Semantic Types" (Water, Camp, Hazard) automatically activates the Marker tool with the appropriate tag.
 
 -   **`OperationsPanel.js`**:
     -   **Purpose:** Manages the "business" side of the plan.
@@ -252,9 +252,9 @@ These components are specific to the `/plans/:planId` route.
 -   **`ItineraryPanel.js`**:
     -   **Purpose:** Displays the chronological and logical flow of the plan.
     -   **Sections:**
-        -   **Day Summaries:** Route overview and conditions per day.
-        -   **Checkpoints:** Time-sorted waypoints (supports "Cascade Update" to shift subsequent times).
-        -   **Features & Markers:** Items grouped by semantic category (Hazards, Water Sources, Camps, etc.) using collapsible accordions.
+        -   **Timeline:** Chronological view of all scheduled items (Markers, Routes, Areas).
+        -   **Daily Context:** Routes and Areas are grouped at the top of their respective days as context cards.
+        -   **Features List:** Unscheduled reference markers grouped by semantic category (Hazards, Water Sources, Camps, etc.).
         -   **Reference Tracks:** Toggle visibility of imported GPX baselines.
 
 -   **`PlanStatsHUD.js`**:
