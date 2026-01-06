@@ -181,10 +181,10 @@ const CloneToPlanModal = ({ tripId, tripName, onClose, onCreated }) => {
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn-secondary" onClick={onClose}>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={loading}>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? 'Creating...' : 'Create Plan'}
             </button>
           </div>

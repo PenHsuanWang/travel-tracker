@@ -1,27 +1,21 @@
-/* client/src/components/common/PlanCard.css */
+/**
+ * TripCard Component Styles
+ */
 
-/* Checkbox positioning override */
-.plan-checkbox {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 5;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 6px;
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  cursor: pointer;
+.trip-card {
+  height: 100%;
 }
 
-.plan-checkbox input {
-  margin-right: 6px;
-  cursor: pointer;
+/* List view override */
+.trip-card.list-view {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--spacing-md);
+  align-items: stretch;
 }
 
 /* Cover Area Customizations */
-.plan-card .card__cover {
+.trip-card .card__cover {
   background: var(--color-bg-secondary);
 }
 
@@ -57,10 +51,21 @@
   transition: opacity 0.15s ease;
 }
 
-.plan-card:hover .cover-overlay,
-.plan-card.is-selected .cover-overlay,
-.plan-card:focus-within .cover-overlay {
+.trip-card:hover .cover-overlay,
+.trip-card.is-selected .cover-overlay,
+.trip-card:focus-within .cover-overlay {
   opacity: 1;
+}
+
+.cover-pill {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--color-gray-900);
+  padding: 4px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: auto; /* Push to top */
 }
 
 .cover-actions {
@@ -69,27 +74,21 @@
   flex-wrap: wrap;
 }
 
-/* Plan Specific Content - Aligned with TripCard */
-.plan-title-row {
+/* Trip Specific Content */
+.trip-title-row {
   display: flex;
   justify-content: space-between;
   gap: 8px;
   align-items: baseline;
 }
 
-.plan-name-link {
-  text-decoration: none;
-  color: inherit;
-}
-
-.plan-date {
+.trip-date {
   color: var(--color-text-secondary);
   font-size: 13px;
   white-space: nowrap;
 }
 
-/* Owner Info */
-.plan-owner {
+.trip-owner {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -98,26 +97,12 @@
   border-radius: var(--radius-full);
   font-size: 12px;
   color: var(--color-text-secondary);
-  align-self: flex-start; /* Align like TripCard owner pill */
 }
 
-.owner-avatar {
+.owner-avatar-small {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: var(--color-gray-200);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  overflow: hidden;
-}
-
-.owner-avatar img {
-  width: 100%;
-  height: 100%;
   object-fit: cover;
 }
 
@@ -125,18 +110,8 @@
   font-weight: 600;
 }
 
-.owner-badge {
-  font-size: 10px;
-  font-weight: 600;
-  background: var(--color-brand-light);
-  color: var(--color-brand);
-  padding: 2px 6px;
-  border-radius: 10px;
-  text-transform: uppercase;
-}
-
 /* Meta Pills */
-.plan-meta-row {
+.trip-meta-row {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -152,4 +127,44 @@
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* Status Row */
+.trip-status-row {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  flex-wrap: wrap;
+}
+
+.status strong {
+  color: var(--color-text-primary);
+}
+
+/* Checkbox */
+.trip-checkbox {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.trip-checkbox input {
+  margin-right: 6px;
+  cursor: pointer;
+}
+
+/* Responsive List View */
+@media (max-width: 900px) {
+  .trip-card.list-view {
+    grid-template-columns: 1fr;
+  }
 }

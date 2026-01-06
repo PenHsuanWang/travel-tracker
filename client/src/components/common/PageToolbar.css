@@ -1,0 +1,137 @@
+/**
+ * PageToolbar Styles
+ * Reference: UNIFY_THEME_AND_PAGE_DETAIL_DESIGN_DOCUMENT.md Section 5.6
+ */
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN CONTAINER
+   ═══════════════════════════════════════════════════════════ */
+
+.page-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  background: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.page-toolbar--sticky {
+  position: sticky;
+  top: var(--header-height);
+  z-index: 50;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LEFT & RIGHT SECTIONS
+   ═══════════════════════════════════════════════════════════ */
+
+.page-toolbar__left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.page-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TITLE
+   ═══════════════════════════════════════════════════════════ */
+
+.page-toolbar__title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.page-toolbar__icon {
+  display: flex;
+  align-items: center;
+  color: var(--color-brand);
+  font-size: 22px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ACTIONS & GROUPS
+   ═══════════════════════════════════════════════════════════ */
+
+.page-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.page-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.page-toolbar__divider {
+  width: 1px;
+  height: 24px;
+  background: var(--color-border);
+  margin: 0 var(--spacing-sm);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SECONDARY ROW
+   ═══════════════════════════════════════════════════════════ */
+
+.page-toolbar__secondary-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--spacing-sm);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .page-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: var(--spacing-md);
+  }
+  
+  .page-toolbar__right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .page-toolbar__title {
+    font-size: 20px;
+  }
+  
+  .page-toolbar__actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-toolbar__group {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  
+  .page-toolbar__divider {
+    display: none;
+  }
+}

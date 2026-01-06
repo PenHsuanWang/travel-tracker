@@ -7,16 +7,18 @@
  * 1. Timeline - Point features with estimated_arrival (time-sorted)
  * 2. Features List - Point features without time + Routes/Areas (reference items)
  * 3. Reference Tracks - Read-only GPX baselines
+ * 
+ * Design: Aligned with TripDetailPage TimelinePanel (Visual Unification)
  */
 import React, { useState, useCallback, useMemo } from 'react';
 import { differenceInCalendarDays, format, parseISO, isValid } from 'date-fns';
+import { Card, CardBody } from '../common/Card/Card';
 import MarkerCard from './MarkerCard';
 import RouteCard from './RouteCard';
 import AreaCard from './AreaCard';
 import DailyProfileCard from './DailyProfileCard';
 import DailyHazardCard from './DailyHazardCard';
 import {
-  FEATURE_CATEGORY,
   getCategoryIcon,
   getCategoryLabel,
   SEMANTIC_TYPE,
@@ -24,7 +26,7 @@ import {
 import { ICON_CONFIG } from '../../utils/mapIcons';
 import './ItineraryPanel.css';
 
-// Helper: derive arrival time from multiple possible fields to avoid type-specific coupling
+// Helper: derive arrival time from multiple possible fields
 const getArrivalTime = (feature) => {
   if (!feature) return null;
   const props = feature.properties || {};
@@ -41,7 +43,7 @@ const getArrivalTime = (feature) => {
 
 /**
  * FeatureItem - Generic item for non-checkpoint features (markers, routes, areas).
- * Supports FE-06: Double-click to navigate/flyTo map location.
+ * Refactored to use Card component.
  */
 const FeatureItem = ({
   feature,
@@ -75,7 +77,6 @@ const FeatureItem = ({
     setEditedName('');
   };
 
-  // FE-06: Handle double-click to fly to feature
   const handleDoubleClick = (e) => {
     e.stopPropagation();
     if (onDoubleClick) {
@@ -92,7 +93,7 @@ const FeatureItem = ({
        return '⚠️';
     }
 
-    // Priority 1: Semantic Type (if specific)
+    // Priority 1: Semantic Type
     const semanticType = feature.properties?.semantic_type;
     if (semanticType && semanticType !== SEMANTIC_TYPE.GENERIC && ICON_CONFIG[semanticType]) {
       return ICON_CONFIG[semanticType].emoji;
@@ -104,12 +105,8 @@ const FeatureItem = ({
     }
     const type = feature.geometry?.type;
     const shapeType = feature.properties?.shape_type;
-    if (type === 'Point') {
-      return '📌';
-    }
-    if (type === 'LineString') {
-      return '〰️';
-    }
+    if (type === 'Point') return '📌';
+    if (type === 'LineString') return '〰️';
     if (type === 'Polygon') {
       if (shapeType === 'rectangle') return '▭';
       if (shapeType === 'circle') return '◯';
@@ -119,113 +116,104 @@ const FeatureItem = ({
   };
 
   const getFeatureLabel = () => {
-    if (feature.properties?.name) {
-      return feature.properties.name;
-    }
-    // Use category label
-    if (category) {
-      return getCategoryLabel(category);
-    }
+    if (feature.properties?.name) return feature.properties.name;
+    if (category) return getCategoryLabel(category);
     const type = feature.geometry?.type;
-    const shapeType = feature.properties?.shape_type;
-    if (type === 'Point') {
-      return 'Marker';
-    }
-    if (type === 'LineString') {
-      return 'Route';
-    }
-    if (type === 'Polygon') {
-      if (shapeType === 'rectangle') return 'Rectangle';
-      if (shapeType === 'circle') return 'Circle';
-      return 'Polygon';
-    }
+    if (type === 'Point') return 'Marker';
+    if (type === 'LineString') return 'Route';
+    if (type === 'Polygon') return 'Area';
     return 'Feature';
   };
 
   return (
-    <div
-      className={`feature-item ${selected ? 'selected' : ''}`}
+    <Card
+      variant="plan"
+      selected={selected}
       onClick={() => onSelect(feature.id)}
       onDoubleClick={handleDoubleClick}
+      className="mb-2 group"
       title="Double-click to navigate on map"
     >
-      <span className="feature-icon">{getFeatureIcon()}</span>
-
-      {isEditing ? (
-        <div className="feature-edit" onClick={(e) => e.stopPropagation()}>
-          <input
-            type="text"
-            value={editedName}
-            onChange={(e) => setEditedName(e.target.value)}
-            placeholder="Feature name"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSaveEdit();
-              if (e.key === 'Escape') handleCancelEdit();
-            }}
-          />
-          <button onClick={handleSaveEdit} title="Save">
-            ✓
-          </button>
-          <button onClick={handleCancelEdit} title="Cancel">
-            ✕
-          </button>
-        </div>
-      ) : (
-        <>
-          <span className="feature-name" onDoubleClick={handleStartEdit}>
-            {getFeatureLabel()}
-            {feature.properties?.difficulty_grade && (
-              <span style={{ fontSize: '0.85em', color: '#6b7280', marginLeft: '6px' }}>
-                ({feature.properties.difficulty_grade})
+      <CardBody className="p-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <span className="text-xl flex-shrink-0">{getFeatureIcon()}</span>
+          
+          {isEditing ? (
+            <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()}>
+              <input
+                type="text"
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                className="flex-1 text-sm border rounded px-1 py-0.5"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveEdit();
+                  if (e.key === 'Escape') handleCancelEdit();
+                }}
+              />
+              <button onClick={handleSaveEdit} className="text-green-600 font-bold hover:bg-green-50 rounded px-1">✓</button>
+              <button onClick={handleCancelEdit} className="text-gray-400 hover:text-gray-600 px-1">✕</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-medium text-slate-700 truncate" onDoubleClick={handleStartEdit}>
+                {getFeatureLabel()}
               </span>
-            )}
-          </span>
-
-          {!readOnly && (
-            <div className="feature-actions">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Add to schedule (defaults: Route=1h, Area=30m)
-                  const now = new Date().toISOString();
-                  const isRoute = feature.geometry?.type === 'LineString';
-                  const defaultDuration = isRoute ? 60 : 30;
-                  onUpdate(feature.id, {
-                    properties: {
-                      ...feature.properties,
-                      estimated_arrival: now,
-                      estimated_duration_minutes: defaultDuration,
-                    },
-                  });
-                }}
-                title="Add to schedule"
-              >
-                📅+
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleStartEdit();
-                }}
-                title="Edit name"
-              >
-                ✏️
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(feature.id);
-                }}
-                title="Delete"
-              >
-                🗑️
-              </button>
+              {feature.properties?.difficulty_grade && (
+                <span className="text-xs text-gray-400 flex-shrink-0">
+                  ({feature.properties.difficulty_grade})
+                </span>
+              )}
             </div>
           )}
-        </>
-      )}
-    </div>
+        </div>
+
+        {!readOnly && !isEditing && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                // Add to schedule (defaults: Route=1h, Area=30m)
+                const now = new Date().toISOString();
+                const isRoute = feature.geometry?.type === 'LineString';
+                const defaultDuration = isRoute ? 60 : 30;
+                onUpdate(feature.id, {
+                  properties: {
+                    ...feature.properties,
+                    estimated_arrival: now,
+                    estimated_duration_minutes: defaultDuration,
+                  },
+                });
+              }}
+              className="p-1.5 text-slate-400 hover:text-[var(--color-brand)] hover:bg-slate-100 rounded"
+              title="Add to schedule"
+            >
+              📅+
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStartEdit();
+              }}
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
+              title="Edit name"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(feature.id);
+              }}
+              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
+              title="Delete"
+            >
+              🗑️
+            </button>
+          </div>
+        )}
+      </CardBody>
+    </Card>
   );
 };
 
@@ -245,18 +233,19 @@ const EmbeddedDaySummary = ({ dayNumber, summary, onChange, readOnly }) => {
   }
 
   return (
-    <div className="day-summary-embedded p-3 bg-gray-50 border-b border-gray-100">
+    <div className="mb-3 p-3 bg-white rounded-lg border border-slate-200 shadow-sm">
+      <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Day Summary</h5>
       {!readOnly ? (
-        <div className="day-summary-fields flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <textarea
-            className="w-full text-sm border rounded p-1"
+            className="w-full text-sm border-slate-200 rounded-md p-2 focus:ring-1 focus:ring-[var(--color-brand)] focus:border-[var(--color-brand)]"
             placeholder={`Day ${dayNumber} Overview (Route, key moves...)`}
             rows="2"
             value={overviewValue}
             onChange={(e) => handleFieldChange('route_summary', e.target.value)}
           />
           <textarea
-            className="w-full text-sm border rounded p-1"
+            className="w-full text-sm border-slate-200 rounded-md p-2 focus:ring-1 focus:ring-[var(--color-brand)] focus:border-[var(--color-brand)]"
             placeholder="Conditions (Weather, water...)"
             rows="1"
             value={conditionsValue}
@@ -264,7 +253,7 @@ const EmbeddedDaySummary = ({ dayNumber, summary, onChange, readOnly }) => {
           />
         </div>
       ) : (
-        <div className="day-summary-readonly text-sm text-gray-700">
+        <div className="text-sm text-slate-700">
           {overviewValue && <p className="mb-1"><strong>Overview:</strong> {overviewValue}</p>}
           {conditionsValue && <p><strong>Conditions:</strong> {conditionsValue}</p>}
         </div>
@@ -273,49 +262,54 @@ const EmbeddedDaySummary = ({ dayNumber, summary, onChange, readOnly }) => {
   );
 };
 
-// UI-03: Reference track item with visibility toggles for track line and waypoints
+// UI-03: Reference track item with visibility toggles
 const ReferenceTrackItem = ({ track, onRemove, onToggleVisibility, readOnly }) => {
   const showTrack = track.showTrack !== false; // Default true
   const showWaypoints = track.showWaypoints === true; // Default false
   
   return (
-    <div className="reference-track-item">
-      <span className="track-icon">🛤️</span>
-      <span className="track-name">{track.display_name || track.filename}</span>
-      <div className="track-controls">
-        {/* Toggle track line visibility */}
-        <button
-          className={`track-toggle ${showTrack ? 'active' : ''}`}
-          onClick={() => onToggleVisibility?.(track.id, 'showTrack', !showTrack)}
-          title={showTrack ? 'Hide track line' : 'Show track line'}
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 12h18M3 6h18M3 18h18" />
-          </svg>
-        </button>
-        {/* Toggle waypoints visibility */}
-        <button
-          className={`track-toggle ${showWaypoints ? 'active' : ''}`}
-          onClick={() => onToggleVisibility?.(track.id, 'showWaypoints', !showWaypoints)}
-          title={showWaypoints ? 'Hide reference waypoints' : 'Show reference waypoints'}
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="3" />
-            <circle cx="12" cy="5" r="2" />
-            <circle cx="12" cy="19" r="2" />
-          </svg>
-        </button>
-        {!readOnly && (
+    <Card variant="plan" className="mb-2 group">
+      <CardBody className="p-3 flex items-center justify-between">
+        <div className="flex items-center gap-3 overflow-hidden">
+          <span className="text-lg">🛤️</span>
+          <span className="font-medium text-slate-700 truncate" title={track.display_name || track.filename}>
+            {track.display_name || track.filename}
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-1">
           <button
-            className="track-remove"
-            onClick={() => onRemove(track.id)}
-            title="Remove track"
+            className={`p-1.5 rounded transition-colors ${showTrack ? 'text-[var(--color-brand)] bg-[var(--color-brand-light)]' : 'text-slate-400 hover:text-slate-600'}`}
+            onClick={() => onToggleVisibility?.(track.id, 'showTrack', !showTrack)}
+            title={showTrack ? 'Hide track line' : 'Show track line'}
           >
-            ✕
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 12h18M3 6h18M3 18h18" />
+            </svg>
           </button>
-        )}
-      </div>
-    </div>
+          <button
+            className={`p-1.5 rounded transition-colors ${showWaypoints ? 'text-[var(--color-brand)] bg-[var(--color-brand-light)]' : 'text-slate-400 hover:text-slate-600'}`}
+            onClick={() => onToggleVisibility?.(track.id, 'showWaypoints', !showWaypoints)}
+            title={showWaypoints ? 'Hide reference waypoints' : 'Show reference waypoints'}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="3" />
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </button>
+          {!readOnly && (
+            <button
+              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded ml-1"
+              onClick={() => onRemove(track.id)}
+              title="Remove track"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </CardBody>
+    </Card>
   );
 };
 
@@ -325,30 +319,19 @@ const FeatureGroup = ({ title, icon, count, children, defaultOpen = true }) => {
   if (count === 0) return null;
 
   return (
-    <div className="feature-group" style={{ marginBottom: '8px' }}>
+    <div className="mb-4">
       <div 
-        className="feature-group-header" 
+        className="flex items-center justify-between py-2 px-1 cursor-pointer select-none group" 
         onClick={() => setIsOpen(!isOpen)}
-        style={{ 
-          cursor: 'pointer', 
-          display: 'flex', 
-          alignItems: 'center', 
-          padding: '8px 12px', 
-          backgroundColor: '#f3f4f6', 
-          borderRadius: '6px', 
-          marginBottom: '4px', 
-          justifyContent: 'space-between',
-          userSelect: 'none'
-        }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, fontSize: '12px', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          <span style={{ fontSize: '10px' }}>{isOpen ? '▼' : '▶'}</span>
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wide group-hover:text-slate-700">
+          <span className="text-[10px] transition-transform duration-200" style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
           <span>{icon} {title}</span>
         </div>
-        <span className="section-count" style={{ fontSize: '11px', color: '#6b7280', backgroundColor: '#e5e7eb', padding: '2px 6px', borderRadius: '10px' }}>{count}</span>
+        <span className="text-[10px] font-bold text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-full">{count}</span>
       </div>
       {isOpen && (
-        <div className="feature-group-content" style={{ paddingLeft: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div className="pl-2 flex flex-col gap-1 mt-1">
           {children}
         </div>
       )}
@@ -359,19 +342,19 @@ const FeatureGroup = ({ title, icon, count, children, defaultOpen = true }) => {
 const ItineraryPanel = ({
   features,
   referenceTracks,
-  planStartDate, // Added prop for day grouping
+  planStartDate,
   selectedFeatureId,
   onSelectFeature,
   onUpdateFeature,
-  onUpdateFeatureWithCascade, // Optional: for cascade time updates
+  onUpdateFeatureWithCascade,
   onDeleteFeature,
   onReorderFeatures,
   onCenterFeature,
-  onFlyToFeature, // FE-06: Navigate map to feature with flyTo + flash
-  onEditFeature, // Open feature popup for editing
+  onFlyToFeature,
+  onEditFeature,
   onAddReferenceTrack,
   onRemoveReferenceTrack,
-  onToggleTrackVisibility, // UI-03: Toggle track/waypoint visibility
+  onToggleTrackVisibility,
   width,
   onWidthChange,
   daySummaries = [],
@@ -383,14 +366,11 @@ const ItineraryPanel = ({
 }) => {
   const [draggedIndex, setDraggedIndex] = useState(null);
 
-  // Ensure features is an array (handle FeatureCollection object case)
+  // Ensure features is an array
   const featuresArray = useMemo(() => {
     return Array.isArray(features) ? features : (features?.features || []);
   }, [features]);
 
-  // =========================================================================
-  // Unified Marker System (PRD v1.1): Split by TIME presence, not CATEGORY
-  // =========================================================================
   const { timelineItems, referenceItems, nonPointFeatures } = useMemo(() => {
     const timeline = [];
     const reference = [];
@@ -399,18 +379,15 @@ const ItineraryPanel = ({
     featuresArray.forEach((feature) => {
       const geometryType = feature.geometry?.type;
       const arrival = getArrivalTime(feature);
-      // Fix: Ensure we catch any feature that claims to be scheduled via has_time_stamp
-      // or has a detectable time value.
       const hasTime = (feature.properties?.has_time_stamp === true) || (arrival != null);
 
       if (hasTime) {
-        timeline.push(feature);   // Scheduled → Timeline (Points, Routes, Areas)
+        timeline.push(feature);
       } else {
-        // Unscheduled
         if (geometryType === 'Point') {
-          reference.push(feature); // Unscheduled Points
+          reference.push(feature);
         } else {
-          nonPoints.push(feature); // Unscheduled Routes/Areas
+          nonPoints.push(feature);
         }
       }
     });
@@ -418,8 +395,7 @@ const ItineraryPanel = ({
     return { timelineItems: timeline, referenceItems: reference, nonPointFeatures: nonPoints };
   }, [featuresArray]);
 
-  // Sort timeline items by estimated_arrival (ascending) - replaces sortedCheckpoints
-  const sortedTimelineItems = useMemo(() => {
+  const sortedCheckpoints = useMemo(() => {
     return [...timelineItems].sort((a, b) => {
       const aTime = getArrivalTime(a);
       const bTime = getArrivalTime(b);
@@ -430,19 +406,14 @@ const ItineraryPanel = ({
     });
   }, [timelineItems]);
 
-  // Backward compatibility: alias for existing code that uses checkpoints
-  const checkpoints = timelineItems;
-  const sortedCheckpoints = sortedTimelineItems;
-  // Combined list of reference points and non-point features (routes/areas)
   const otherFeatures = [...referenceItems, ...nonPointFeatures];
 
-  // Derive an effective trip start date: prefer planStartDate; otherwise use earliest scheduled item (any geometry).
   const effectiveStartDate = useMemo(() => {
     const explicit = planStartDate ? parseISO(planStartDate) : null;
     if (explicit && isValid(explicit)) return explicit;
 
     let earliest = null;
-    sortedTimelineItems.forEach((item) => {
+    sortedCheckpoints.forEach((item) => {
       const arrival = getArrivalTime(item);
       if (!arrival) return;
       const dt = parseISO(arrival);
@@ -452,11 +423,9 @@ const ItineraryPanel = ({
       }
     });
     return earliest;
-  }, [planStartDate, sortedTimelineItems]);
+  }, [planStartDate, sortedCheckpoints]);
 
-  // Group checkpoints by Day (based on effectiveStartDate)
   const groupedCheckpoints = useMemo(() => {
-    // If no viable start date, keep a flat group but still render items
     const hasStart = !!effectiveStartDate;
 
     if (!hasStart) {
@@ -476,12 +445,11 @@ const ItineraryPanel = ({
       let key = 'Unscheduled';
       let label = 'Unscheduled';
       let subLabel = '';
-      let dayNum = 999999; // Sort unscheduled last
+      let dayNum = 999999;
 
       if (arrival) {
         const cpDate = parseISO(arrival);
         if (isValid(cpDate) && isValid(effectiveStartDate)) {
-          // Calculate day offset from the effective start (could be derived from Route/Area)
           dayNum = differenceInCalendarDays(cpDate, effectiveStartDate) + 1;
           label = `Day ${dayNum}`;
           subLabel = format(cpDate, 'MMM dd');
@@ -503,13 +471,11 @@ const ItineraryPanel = ({
       groupMap.get(key).items.push(cp);
     });
 
-    // Sort groups: chronological days first, then Unscheduled
     groupList.sort((a, b) => a.dayNum - b.dayNum);
 
     return groupList;
   }, [sortedCheckpoints, effectiveStartDate]);
 
-  // Sort other features by order_index (for non-point features like routes/areas)
   const sortedOtherFeatures = useMemo(() => {
     return [...nonPointFeatures].sort((a, b) => {
       const aOrder = a.properties?.order_index ?? Infinity;
@@ -518,7 +484,6 @@ const ItineraryPanel = ({
     });
   }, [nonPointFeatures]);
 
-  // Group reference items (Point features without time) by semantic type
   const groupedFeatures = useMemo(() => {
     const groups = {
       hazard: [],
@@ -529,7 +494,6 @@ const ItineraryPanel = ({
       other: []
     };
 
-    // Only include Point features that have no time (referenceItems)
     referenceItems.forEach(feature => {
       const type = feature.properties?.semantic_type;
       if (type === 'hazard') groups.hazard.push(feature);
@@ -540,7 +504,6 @@ const ItineraryPanel = ({
       else groups.other.push(feature);
     });
     
-    // Also add non-point features to 'other' group
     sortedOtherFeatures.forEach(feature => {
       groups.other.push(feature);
     });
@@ -548,7 +511,6 @@ const ItineraryPanel = ({
     return groups;
   }, [referenceItems, sortedOtherFeatures]);
 
-  // Refactored to handle dynamic updates for embedded summaries
   const handleDaySummaryChange = (dayNumber, field, value) => {
     if (!onUpdateDaySummaries) return;
     const base = Array.isArray(daySummaries) ? [...daySummaries] : [];
@@ -568,44 +530,6 @@ const ItineraryPanel = ({
     onUpdateDaySummaries(base);
   };
 
-  // Drag and drop handlers (for Other Features only, checkpoints are time-sorted)
-  const handleDragStart = (index) => {
-    if (readOnly) return;
-    setDraggedIndex(index);
-  };
-
-  const handleDragOver = (e, index) => {
-    e.preventDefault();
-    if (readOnly || draggedIndex === null || draggedIndex === index) return;
-  };
-
-  const handleDrop = (e, dropIndex) => {
-    e.preventDefault();
-    if (readOnly || draggedIndex === null || draggedIndex === dropIndex) {
-      setDraggedIndex(null);
-      return;
-    }
-
-    // Calculate new order for Other Features only
-    const newOrder = [...sortedOtherFeatures];
-    const [moved] = newOrder.splice(draggedIndex, 1);
-    newOrder.splice(dropIndex, 0, moved);
-
-    // Create order updates
-    const featureOrders = newOrder.map((f, i) => ({
-      feature_id: f.id,
-      order_index: i,
-    }));
-
-    onReorderFeatures(featureOrders);
-    setDraggedIndex(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
-  };
-
-  // Panel resize
   const handleResizeStart = useCallback(
     (e) => {
       e.preventDefault();
@@ -630,84 +554,83 @@ const ItineraryPanel = ({
   );
 
   return (
-    <aside className="itinerary-panel" style={{ width }}>
-      <div className="resize-handle" onMouseDown={handleResizeStart} />
+    <div className="flex flex-col bg-slate-50 overflow-hidden relative border-l border-slate-200 shadow-xl z-20" style={{ width, height: '100%' }}>
+      {/* Resize Handle */}
+      <div 
+        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[var(--color-brand)] transition-colors z-50"
+        onMouseDown={handleResizeStart}
+      />
 
-      <div className="panel-header">
+      {/* Header */}
+      <div className="p-6 pb-0 flex justify-between items-end mb-6">
         <div>
-          <h3>Itinerary</h3>
-          <p className="panel-subtitle">Unified Marker View</p>
+          <h1 className="text-2xl font-bold text-slate-800 leading-tight">Itinerary</h1>
+          <p className="text-sm text-slate-500 font-medium">Unified Marker View</p>
         </div>
-        <span className="feature-count">
-          {featuresArray.length} {featuresArray.length === 1 ? 'item' : 'items'}
-        </span>
+        <div className="flex flex-col items-end gap-2">
+            {!readOnly && daySummariesDirty && (
+                <button
+                    className="text-xs font-bold text-white bg-[var(--color-brand)] px-2 py-1 rounded shadow-sm hover:bg-[var(--color-brand-hover)] transition-colors"
+                    onClick={() => onSaveDaySummaries?.()}
+                    disabled={savingDaySummaries}
+                >
+                    {savingDaySummaries ? 'Saving...' : 'Save Notes' }
+                </button>
+            )}
+             <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-full shadow-sm">
+                {featuresArray.length} items
+            </span>
+        </div>
       </div>
 
-      <div className="panel-content">
-        {/* Section 1: Timeline (Scheduled Items with estimated_arrival) */}
-        <section className="checkpoints-section timeline-section">
-          <div className="section-header-row">
-            <h4>
-              <span className="section-icon">📅</span>
+      <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-8">
+        {/* Section 1: Timeline */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
               Timeline
-              <span className="section-count">({sortedCheckpoints.length})</span>
-            </h4>
-            {!readOnly && daySummariesDirty && (
-               <button
-                 className="save-day-btn"
-                 onClick={() => onSaveDaySummaries?.()}
-                 disabled={savingDaySummaries}
-                 title="Save itinerary changes"
-                 style={{ marginLeft: 'auto', fontSize: '11px', padding: '2px 8px' }}
-               >
-                 {savingDaySummaries ? 'Saving...' : 'Save Notes' }
-               </button>
-            )}
+            </h2>
+            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-[var(--color-brand-light)] text-[var(--color-brand)]">
+                {sortedCheckpoints.length}
+            </span>
           </div>
+
           {sortedCheckpoints.length === 0 ? (
-            <p className="empty-message">
-              {readOnly
-                ? 'No scheduled items.'
-                : 'Place markers on map and use 📅+ to add them to the timeline.'}
-            </p>
+            <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                <span className="text-2xl block mb-2">📅</span>
+                <p className="text-sm text-slate-500">
+                    {readOnly ? 'No scheduled items.' : 'Place markers on map and use 📅+ to add them.'}
+                </p>
+            </div>
           ) : (
-            <div className="checkpoints-list">
+            <div className="space-y-6">
               {groupedCheckpoints.map((group, groupIndex) => (
-                <div key={group.key || groupIndex} className="day-group-container mb-4">
-                  {/* Day Header - use effectiveStartDate (derived from any scheduled item) */}
-                  {effectiveStartDate ? (
-                    <div className="day-group-header sticky top-0 z-10 bg-gray-100 p-2 font-bold border-b flex justify-between">
-                      <span>{group.label}</span>
-                      <span className="text-gray-500 font-normal">{group.subLabel}</span>
+                <div key={group.key || groupIndex} className="relative">
+                  {/* Day Header */}
+                  {effectiveStartDate && group.label !== 'All Checkpoints' && (
+                    <div className="flex items-baseline justify-between mb-3 pb-1 border-b border-slate-200">
+                      <span className="font-bold text-slate-800">{group.label}</span>
+                      <span className="text-sm text-slate-500 font-medium">{group.subLabel}</span>
                     </div>
-                  ) : (
-                     /* If no start date at all, show simplified header or nothing if 'All Checkpoints' */
-                     group.label !== 'All Checkpoints' && (
-                       <div className="day-group-header sticky top-0 z-10 bg-gray-100 p-2 font-bold border-b">
-                         <span>{group.label}</span>
-                       </div>
-                     )
                   )}
 
-                  {/* UI-04: Embedded Day Summary & Daily Profile */}
-                  {/* Only show for valid Day groups (not Unscheduled 999999) */}
-                  {group.dayNum >= 0 && group.dayNum < 900000 && (
-                    <>
-                      {/* Feature: Daily Profile Visualization */}
-                      <DailyProfileCard dailyCheckpoints={group.items} />
+                  <div className="pl-4 border-l-2 border-slate-200 space-y-3">
+                      {/* Day Stats */}
+                      {group.dayNum >= 0 && group.dayNum < 900000 && (
+                        <>
+                          <DailyProfileCard dailyCheckpoints={group.items} />
+                          <DailyHazardCard dailyCheckpoints={group.items} />
+                        </>
+                      )}
                       
-                      {/* Feature: Daily Hazard Statistics */}
-                      <DailyHazardCard dailyCheckpoints={group.items} />
-                      
-                      {/* Day Route & Area Cards - shown before Overview as terrain/route context */}
-                      <div className="day-context-cards mb-3">
+                      {/* Route/Area Cards - Always show if present in this group */}
+                      <div className="space-y-2 mb-3">
                         {group.items
                           .filter(item => {
                             const t = item.geometry?.type?.toLowerCase();
                             return t === 'linestring' || t === 'multilinestring' || t === 'polygon' || t === 'multipolygon';
                           })
                           .map(item => {
-                            const t = item.geometry?.type?.toLowerCase();
                             const arrival = getArrivalTime(item);
                             const itemForRender = arrival && !item.properties?.estimated_arrival
                               ? { ...item, properties: { ...item.properties, estimated_arrival: arrival } }
@@ -723,7 +646,7 @@ const ItineraryPanel = ({
                               onEdit: onEditFeature,
                               readOnly,
                             };
-                            if (t === 'linestring' || t === 'multilinestring') {
+                            if (item.geometry?.type?.toLowerCase().includes('line')) {
                               return <RouteCard key={item.id} {...commonProps} />;
                             }
                             return <AreaCard key={item.id} {...commonProps} />;
@@ -731,49 +654,49 @@ const ItineraryPanel = ({
                         }
                       </div>
 
-                      <EmbeddedDaySummary
-                        dayNumber={group.dayNum}
-                        summary={daySummaries.find(d => d.day_number === group.dayNum)}
-                        onChange={handleDaySummaryChange}
-                        readOnly={readOnly}
-                      />
-                    </>
-                  )}
-
-                  {/* Items container - Only Point markers in timeline (Route/Area shown above) */}
-                  <div className={effectiveStartDate ? "day-items border-l-2 border-green-200 ml-2 pl-2" : "day-items"}>
-                    {group.items
-                      .filter(item => {
-                        const t = item.geometry?.type?.toLowerCase();
-                        // Only render Point types here; Route/Area are rendered above in day-context-cards
-                        return t === 'point' || t === 'multipoint';
-                      })
-                      .map((item, index, filteredItems) => {
-                        const arrival = getArrivalTime(item);
-                        // Ensure downstream cards receive a consistent arrival field
-                        const itemForRender = arrival && !item.properties?.estimated_arrival
-                          ? { ...item, properties: { ...item.properties, estimated_arrival: arrival } }
-                          : item;
-
-                        return (
-                          <MarkerCard
-                            key={item.id}
-                            feature={itemForRender}
-                            selected={item.id === selectedFeatureId}
-                            isScheduled={true}
-                            onSelect={onSelectFeature}
-                            onUpdate={onUpdateFeature}
-                            onUpdateWithCascade={onUpdateFeatureWithCascade}
-                            onDelete={onDeleteFeature}
-                            onNavigate={onCenterFeature}
-                            onEdit={onEditFeature}
+                      {/* Day Summary */}
+                      {group.dayNum >= 0 && group.dayNum < 900000 && (
+                          <EmbeddedDaySummary
+                            dayNumber={group.dayNum}
+                            summary={daySummaries.find(d => d.day_number === group.dayNum)}
+                            onChange={handleDaySummaryChange}
                             readOnly={readOnly}
-                            showDeltaTime={index > 0}
-                            previousArrival={index > 0 ? getArrivalTime(filteredItems[index - 1]) : null}
-                            hasSubsequentItems={index < filteredItems.length - 1}
                           />
-                        );
-                      })}
+                      )}
+
+                      {/* Point Markers */}
+                      <div className="space-y-2">
+                        {group.items
+                          .filter(item => {
+                            const t = item.geometry?.type?.toLowerCase();
+                            return t === 'point' || t === 'multipoint';
+                          })
+                          .map((item, index, filteredItems) => {
+                            const arrival = getArrivalTime(item);
+                            const itemForRender = arrival && !item.properties?.estimated_arrival
+                              ? { ...item, properties: { ...item.properties, estimated_arrival: arrival } }
+                              : item;
+
+                            return (
+                              <MarkerCard
+                                key={item.id}
+                                feature={itemForRender}
+                                selected={item.id === selectedFeatureId}
+                                isScheduled={true}
+                                onSelect={onSelectFeature}
+                                onUpdate={onUpdateFeature}
+                                onUpdateWithCascade={onUpdateFeatureWithCascade}
+                                onDelete={onDeleteFeature}
+                                onNavigate={onCenterFeature}
+                                onEdit={onEditFeature}
+                                readOnly={readOnly}
+                                showDeltaTime={index > 0}
+                                previousArrival={index > 0 ? getArrivalTime(filteredItems[index - 1]) : null}
+                                hasSubsequentItems={index < filteredItems.length - 1}
+                              />
+                            );
+                          })}
+                      </div>
                   </div>
                 </div>
               ))}
@@ -781,21 +704,26 @@ const ItineraryPanel = ({
           )}
         </section>
 
-        {/* Section 2: Features List (Reference Items - no time) */}
-        <section className="other-features-section reference-section">
-          <h4>
-              <span className="section-icon">📌</span>
+        {/* Section 2: Features List */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+             <h2 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
               Features List
-              <span className="section-count">({otherFeatures.length})</span>
-            </h4>
-            {(otherFeatures.length === 0) ? (
-            <p className="empty-message">
-              {readOnly
-                ? 'No reference markers.'
-                : 'Place markers on map. Use 📅+ to add them to timeline.'}
-            </p>
+            </h2>
+            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-slate-200 text-slate-600">
+                {otherFeatures.length}
+            </span>
+          </div>
+            
+          {otherFeatures.length === 0 ? (
+            <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                <span className="text-2xl block mb-2">📌</span>
+                <p className="text-sm text-slate-500">
+                   {readOnly ? 'No features.' : 'Place markers on map.'}
+                </p>
+            </div>
           ) : (
-            <div className="features-list-grouped">
+            <div className="space-y-2">
               <FeatureGroup title="HAZARDS" icon={ICON_CONFIG.hazard.emoji} count={groupedFeatures.hazard.length}>
                 {groupedFeatures.hazard.map(feature => (
                   <MarkerCard
@@ -807,81 +735,37 @@ const ItineraryPanel = ({
                     onUpdate={onUpdateFeature}
                     onDelete={onDeleteFeature}
                     onNavigate={onCenterFeature}
-                        onEdit={onEditFeature}
+                    onEdit={onEditFeature}
                     readOnly={readOnly}
                   />
                 ))}
               </FeatureGroup>
 
-              <FeatureGroup title="WATER SOURCES" icon={ICON_CONFIG.water.emoji} count={groupedFeatures.water.length}>
+              <FeatureGroup title="WATER" icon={ICON_CONFIG.water.emoji} count={groupedFeatures.water.length}>
                 {groupedFeatures.water.map(feature => (
-                  <MarkerCard
-                    key={feature.id}
-                    feature={feature}
-                    selected={feature.id === selectedFeatureId}
-                    isScheduled={false}
-                    onSelect={onSelectFeature}
-                    onUpdate={onUpdateFeature}
-                    onDelete={onDeleteFeature}
-                    onNavigate={onCenterFeature}
-                        onEdit={onEditFeature}
-                    readOnly={readOnly}
-                  />
+                  <MarkerCard key={feature.id} feature={feature} selected={feature.id === selectedFeatureId} isScheduled={false} onSelect={onSelectFeature} onUpdate={onUpdateFeature} onDelete={onDeleteFeature} onNavigate={onCenterFeature} onEdit={onEditFeature} readOnly={readOnly} />
                 ))}
               </FeatureGroup>
 
-              <FeatureGroup title="CAMPSITES" icon={ICON_CONFIG.camp.emoji} count={groupedFeatures.camp.length}>
+              <FeatureGroup title="CAMPS" icon={ICON_CONFIG.camp.emoji} count={groupedFeatures.camp.length}>
                 {groupedFeatures.camp.map(feature => (
-                  <MarkerCard
-                    key={feature.id}
-                    feature={feature}
-                    selected={feature.id === selectedFeatureId}
-                    isScheduled={false}
-                    onSelect={onSelectFeature}
-                    onUpdate={onUpdateFeature}
-                    onDelete={onDeleteFeature}
-                    onNavigate={onCenterFeature}
-                        onEdit={onEditFeature}
-                    readOnly={readOnly}
-                  />
+                  <MarkerCard key={feature.id} feature={feature} selected={feature.id === selectedFeatureId} isScheduled={false} onSelect={onSelectFeature} onUpdate={onUpdateFeature} onDelete={onDeleteFeature} onNavigate={onCenterFeature} onEdit={onEditFeature} readOnly={readOnly} />
                 ))}
               </FeatureGroup>
 
-              <FeatureGroup title="SIGNALS" icon={ICON_CONFIG.signal.emoji} count={groupedFeatures.signal.length}>
+               <FeatureGroup title="SIGNALS" icon={ICON_CONFIG.signal.emoji} count={groupedFeatures.signal.length}>
                 {groupedFeatures.signal.map(feature => (
-                  <MarkerCard
-                    key={feature.id}
-                    feature={feature}
-                    selected={feature.id === selectedFeatureId}
-                    isScheduled={false}
-                    onSelect={onSelectFeature}
-                    onUpdate={onUpdateFeature}
-                    onDelete={onDeleteFeature}
-                    onNavigate={onCenterFeature}
-                        onEdit={onEditFeature}
-                    readOnly={readOnly}
-                  />
+                  <MarkerCard key={feature.id} feature={feature} selected={feature.id === selectedFeatureId} isScheduled={false} onSelect={onSelectFeature} onUpdate={onUpdateFeature} onDelete={onDeleteFeature} onNavigate={onCenterFeature} onEdit={onEditFeature} readOnly={readOnly} />
                 ))}
               </FeatureGroup>
 
-              <FeatureGroup title="CHECK-INS" icon={ICON_CONFIG.checkin.emoji} count={groupedFeatures.checkin.length}>
+               <FeatureGroup title="CHECK-INS" icon={ICON_CONFIG.checkin.emoji} count={groupedFeatures.checkin.length}>
                 {groupedFeatures.checkin.map(feature => (
-                  <MarkerCard
-                    key={feature.id}
-                    feature={feature}
-                    selected={feature.id === selectedFeatureId}
-                    isScheduled={false}
-                    onSelect={onSelectFeature}
-                    onUpdate={onUpdateFeature}
-                    onDelete={onDeleteFeature}
-                    onNavigate={onCenterFeature}
-                        onEdit={onEditFeature}
-                    readOnly={readOnly}
-                  />
+                  <MarkerCard key={feature.id} feature={feature} selected={feature.id === selectedFeatureId} isScheduled={false} onSelect={onSelectFeature} onUpdate={onUpdateFeature} onDelete={onDeleteFeature} onNavigate={onCenterFeature} onEdit={onEditFeature} readOnly={readOnly} />
                 ))}
               </FeatureGroup>
 
-              <FeatureGroup title="OTHER MARKERS" icon={ICON_CONFIG.generic.emoji} count={groupedFeatures.other.length}>
+              <FeatureGroup title="OTHER" icon={ICON_CONFIG.generic.emoji} count={groupedFeatures.other.length}>
                 {groupedFeatures.other.map(feature => (
                   feature.geometry?.type === 'Point' ? (
                     <MarkerCard
@@ -893,7 +777,7 @@ const ItineraryPanel = ({
                       onUpdate={onUpdateFeature}
                       onDelete={onDeleteFeature}
                       onNavigate={onCenterFeature}
-                        onEdit={onEditFeature}
+                      onEdit={onEditFeature}
                       readOnly={readOnly}
                     />
                   ) : (
@@ -915,38 +799,43 @@ const ItineraryPanel = ({
         </section>
 
         {/* Section 3: Reference Tracks */}
-        <section className="tracks-section">
-          <div className="section-header-row">
-            <h4>
-              <span className="section-icon">🛤️</span>
+        <section>
+          <div className="flex items-center justify-between mb-4">
+             <h2 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
               Reference Tracks
-              <span className="section-count">({referenceTracks?.length || 0})</span>
-            </h4>
-            {!readOnly && (
-              <label className="add-gpx-btn" title="Upload GPX file as reference track">
-                <span>+ Add GPX</span>
-                <input
-                  type="file"
-                  accept=".gpx"
-                  onChange={(e) => {
-                    if (e.target.files?.[0] && onAddReferenceTrack) {
-                      onAddReferenceTrack(e.target.files[0]);
-                      e.target.value = ''; // Reset input
-                    }
-                  }}
-                  hidden
-                />
-              </label>
-            )}
+            </h2>
+            <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-slate-200 text-slate-600">
+                    {referenceTracks?.length || 0}
+                </span>
+                {!readOnly && (
+                  <label className="cursor-pointer text-[var(--color-brand)] hover:text-[var(--color-brand-hover)]" title="Upload GPX file">
+                    <span className="text-xl">⊕</span>
+                    <input
+                      type="file"
+                      accept=".gpx"
+                      onChange={(e) => {
+                        if (e.target.files?.[0] && onAddReferenceTrack) {
+                          onAddReferenceTrack(e.target.files[0]);
+                          e.target.value = '';
+                        }
+                      }}
+                      hidden
+                    />
+                  </label>
+                )}
+            </div>
           </div>
+
           {(!referenceTracks || referenceTracks.length === 0) ? (
-            <p className="empty-message">
-              {readOnly
-                ? 'No reference tracks added.'
-                : 'Add GPX tracks as reference baselines.'}
-            </p>
+            <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                <span className="text-2xl block mb-2">🛤️</span>
+                <p className="text-sm text-slate-500">
+                    {readOnly ? 'No tracks.' : 'Add GPX tracks as reference.'}
+                </p>
+            </div>
           ) : (
-            <div className="tracks-list">
+            <div className="space-y-2">
               {referenceTracks.map((track) => (
                 <ReferenceTrackItem
                   key={track.id}
@@ -960,7 +849,7 @@ const ItineraryPanel = ({
           )}
         </section>
       </div>
-    </aside>
+    </div>
   );
 };
 

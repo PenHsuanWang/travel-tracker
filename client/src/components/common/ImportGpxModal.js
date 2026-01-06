@@ -474,12 +474,12 @@ const ImportGpxModal = ({ onClose, onCreated }) => {
         <div className="modal-footer">
           {step === 'upload' && (
             <>
-              <button type="button" className="btn-secondary" onClick={onClose}>
+              <button type="button" className="btn btn-secondary" onClick={onClose}>
                 Cancel
               </button>
               <button
                 type="button"
-                className="btn-primary"
+                className="btn btn-primary"
                 onClick={handleUpload}
                 disabled={!file || uploading}
               >
@@ -492,14 +492,14 @@ const ImportGpxModal = ({ onClose, onCreated }) => {
             <>
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn btn-secondary"
                 onClick={() => setStep('upload')}
               >
                 Back
               </button>
               <button
                 type="button"
-                className="btn-primary"
+                className="btn btn-primary"
                 onClick={() => setStep('configure')}
                 disabled={selectedWaypoints.size === 0 && !previewData.track_geometry}
               >
@@ -512,14 +512,14 @@ const ImportGpxModal = ({ onClose, onCreated }) => {
             <>
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn btn-secondary"
                 onClick={() => setStep('preview')}
               >
                 Back
               </button>
               <button
                 type="button"
-                className="btn-primary"
+                className="btn btn-primary"
                 onClick={handleCreatePlan}
                 disabled={creating}
               >

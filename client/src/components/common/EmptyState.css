@@ -1,0 +1,75 @@
+/**
+ * EmptyState Styles
+ * Reference: UNIFY_THEME_AND_PAGE_DETAIL_DESIGN_DOCUMENT.md Section 5.7
+ */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--spacing-2xl);
+  min-height: 300px;
+}
+
+.empty-state__icon {
+  font-size: 48px;
+  color: var(--color-gray-400);
+  margin-bottom: var(--spacing-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--spacing-sm);
+}
+
+.empty-state__description {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  max-width: 300px;
+  margin: 0 0 var(--spacing-lg);
+  line-height: 1.5;
+}
+
+.empty-state__action {
+  margin-top: var(--spacing-md);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   THEME-AWARE ICON COLORS
+   ═══════════════════════════════════════════════════════════ */
+
+[data-theme="trip"] .empty-state__icon {
+  color: var(--color-success-400);
+}
+
+[data-theme="plan"] .empty-state__icon {
+  color: var(--color-blue-400);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SIZE VARIANTS
+   ═══════════════════════════════════════════════════════════ */
+
+.empty-state--compact {
+  min-height: 200px;
+  padding: var(--spacing-lg);
+}
+
+.empty-state--compact .empty-state__icon {
+  font-size: 36px;
+}
+
+.empty-state--compact .empty-state__title {
+  font-size: 16px;
+}
+
+.empty-state--compact .empty-state__description {
+  font-size: 13px;
+}

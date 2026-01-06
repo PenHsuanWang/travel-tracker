@@ -154,10 +154,10 @@ const ManageMembersModal = ({ isOpen, onClose, trip, onTripUpdated }) => {
                 </div>
 
                 <div className="modal-actions">
-                    <button type="button" className="cancel-button" onClick={onClose} disabled={saving}>
+                    <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
                         Cancel
                     </button>
-                    <button type="button" className="submit-button" onClick={handleSave} disabled={saving}>
+                    <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
                         {saving ? 'Saving...' : 'Save Changes'}
                     </button>
                 </div>

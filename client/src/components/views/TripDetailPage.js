@@ -1,3 +1,10 @@
+/**
+ * TripDetailPage - Main viewing page for a trip.
+ * 
+ * Migrated to use unified components (Phase 4.4):
+ * - LoadingState for loading spinner
+ * - Unified button classes
+ */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -7,6 +14,7 @@ import TimelinePanel from '../panels/TimelinePanel';
 import TripStatsHUD from '../panels/TripStatsHUD';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
 import CloneToPlanModal from '../common/CloneToPlanModal';
+import { LoadingState } from '../common/LoadingState';
 import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, getImageVariantUrl, normalizeImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile, updateWaypointNote } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
@@ -848,7 +856,7 @@ const TripDetailPage = () => {
     };
 
     if (loading) {
-        return <div className="loading">Loading trip details...</div>;
+        return <LoadingState message="Loading trip details..." size="lg" />;
     }
 
     if (!trip) {
@@ -857,47 +865,48 @@ const TripDetailPage = () => {
 
     return (
         <div className="TripDetailPage">
-            <div className="trip-detail-header">
-                <div className="trip-detail-header__left">
-                    <Link to="/trips" className="back-to-trips">← Back to My Trips</Link>
-                    <div>
-                        <p className="trip-detail-label">Currently viewing</p>
-                        <h1 className="trip-detail-title">{trip.name}</h1>
+            <header className="plan-canvas-header">
+                <div className="plan-header-left">
+                    <Link to="/trips" className="back-link">← Back to My Trips</Link>
+                    <div className="plan-title-block">
+                        <h1 className="plan-title">{trip.name}</h1>
                     </div>
                 </div>
-                <div className="trip-detail-header__right">
-                    <label htmlFor="trip-selector">Quick switch</label>
-                    <select
-                        id="trip-selector"
-                        className="trip-selector"
-                        value={tripId}
-                        onChange={handleTripChange}
-                    >
-                        {(allTrips.length ? allTrips : [trip]).map((listTrip) => (
-                            <option key={listTrip.id} value={listTrip.id}>
-                                {listTrip.name}
-                            </option>
-                        ))}
-                    </select>
+                <div className="plan-header-right header-actions">
+                    <div className="header-selector-wrapper">
+                        <select
+                            className="header-select"
+                            aria-label="Switch trip"
+                            value={tripId}
+                            onChange={handleTripChange}
+                        >
+                            {(allTrips.length ? allTrips : [trip]).map((listTrip) => (
+                                <option key={listTrip.id} value={listTrip.id}>
+                                    {listTrip.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                     <button
                         type="button"
-                        className="ghost-button"
+                        className="header-btn"
                         onClick={() => setShowCloneToPlanModal(true)}
                         title="Clone this trip to create a new plan"
                     >
-                        📋 Clone to Plan
+                        📋 Clone
                     </button>
                     {canManageTrip && (
                         <button
                             type="button"
-                            className="ghost-button danger-button"
+                            className="header-btn btn-delete"
                             onClick={handleDeleteTrip}
+                            title="Delete Trip"
                         >
-                            Delete Trip
+                            Delete
                         </button>
                     )}
                 </div>
-            </div>
+            </header>
             <div className="MainBlock">
                 <TripSidebar
                     tripId={tripId}

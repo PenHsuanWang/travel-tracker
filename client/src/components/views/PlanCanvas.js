@@ -8,6 +8,11 @@
  * - Zone C (Right Sidebar): ItineraryPanel (Day Grouping)
  * 
  * Follows the same patterns as TripDetailPage but adapted for plans.
+ * 
+ * Migrated to use unified components (Phase 4.4):
+ * - LoadingState for loading spinner
+ * - Unified button classes
+ * - useResizablePanel hook
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
@@ -17,6 +22,8 @@ import PlanToolbox from '../panels/PlanToolbox';
 import OperationsPanel from '../panels/OperationsPanel';
 import ItineraryPanel from '../panels/ItineraryPanel';
 import PlanStatsHUD from '../panels/PlanStatsHUD';
+import { LoadingState } from '../common/LoadingState';
+import { useResizablePanel } from '../../hooks/useResizablePanel';
 import {
   getPlan,
   updatePlan,
@@ -42,38 +49,6 @@ import { calculateLengthKm, calculateAreaSqM } from '../../utils/geoUtils';
 import GpxImportOptionsModal from '../common/GpxImportOptionsModal';
 import '../../styles/PlanCanvas.css';
 
-const MIN_ITINERARY_WIDTH = 280;
-const MAX_ITINERARY_WIDTH = 500;
-const DEFAULT_ITINERARY_WIDTH = 340;
-
-const MIN_LEFT_WIDTH = 280;
-const MAX_LEFT_WIDTH = 500;
-const DEFAULT_LEFT_WIDTH = 300;
-
-const clampItineraryWidth = (value) =>
-  Math.min(MAX_ITINERARY_WIDTH, Math.max(MIN_ITINERARY_WIDTH, value));
-
-const getStoredItineraryWidth = () => {
-  if (typeof window === 'undefined') return DEFAULT_ITINERARY_WIDTH;
-  const stored = Number(window.localStorage.getItem('planItineraryWidth'));
-  if (Number.isFinite(stored)) {
-    return clampItineraryWidth(stored);
-  }
-  return DEFAULT_ITINERARY_WIDTH;
-};
-
-const clampLeftWidth = (value) =>
-  Math.min(MAX_LEFT_WIDTH, Math.max(MIN_LEFT_WIDTH, value));
-
-const getStoredLeftWidth = () => {
-  if (typeof window === 'undefined') return DEFAULT_LEFT_WIDTH;
-  const stored = Number(window.localStorage.getItem('planLeftSidebarWidth'));
-  if (Number.isFinite(stored)) {
-    return clampLeftWidth(stored);
-  }
-  return DEFAULT_LEFT_WIDTH;
-};
-
 const PlanCanvas = () => {
   const { isAuthenticated, user } = useAuth();
   const { planId } = useParams();
@@ -86,22 +61,18 @@ const PlanCanvas = () => {
   const [saving, setSaving] = useState(false);
 
   // UI state
-  const [activeTool, setActiveTool] = useState(null); // 'waypoint', 'marker', 'polyline', 'polygon', 'rectangle', 'circle', etc.
-  const [activeDrawCategory, setActiveDrawCategory] = useState(null); // category for the current drawing tool
+  const [activeTool, setActiveTool] = useState(null);
+  const [activeDrawCategory, setActiveDrawCategory] = useState(null);
   const [activeSemanticType, setActiveSemanticType] = useState(SEMANTIC_TYPE.GENERIC);
   const [selectedFeatureId, setSelectedFeatureId] = useState(null);
-  const [itineraryOpen, setItineraryOpen] = useState(true);
-  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true); // Phase 2: Left sidebar visibility
-  const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => getStoredLeftWidth());
-  const [itineraryWidth, setItineraryWidth] = useState(() => getStoredItineraryWidth());
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [drawingState, setDrawingState] = useState({ isDrawing: false, vertices: [] });
-  const [trackData, setTrackData] = useState({}); // Map of object_key -> analysis data
+  const [trackData, setTrackData] = useState({});
   const [daySummaries, setDaySummaries] = useState([]);
   const [daySummariesDirty, setDaySummariesDirty] = useState(false);
   
-  // Phase 2 - Logistics state (local editing before save)
+  // Phase 2 - Logistics state
   const [localRoster, setLocalRoster] = useState([]);
   const [localLogistics, setLocalLogistics] = useState({});
   const [localChecklist, setLocalChecklist] = useState([]);
@@ -112,6 +83,21 @@ const PlanCanvas = () => {
   const [uploadingGpx, setUploadingGpx] = useState(false);
 
   const mapRef = useRef(null);
+
+  // Panel State Management using hooks
+  const leftPanel = useResizablePanel({
+    initialWidth: 300,
+    minWidth: 280,
+    maxWidth: 500,
+    storageKey: 'planLeftSidebarWidth',
+  });
+
+  const itineraryPanel = useResizablePanel({
+    initialWidth: 340,
+    minWidth: 280,
+    maxWidth: 500,
+    storageKey: 'planItineraryWidth',
+  });
 
   // Permissions
   const userId = user ? (user.id || user._id) : null;
@@ -136,7 +122,6 @@ const PlanCanvas = () => {
       setError(null);
       const data = await getPlan(planId);
       setPlan(data);
-      // Phase 2: Initialize local logistics state from fetched plan
       setLocalRoster(data.roster || []);
       setLocalLogistics(data.logistics || {});
       setLocalChecklist(data.checklist || []);
@@ -165,7 +150,6 @@ const PlanCanvas = () => {
       await Promise.all(plan.reference_tracks.map(async (track) => {
         if (!newTrackData[track.object_key]) {
           try {
-            // Fetch analysis without tripId (plan context)
             const analysis = await fetchGpxAnalysis(track.object_key);
             if (analysis && analysis.coordinates) {
               newTrackData[track.object_key] = analysis;
@@ -185,24 +169,12 @@ const PlanCanvas = () => {
     loadTracks();
   }, [plan?.reference_tracks, trackData]);
 
-  // Save itinerary width preference
-  useEffect(() => {
-    window.localStorage.setItem('planItineraryWidth', String(itineraryWidth));
-  }, [itineraryWidth]);
-
-  // Save left sidebar width preference
-  useEffect(() => {
-    window.localStorage.setItem('planLeftSidebarWidth', String(leftSidebarWidth));
-  }, [leftSidebarWidth]);
-
   // Helper to extract features array from FeatureCollection
   const getFeaturesArray = useCallback((planData) => {
     if (!planData?.features) return [];
-    // Handle both FeatureCollection object and direct array
     if (Array.isArray(planData.features)) {
       return planData.features;
     }
-    // It's a FeatureCollection object
     return planData.features.features || [];
   }, []);
 
@@ -218,14 +190,12 @@ const PlanCanvas = () => {
           ...properties,
         };
 
-        // Calculate geometric stats
         if (geometry.type === 'LineString') {
           featureProps.distance_km = calculateLengthKm(geometry);
         } else if (geometry.type === 'Polygon') {
           featureProps.area_sq_m = calculateAreaSqM(geometry);
         }
 
-        // Default route type for lines
         if (!featureProps.route_type && featureProps.category === FEATURE_CATEGORY.ROUTE) {
           featureProps.route_type = ROUTE_TYPE.MAIN;
         }
@@ -260,13 +230,9 @@ const PlanCanvas = () => {
       try {
         setSaving(true);
         
-        // Recalculate stats if geometry changes
         const geometry = updates.geometry;
         if (geometry) {
            if (!updates.properties) updates.properties = {};
-           
-           // We need to merge with existing properties to check category? 
-           // Or just trust geometry type.
            if (geometry.type === 'LineString') {
              updates.properties.distance_km = calculateLengthKm(geometry);
            } else if (geometry.type === 'Polygon') {
@@ -294,13 +260,11 @@ const PlanCanvas = () => {
     [canEdit, plan, planId, getFeaturesArray]
   );
 
-  // Handle feature update with cascade time propagation
   const handleUpdateFeatureWithCascade = useCallback(
     async (featureId, updates) => {
       if (!canEdit || !plan) return;
       try {
         setSaving(true);
-        // This returns the entire updated plan with all features updated
         const updatedPlan = await updateFeatureWithCascade(planId, featureId, updates, true);
         setPlan(updatedPlan);
       } catch (err) {
@@ -347,7 +311,6 @@ const PlanCanvas = () => {
       try {
         setSaving(true);
         await reorderFeatures(planId, featureOrders);
-        // Reorder locally
         const orderMap = new Map(featureOrders.map((o) => [o.feature_id, o.order_index]));
         setPlan((prev) => {
           const currentFeatures = getFeaturesArray(prev);
@@ -370,20 +333,14 @@ const PlanCanvas = () => {
     [canEdit, plan, planId, getFeaturesArray]
   );
 
-  // Reference track operations
-  // Handler for GPX file upload - shows import options modal for user to select waypoints
   const handleAddReferenceTrack = useCallback(
     async (fileOrData) => {
       if (!canEdit || !plan) return;
       
-      // Check if it's a File object (from file input) - show import modal
       if (fileOrData instanceof File) {
         try {
           setUploadingGpx(true);
-          // First, ingest the GPX to get preview data (waypoints, times, etc.)
           const previewData = await ingestGpx(fileOrData);
-          
-          // Store preview data and show the import options modal
           setGpxPreviewData({
             ...previewData,
             file: fileOrData,
@@ -399,7 +356,6 @@ const PlanCanvas = () => {
         return;
       }
       
-      // Direct track data object (object_key already uploaded) - no modal needed
       try {
         setSaving(true);
         const track = await addReferenceTrack(planId, fileOrData);
@@ -417,7 +373,6 @@ const PlanCanvas = () => {
     [canEdit, plan, planId]
   );
 
-  // Handler for GPX import from modal - creates checkpoints and uploads track
   const handleGpxImport = useCallback(
     async (checkpoints, tempFileKey) => {
       if (!canEdit || !plan || !gpxPreviewData) return;
@@ -426,14 +381,9 @@ const PlanCanvas = () => {
         setSaving(true);
         setGpxImportModalOpen(false);
         
-        // 1. Create checkpoint features from selected waypoints
         const createdFeatures = [];
         for (const checkpoint of checkpoints) {
-          // API expects: addFeature(planId, geometry, properties)
-          // Geometry should be a GeoJSON geometry object
           const geometry = checkpoint.geometry;
-          
-          // Properties should include category, name, and other checkpoint data
           const properties = {
             category: checkpoint.properties?.category || 'waypoint',
             name: checkpoint.properties?.name || 'Checkpoint',
@@ -450,7 +400,6 @@ const PlanCanvas = () => {
           createdFeatures.push(feature);
         }
         
-        // 2. Upload reference track if tempFileKey was provided (user selected to include it)
         let track = null;
         if (tempFileKey && gpxPreviewData.file) {
           track = await uploadReferenceTrack(planId, gpxPreviewData.file, {
@@ -458,8 +407,6 @@ const PlanCanvas = () => {
           });
         }
         
-        // 3. Update plan state with new features and track
-        // UI-02: Set showWaypoints=false on the new track to hide reference waypoints after import
         setPlan((prev) => {
           const updatedPlan = { ...prev };
           if (createdFeatures.length > 0) {
@@ -470,23 +417,17 @@ const PlanCanvas = () => {
             };
           }
           if (track) {
-            // UI-02: Smart Hiding - set showWaypoints to false by default after import
             const trackWithVisibility = {
               ...track,
-              showTrack: true,      // Show the reference track line
-              showWaypoints: false, // Hide reference waypoints (they're now checkpoints)
+              showTrack: true,
+              showWaypoints: false,
             };
             updatedPlan.reference_tracks = [...(prev.reference_tracks || []), trackWithVisibility];
           }
           return updatedPlan;
         });
         
-        // Clear modal state
         setGpxPreviewData(null);
-        
-        // Show success message
-        const trackMsg = track ? ' and reference track' : '';
-        console.log(`Successfully imported ${createdFeatures.length} checkpoints${trackMsg}`);
         
       } catch (err) {
         console.error('Failed to import GPX data:', err);
@@ -498,7 +439,6 @@ const PlanCanvas = () => {
     [canEdit, plan, planId, gpxPreviewData, getFeaturesArray]
   );
 
-  // Handler for closing the GPX import modal
   const handleGpxImportCancel = useCallback(() => {
     setGpxImportModalOpen(false);
     setGpxPreviewData(null);
@@ -524,7 +464,6 @@ const PlanCanvas = () => {
     [canEdit, plan, planId]
   );
 
-  // UI-03: Handler for toggling reference track visibility (track line or waypoints)
   const handleToggleTrackVisibility = useCallback(
     (trackId, property, value) => {
       setPlan((prev) => ({
@@ -537,7 +476,6 @@ const PlanCanvas = () => {
     []
   );
 
-  // Plan name editing
   const handleStartEditName = () => {
     if (!canManage) return;
     setEditedName(plan?.name || '');
@@ -563,7 +501,6 @@ const PlanCanvas = () => {
     setEditedName('');
   };
 
-  // Plan deletion
   const handleDeletePlan = async () => {
     if (!canManage) return;
     if (!window.confirm('Delete this plan? This cannot be undone.')) return;
@@ -575,7 +512,6 @@ const PlanCanvas = () => {
     }
   };
 
-  // Phase 2: Save logistics data (roster, logistics, checklist)
   const handleSaveLogistics = useCallback(async () => {
     if (!canEdit || !plan) return;
     try {
@@ -594,7 +530,6 @@ const PlanCanvas = () => {
     }
   }, [canEdit, plan, planId, localRoster, localLogistics, localChecklist]);
 
-  // Phase 2: Day summary (itinerary) updates
   const handleUpdateDaySummaries = useCallback((updatedSummaries) => {
     setDaySummaries(updatedSummaries);
     setDaySummariesDirty(true);
@@ -616,7 +551,6 @@ const PlanCanvas = () => {
     }
   }, [canEdit, plan, planId, daySummaries]);
 
-  // Phase 2: Update plan metadata from OperationsPanel Settings tab
   const handleUpdatePlanMetadata = useCallback(async (updates) => {
     if (!canEdit || !plan) return;
     try {
@@ -630,62 +564,35 @@ const PlanCanvas = () => {
     }
   }, [canEdit, plan, planId]);
 
-  // Selected feature
   const selectedFeature = useMemo(() => {
     if (!plan || !selectedFeatureId) return null;
     const featuresArray = getFeaturesArray(plan);
     return featuresArray.find((f) => f.id === selectedFeatureId) || null;
   }, [plan, selectedFeatureId, getFeaturesArray]);
 
-  // Get features array for passing to child components
   const featuresArray = useMemo(() => getFeaturesArray(plan), [plan, getFeaturesArray]);
 
-  const handleLeftResizeStart = useCallback((e) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = leftSidebarWidth;
+  // Compute grid columns
+  const gridTemplate = `${leftPanel.width}px 1fr ${itineraryPanel.width}px`;
 
-    const handleMouseMove = (moveEvent) => {
-      const delta = moveEvent.clientX - startX;
-      const newWidth = clampLeftWidth(startWidth + delta);
-      setLeftSidebarWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [leftSidebarWidth]);
-
-  // Loading state
   if (loading) {
     return (
       <div className="plan-canvas-loading">
-        <div className="loading-spinner" />
-        <div>Loading plan...</div>
+        <LoadingState message="Loading plan..." size="lg" />
       </div>
     );
   }
 
-  // No plan found
   if (!plan) {
     return (
       <div className="plan-canvas-error">
         <h2>Plan not found</h2>
-        <Link to="/plans" className="btn-secondary">
+        <Link to="/plans" className="btn btn-secondary">
           Back to Plans
         </Link>
       </div>
     );
   }
-
-  // Compute grid columns so sidebars stay anchored to edges when resized
-  const leftWidth = leftSidebarOpen ? leftSidebarWidth : 0;
-  const rightWidth = itineraryOpen ? itineraryWidth : 0;
-  const gridTemplate = `${leftWidth}px 1fr ${rightWidth}px`;
 
   return (
     <div className="plan-canvas">
@@ -729,22 +636,21 @@ const PlanCanvas = () => {
           
           {saving && <span className="saving-indicator">Saving...</span>}
           
-          {/* Phase 2: Toggle buttons for both sidebars */}
           <button
             className="header-btn btn-toggle-sidebar"
-            onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
-            title={leftSidebarOpen ? 'Hide Operations Panel' : 'Show Operations Panel'}
+            onClick={leftPanel.toggleCollapse}
+            title={!leftPanel.isCollapsed ? 'Hide Operations Panel' : 'Show Operations Panel'}
           >
-            {leftSidebarOpen ? '◀ Hide Ops' : '▶ Show Ops'}
+            {!leftPanel.isCollapsed ? '◀ Hide Ops' : '▶ Show Ops'}
           </button>
           
           <div className="header-center-controls">
             <button
               className="header-btn btn-toggle-itinerary"
-            onClick={() => setItineraryOpen(!itineraryOpen)}
-          >
-            {itineraryOpen ? 'Hide Itinerary ▶' : '◀ Show Itinerary'}
-          </button>
+              onClick={itineraryPanel.toggleCollapse}
+            >
+              {!itineraryPanel.isCollapsed ? 'Hide Itinerary ▶' : '◀ Show Itinerary'}
+            </button>
           </div>
           {canManage && (
             <button
@@ -758,17 +664,16 @@ const PlanCanvas = () => {
         </div>
       </header>
 
-      {/* Main Content - Phase 2: Three-Column Grid Layout */}
+      {/* Main Content */}
       <div
-        className={`plan-canvas-content ${!leftSidebarOpen ? 'left-collapsed' : ''} ${!itineraryOpen ? 'right-collapsed' : ''}`}
+        className={`plan-canvas-content ${leftPanel.isCollapsed ? 'left-collapsed' : ''} ${itineraryPanel.isCollapsed ? 'right-collapsed' : ''}`}
         style={{ gridTemplateColumns: gridTemplate }}
       >
         
         {/* Zone A: Left Sidebar (Operations) */}
-        {leftSidebarOpen && (
+        {!leftPanel.isCollapsed && (
           <div className="plan-left-sidebar">
-            <div className="left-resize-handle" onMouseDown={handleLeftResizeStart} />
-            {/* Toolbox - Now embedded in Zone A */}
+            <div className="left-resize-handle" onMouseDown={leftPanel.handleMouseDown} />
             {canEdit && (
               <PlanToolbox
                 activeTool={activeTool}
@@ -795,7 +700,6 @@ const PlanCanvas = () => {
               />
             )}
             
-            {/* Operations Panel - Team, Gear, Settings Tabs */}
             <OperationsPanel
               plan={plan}
               roster={localRoster}
@@ -823,8 +727,8 @@ const PlanCanvas = () => {
               trackData={trackData}
               selectedFeatureId={selectedFeatureId}
               onSelectFeature={setSelectedFeatureId}
-                activeTool={canEdit ? activeTool : null}
-                activeSemanticType={activeSemanticType}
+              activeTool={canEdit ? activeTool : null}
+              activeSemanticType={activeSemanticType}
               activeDrawCategory={activeDrawCategory}
               onAddFeature={handleAddFeature}
               onUpdateFeature={handleUpdateFeature}
@@ -854,7 +758,7 @@ const PlanCanvas = () => {
         </div>
 
         {/* Zone C: Right Sidebar (Itinerary) */}
-        {itineraryOpen && (
+        {!itineraryPanel.isCollapsed && (
           <ItineraryPanel
             features={featuresArray}
             referenceTracks={plan.reference_tracks || []}
@@ -866,21 +770,18 @@ const PlanCanvas = () => {
             onDeleteFeature={handleDeleteFeature}
             onReorderFeatures={handleReorderFeatures}
             onCenterFeature={(featureId, coords) => {
-              // Center map on feature
               if (mapRef.current?.centerOnCoords) {
                 mapRef.current.centerOnCoords(coords);
               }
               setSelectedFeatureId(featureId);
             }}
             onFlyToFeature={(featureId) => {
-              // FE-06: Fly to feature with flash animation
               if (mapRef.current?.flyToFeature) {
                 mapRef.current.flyToFeature(featureId);
               }
               setSelectedFeatureId(featureId);
             }}
             onEditFeature={(featureId) => {
-              // Open feature popup for editing
               if (mapRef.current?.openFeaturePopup) {
                 mapRef.current.openFeaturePopup(featureId);
               }
@@ -889,8 +790,8 @@ const PlanCanvas = () => {
             onAddReferenceTrack={handleAddReferenceTrack}
             onRemoveReferenceTrack={handleRemoveReferenceTrack}
             onToggleTrackVisibility={handleToggleTrackVisibility}
-            width={itineraryWidth}
-            onWidthChange={setItineraryWidth}
+            width={itineraryPanel.actualWidth}
+            onWidthChange={itineraryPanel.setWidth}
             daySummaries={daySummaries}
             onUpdateDaySummaries={handleUpdateDaySummaries}
             onSaveDaySummaries={handleSaveDaySummaries}
@@ -901,7 +802,6 @@ const PlanCanvas = () => {
         )}
       </div>
 
-      {/* GPX Import Options Modal */}
       {gpxImportModalOpen && gpxPreviewData && (
         <GpxImportOptionsModal
           isOpen={gpxImportModalOpen}

@@ -288,13 +288,13 @@ const CreatePlanModal = ({ onClose, onCreated }) => {
           <div className="modal-footer">
             <button
               type="button"
-              className="btn-secondary"
+              className="btn btn-secondary"
               onClick={onClose}
               disabled={loading}
             >
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={loading}>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? 'Creating...' : 'Create Plan'}
             </button>
           </div>

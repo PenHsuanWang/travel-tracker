@@ -3,10 +3,13 @@
  * PlanCard - Displays a single plan in the plans grid.
  * 
  * Shows plan metadata, status badge, and action buttons.
+ * Uses the unified Card compound component.
  */
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { PLAN_STATUS_LABELS } from '../../services/planService';
+import { Card, CardBody, CardFooter, CardTitle, CardCover } from './Card/Card';
+import StatusBadge from './StatusBadge';
 import './PlanCard.css';
 
 const formatDate = (value) => {
@@ -25,19 +28,6 @@ const formatDateRange = (start, end) => {
   const endText = formatDate(end);
   if (startText && endText) return `${startText} – ${endText}`;
   return startText || endText || '—';
-};
-
-const getStatusClass = (status) => {
-  switch (status) {
-    case 'draft':
-      return 'status-draft';
-    case 'active':
-      return 'status-active';
-    case 'archived':
-      return 'status-archived';
-    default:
-      return '';
-  }
 };
 
 const PlanCard = ({
@@ -67,10 +57,12 @@ const PlanCard = ({
   };
 
   return (
-    <article
-      className={`plan-card ${selected ? 'is-selected' : ''}`}
+    <Card
+      variant="plan"
+      className="plan-card"
+      selected={selected}
       onClick={handleCardClick}
-      tabIndex={0}
+      hoverable={true}
       role="group"
       aria-label={`Plan ${plan.name || 'Untitled plan'}`}
     >
@@ -83,57 +75,46 @@ const PlanCard = ({
             onChange={() => onSelectToggle(plan.id)}
             aria-label={`Select ${plan.name || ''}`}
           />
-          <span className="checkbox-visual" aria-hidden />
+          <span className="checkbox-visual" aria-hidden="true" />
         </label>
       )}
 
-      {/* Header */}
-      <div className="plan-card-header">
-        <div className="plan-icon">📋</div>
-        <span className={`plan-status-badge ${getStatusClass(plan.status)}`}>
-          {PLAN_STATUS_LABELS[plan.status] || plan.status}
-        </span>
-      </div>
+      {/* Cover Area (Placeholder 16:9) */}
+      <CardCover className="cover-area" aspectRatio="16/9">
+        <div className="cover-placeholder" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+          <div className="placeholder-icon">📋</div>
+        </div>
+
+        <div className="cover-overlay">
+          <div className="cover-actions" style={{ justifyContent: 'flex-end' }}>
+            <StatusBadge status={plan.status} label={PLAN_STATUS_LABELS[plan.status]} />
+          </div>
+        </div>
+      </CardCover>
 
       {/* Content */}
-      <div className="plan-card-content">
-        <Link
-          to={`/plans/${plan.id}`}
-          className="plan-name-link"
-          onClick={(e) => selectMode && e.preventDefault()}
-        >
-          <h3 className="plan-name">{plan.name || 'Untitled Plan'}</h3>
-        </Link>
-
-        {plan.description && (
-          <p className="plan-description">{plan.description}</p>
-        )}
-
-        {plan.region && (
-          <div className="plan-region">
-            <span className="region-icon">📍</span>
-            {plan.region}
-          </div>
-        )}
-
-        <div className="plan-dates">
-          <span className="dates-icon">📅</span>
-          {formatDateRange(plan.planned_start_date, plan.planned_end_date)}
-        </div>
-
-        {/* Stats */}
-        <div className="plan-stats">
-          <div className="stat">
-            <span className="stat-value">{featureCount}</span>
-            <span className="stat-label">{featureCount === 1 ? 'Feature' : 'Features'}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-value">{trackCount}</span>
-            <span className="stat-label">{trackCount === 1 ? 'Track' : 'Tracks'}</span>
+      <CardBody>
+        {/* Title Row: Title + Date */}
+        <div className="plan-title-row">
+          <CardTitle>
+            {!selectMode ? (
+              <Link
+                to={`/plans/${plan.id}`}
+                className="plan-name-link"
+                style={{ textDecoration: 'none', color: 'inherit' }}
+              >
+                {plan.name || 'Untitled Plan'}
+              </Link>
+            ) : (
+              plan.name || 'Untitled Plan'
+            )}
+          </CardTitle>
+          <div className="plan-date">
+            {formatDateRange(plan.planned_start_date, plan.planned_end_date)}
           </div>
         </div>
 
-        {/* Owner info */}
+        {/* Owner Info */}
         {plan.owner && (
           <div className="plan-owner">
             <span className="owner-avatar">
@@ -147,29 +128,45 @@ const PlanCard = ({
             {isOwner && <span className="owner-badge">Owner</span>}
           </div>
         )}
-      </div>
+
+        {/* Stats / Meta Pills */}
+        <div className="plan-meta-row">
+          <span className="meta-pill">
+            📍 {featureCount} {featureCount === 1 ? 'Feature' : 'Features'}
+          </span>
+          <span className="meta-pill">
+            🧭 {trackCount} {trackCount === 1 ? 'Track' : 'Tracks'}
+          </span>
+        </div>
+      </CardBody>
 
       {/* Actions */}
       {!selectMode && (
-        <div className="plan-card-actions">
-          <Link to={`/plans/${plan.id}`} className="btn-card-action primary">
-            {canEdit ? 'Edit' : 'View'}
-          </Link>
-          {canEdit && (
-            <button
-              type="button"
-              className="btn-card-action danger"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(plan.id);
-              }}
-            >
-              Delete
-            </button>
-          )}
-        </div>
+        <CardFooter>
+          <div className="plan-card-actions" style={{ display: 'flex', gap: '8px', width: '100%' }}>
+            <Link to={`/plans/${plan.id}`} className="btn btn-primary btn-sm">
+              {canEdit ? 'Edit' : 'View'}
+            </Link>
+            
+            <div style={{ flex: '1 1 0%' }}></div>
+
+            {canEdit && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm danger"
+                title="Delete Plan"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(plan.id);
+                }}
+              >
+                🗑
+              </button>
+            )}
+          </div>
+        </CardFooter>
       )}
-    </article>
+    </Card>
   );
 };
 

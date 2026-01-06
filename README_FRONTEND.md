@@ -265,6 +265,18 @@ These components are specific to the `/plans/:planId` route.
 
 This directory contains reusable UI elements shared across the application.
 
+**Foundation Components** (New Design System):
+-   **`Card.js`**: A flexible card container with support for headers, footers, hover effects, and selection states. Used as the base for `TripCard` and `PlanCard`.
+-   **`PageToolbar.js`**: A standardized toolbar layout for top-of-page controls (search, filter, sort, view toggles).
+-   **`FilterControl.js`**: A dropdown menu component for filtering lists (e.g., by difficulty, status).
+-   **`SearchField.js`**: A styled search input with icon and clear button.
+-   **`StatusBadge.js`**: A consistent badge component for displaying status labels (e.g., "Draft", "Active", "Archived").
+-   **`LoadingState.js`**: A centralized loading spinner/skeleton placeholder.
+-   **`EmptyState.js`**: A user-friendly placeholder displayed when lists are empty (e.g., "No trips found").
+
+**Domain Components:**
+-   **`TripCard.js`**: Displays trip summary information in grid/list views.
+-   **`PlanCard.js`**: Displays plan summary information.
 -   **`CreateTripModal.js`**: Modal dialog for creating a new trip. Contains a form capturing trip name, start date, end date, region, and notes. Calls the `createTrip` API to save the new trip record.
 -   **`ManageMembersModal.js`**: Modal dialog for managing trip members. Allows the trip owner to search for users by name and add/remove them from the trip. Displays helper text: "Contributors can upload photos and edit journal notes. Only the Owner can delete the trip or manage members."
 -   **`ActivityHeatmap.js`**: Calendar-style heatmap component that consumes normalized `{ date, value, metadata[] }` entries. Supports highlighting and `onCellClick` callbacks so parent components can jump to related content.
@@ -356,6 +368,7 @@ The application uses a combination of:
 
 ### State Management
 -   **Global Auth State:** `AuthContext.js` provides `user` and `isAuthenticated` state to the entire app via the Context API.
+-   **Theme Context:** `ThemeContext.js` detects the current route (Plan vs Trip) and provides the active theme name. It wraps the application to inject CSS variables (e.g., `--color-brand`) that adapt components to the current context.
 -   **Local Component State:** Most components use React `useState` and `useEffect` hooks
 -   **Props Drilling:** Parent-to-child communication via props
 -   **Event-Based Communication**: Cross-component updates using custom DOM events:

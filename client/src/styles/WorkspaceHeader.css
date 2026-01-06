@@ -1,0 +1,171 @@
+/* client/src/styles/WorkspaceHeader.css */
+
+/* 
+ * Unified Workspace Header (Plan & Trip Detail) 
+ * Shared styles for the "Workbench" header area.
+ */
+
+.plan-canvas-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 2rem;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  gap: 1.5rem;
+  height: 80px; /* Fixed height for consistency */
+  box-sizing: border-box;
+}
+
+/* Left Zone */
+.plan-header-left {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  min-width: 0;
+  flex: 1; /* Allow it to grow */
+}
+
+.back-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1rem;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.plan-title-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* Enable truncation */
+}
+
+.plan-title {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #111827;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Right Zone */
+.plan-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* Header Buttons */
+.header-btn {
+  padding: 0 16px;
+  height: 40px; /* Standardize height */
+  border-radius: 8px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.header-btn:hover { 
+  background: #e5e7eb; 
+  color: #111827;
+}
+
+.header-btn.btn-delete {
+  background: #fff1f2;
+  color: #b91c1c;
+  border-color: #fca5a5;
+}
+
+.header-btn.btn-delete:hover { 
+  background: #ffe4e6; 
+  border-color: #f87171;
+}
+
+/* Quick Switch Dropdown */
+.header-selector-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-right: 8px;
+}
+
+.header-select {
+  appearance: none;
+  padding: 0 36px 0 16px;
+  height: 40px;
+  border-radius: 8px;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+  min-width: 180px;
+  max-width: 300px;
+  text-overflow: ellipsis;
+}
+
+.header-select:hover {
+  border-color: #9ca3af;
+}
+
+.header-select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .plan-canvas-header {
+    height: auto;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .plan-header-left, .plan-header-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .plan-header-right {
+    flex-wrap: wrap;
+  }
+  
+  .header-selector-wrapper {
+    flex: 1;
+    margin-right: 0;
+  }
+  
+  .header-select {
+    width: 100%;
+    max-width: none;
+  }
+}

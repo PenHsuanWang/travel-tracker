@@ -390,12 +390,12 @@ const GpxImportOptionsModal = ({
         </div>
 
         <div className="modal-footer">
-          <button type="button" className="btn-secondary" onClick={onClose}>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
             Cancel
           </button>
           <button
             type="button"
-            className="btn-primary"
+            className="btn btn-primary"
             onClick={handleImport}
             disabled={importing || (selectedWaypoints.size === 0 && !addAsReference)}
           >
