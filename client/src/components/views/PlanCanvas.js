@@ -8,6 +8,10 @@
  * - Zone C (Right Sidebar): ItineraryPanel (Day Grouping)
  * 
  * Follows the same patterns as TripDetailPage but adapted for plans.
+ * 
+ * Migrated to use unified components (Phase 4.4):
+ * - LoadingState for loading spinner
+ * - Unified button classes
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
@@ -17,6 +21,7 @@ import PlanToolbox from '../panels/PlanToolbox';
 import OperationsPanel from '../panels/OperationsPanel';
 import ItineraryPanel from '../panels/ItineraryPanel';
 import PlanStatsHUD from '../panels/PlanStatsHUD';
+import { LoadingState } from '../common/LoadingState';
 import {
   getPlan,
   updatePlan,
@@ -660,12 +665,11 @@ const PlanCanvas = () => {
     document.addEventListener('mouseup', handleMouseUp);
   }, [leftSidebarWidth]);
 
-  // Loading state
+  // Loading state - using unified LoadingState component
   if (loading) {
     return (
       <div className="plan-canvas-loading">
-        <div className="loading-spinner" />
-        <div>Loading plan...</div>
+        <LoadingState message="Loading plan..." size="lg" />
       </div>
     );
   }
@@ -675,7 +679,7 @@ const PlanCanvas = () => {
     return (
       <div className="plan-canvas-error">
         <h2>Plan not found</h2>
-        <Link to="/plans" className="btn-secondary">
+        <Link to="/plans" className="btn btn-secondary">
           Back to Plans
         </Link>
       </div>

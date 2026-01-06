@@ -1,3 +1,11 @@
+/**
+ * TripsPage - Displays a list of user's trips.
+ * 
+ * Migrated to use unified components (Phase 4.2):
+ * - PageToolbar, SearchField, FilterControl for toolbar
+ * - LoadingState, EmptyState for states
+ * - useListSelection, useSearchFilter hooks
+ */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -12,6 +20,13 @@ import {
 } from '../../services/api';
 import userService from '../../services/userService';
 import CreateTripModal from '../common/CreateTripModal';
+import { PageToolbar } from '../common/PageToolbar';
+import { SearchField } from '../common/SearchField';
+import { FilterControl } from '../common/FilterControl';
+import { LoadingState } from '../common/LoadingState';
+import { EmptyState } from '../common/EmptyState';
+import { useListSelection } from '../../hooks/useListSelection';
+import { useSearchFilter } from '../../hooks/useSearchFilter';
 import './TripsPage.css';
 
 const SORT_OPTIONS = [
@@ -686,16 +701,69 @@ const TripsPage = () => {
     const [trips, setTrips] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
     const [sortOption, setSortOption] = useState('newest');
     const [filters, setFilters] = useState(defaultFilters);
     const [viewMode, setViewMode] = useState('grid');
-    const [selectMode, setSelectMode] = useState(false);
-    const [selectedTripIds, setSelectedTripIds] = useState([]);
     const [coverModalTrip, setCoverModalTrip] = useState(null);
     const [busyMessage, setBusyMessage] = useState('');
 
     const readOnly = !isAuthenticated;
+
+    // Use unified selection hook
+    const selection = useListSelection({ items: trips });
+
+    // Custom filter function for trips
+    const customFilter = useCallback((trip, filterState) => {
+        // Difficulty filter
+        if (filters.difficulty !== 'all') {
+            if (normalizeDifficulty(trip.difficulty) !== filters.difficulty) {
+                return false;
+            }
+        }
+
+        // GPX filter
+        if (filters.hasGpx !== 'all') {
+            const hasGpx = Boolean(trip.has_gpx);
+            if (filters.hasGpx === 'with' && !hasGpx) return false;
+            if (filters.hasGpx === 'without' && hasGpx) return false;
+        }
+
+        // Photos filter
+        if (filters.hasPhotos !== 'all') {
+            const count = typeof trip.photo_count === 'number'
+                ? trip.photo_count
+                : Array.isArray(trip.photos) ? trip.photos.length : 0;
+            if (filters.hasPhotos === 'with' && count === 0) return false;
+            if (filters.hasPhotos === 'without' && count > 0) return false;
+        }
+
+        // Date range filter
+        if (filters.startDate) {
+            const start = new Date(filters.startDate).getTime();
+            const tripStart = new Date(trip.start_date || trip.created_at || 0).getTime();
+            if (tripStart < start) return false;
+        }
+
+        if (filters.endDate) {
+            const end = new Date(filters.endDate).getTime();
+            const tripEnd = new Date(trip.end_date || trip.start_date || trip.created_at || 0).getTime();
+            if (tripEnd > end) return false;
+        }
+
+        return true;
+    }, [filters]);
+
+    // Use unified search/filter hook
+    const {
+        searchQuery,
+        setSearchQuery,
+        filteredItems: searchedTrips,
+    } = useSearchFilter({
+        items: trips,
+        searchFields: ['name', 'title', 'region', 'location_name', 'notes'],
+        debounceMs: 300,
+        customFilter,
+    });
 
     useEffect(() => {
         fetchTrips();
@@ -706,16 +774,16 @@ const TripsPage = () => {
             if (event.key === 'Escape') {
                 if (coverModalTrip) {
                     setCoverModalTrip(null);
-                } else if (selectMode) {
-                    setSelectMode(false);
-                    setSelectedTripIds([]);
+                } else if (selection.selectMode) {
+                    selection.clearSelection();
+                    selection.toggleSelectMode();
                 }
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [coverModalTrip, selectMode]);
+    }, [coverModalTrip, selection]);
 
     const fetchTrips = async () => {
         setLoading(true);
@@ -731,19 +799,6 @@ const TripsPage = () => {
 
     const handleTripCreated = (newTrip) => {
         setTrips((prev) => [newTrip, ...prev]);
-    };
-
-    const toggleSelectMode = () => {
-        setSelectMode((prev) => !prev);
-        if (selectMode) {
-            setSelectedTripIds([]);
-        }
-    };
-
-    const handleSelectToggle = (tripId) => {
-        setSelectedTripIds((prev) =>
-            prev.includes(tripId) ? prev.filter((id) => id !== tripId) : [...prev, tripId]
-        );
     };
 
     const handleTogglePin = async (tripId) => {
@@ -779,65 +834,9 @@ const TripsPage = () => {
         setFilters((prev) => ({ ...prev, ...partial }));
     };
 
+    // Sort the searched/filtered trips (filtering now done by useSearchFilter)
     const filteredTrips = useMemo(() => {
-        const search = searchQuery.trim().toLowerCase();
-        let results = [...trips];
-
-        if (search) {
-            results = results.filter((trip) => {
-                const haystack = [
-                    trip.name,
-                    trip.title,
-                    trip.region,
-                    trip.location_name,
-                    trip.notes,
-                ]
-                    .filter(Boolean)
-                    .join(' ')
-                    .toLowerCase();
-                return haystack.includes(search);
-            });
-        }
-
-        if (filters.difficulty !== 'all') {
-            results = results.filter(
-                (trip) => normalizeDifficulty(trip.difficulty) === filters.difficulty
-            );
-        }
-
-        if (filters.hasGpx !== 'all') {
-            results = results.filter((trip) =>
-                filters.hasGpx === 'with' ? Boolean(trip.has_gpx) : !trip.has_gpx
-            );
-        }
-
-        if (filters.hasPhotos !== 'all') {
-            results = results.filter((trip) => {
-                const count =
-                    typeof trip.photo_count === 'number'
-                        ? trip.photo_count
-                        : Array.isArray(trip.photos)
-                        ? trip.photos.length
-                        : 0;
-                return filters.hasPhotos === 'with' ? count > 0 : count === 0;
-            });
-        }
-
-        if (filters.startDate) {
-            const start = new Date(filters.startDate).getTime();
-            results = results.filter((trip) => {
-                const tripStart = new Date(trip.start_date || trip.created_at || 0).getTime();
-                return tripStart >= start;
-            });
-        }
-
-        if (filters.endDate) {
-            const end = new Date(filters.endDate).getTime();
-            results = results.filter((trip) => {
-                const tripEnd = new Date(trip.end_date || trip.start_date || trip.created_at || 0).getTime();
-                return tripEnd <= end;
-            });
-        }
+        const results = [...searchedTrips];
 
         const distanceAccessor = (trip) => Number(trip.distance_km) || 0;
         const elevationAccessor = (trip) =>
@@ -862,21 +861,22 @@ const TripsPage = () => {
         });
 
         return results;
-    }, [filters, searchQuery, sortOption, trips]);
+    }, [searchedTrips, sortOption]);
 
     const handleBulkDelete = async () => {
-        if (selectedTripIds.length === 0) return;
+        if (selection.selectedCount === 0) return;
         const confirmed = window.confirm(
-            `Delete ${selectedTripIds.length} trip(s)? This cannot be undone.`
+            `Delete ${selection.selectedCount} trip(s)? This cannot be undone.`
         );
         if (!confirmed) return;
 
         setBusyMessage('Deleting trips…');
         try {
-            await Promise.all(selectedTripIds.map((id) => deleteTrip(id)));
-            setTrips((prev) => prev.filter((trip) => !selectedTripIds.includes(trip.id)));
-            setSelectedTripIds([]);
-            setSelectMode(false);
+            const idsToDelete = [...selection.selectedIds];
+            await Promise.all(idsToDelete.map((id) => deleteTrip(id)));
+            setTrips((prev) => prev.filter((trip) => !idsToDelete.includes(trip.id)));
+            selection.clearSelection();
+            selection.toggleSelectMode();
         } catch (error) {
             console.error('Failed to delete trips', error);
         } finally {
@@ -891,7 +891,7 @@ const TripsPage = () => {
         try {
             await deleteTrip(tripId);
             setTrips((prev) => prev.filter((t) => t.id !== tripId));
-            setSelectedTripIds((prev) => prev.filter((id) => id !== tripId));
+            selection.deselectItem(tripId);
         } catch (error) {
             console.error('Failed to delete trip', error);
             alert('Failed to delete trip. Please try again.');
@@ -954,8 +954,8 @@ const TripsPage = () => {
                 onFilterChange={handleFilterChange}
                 onNewTrip={() => setIsModalOpen(true)}
                 onImport={handleImport}
-                selectMode={selectMode}
-                onToggleSelectMode={toggleSelectMode}
+                selectMode={selection.selectMode}
+                onToggleSelectMode={selection.toggleSelectMode}
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
                 readOnly={readOnly}
@@ -964,9 +964,23 @@ const TripsPage = () => {
             {busyMessage && <div className="inline-status">{busyMessage}</div>}
 
             {loading ? (
-                <div className="loading">Loading trips…</div>
+                <LoadingState message="Loading trips…" />
             ) : filteredTrips.length === 0 ? (
-                <EmptyStateCard onCreate={() => setIsModalOpen(true)} onImport={handleImport} readOnly={readOnly} />
+                <EmptyState
+                    icon="🥾"
+                    title="You don't have any trips yet"
+                    description="Create a trip, upload your GPX track and photos to start your hiking journal."
+                    action={!readOnly && (
+                        <div className="empty-actions">
+                            <button type="button" className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+                                + Create your first trip
+                            </button>
+                            <button type="button" className="btn btn-ghost" onClick={handleImport}>
+                                Import GPX history
+                            </button>
+                        </div>
+                    )}
+                />
             ) : (
                 <div
                     className={`trips-grid ${
@@ -978,9 +992,9 @@ const TripsPage = () => {
                             key={trip.id}
                             trip={trip}
                             viewMode={viewMode}
-                            selectMode={selectMode}
-                            selected={selectedTripIds.includes(trip.id)}
-                            onSelectToggle={handleSelectToggle}
+                            selectMode={selection.selectMode}
+                            selected={selection.isSelected(trip.id)}
+                            onSelectToggle={selection.toggleItem}
                             onOpenCover={setCoverModalTrip}
                             onDelete={handleDeleteTrip}
                             readOnly={readOnly}
@@ -994,14 +1008,14 @@ const TripsPage = () => {
 
             {!readOnly && (
                 <BulkActionBar
-                    selectedCount={selectedTripIds.length}
+                    selectedCount={selection.selectedCount}
                     onArchive={handleBulkArchive}
                     onDelete={handleBulkDelete}
                     onExport={handleBulkExport}
                     onMerge={handleMerge}
                     onExitSelect={() => {
-                        setSelectMode(false);
-                        setSelectedTripIds([]);
+                        selection.clearSelection();
+                        selection.toggleSelectMode();
                     }}
                 />
             )}

@@ -1,3 +1,10 @@
+/**
+ * TripDetailPage - Main viewing page for a trip.
+ * 
+ * Migrated to use unified components (Phase 4.4):
+ * - LoadingState for loading spinner
+ * - Unified button classes
+ */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -7,6 +14,7 @@ import TimelinePanel from '../panels/TimelinePanel';
 import TripStatsHUD from '../panels/TripStatsHUD';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
 import CloneToPlanModal from '../common/CloneToPlanModal';
+import { LoadingState } from '../common/LoadingState';
 import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, getImageVariantUrl, normalizeImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile, updateWaypointNote } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
@@ -848,7 +856,7 @@ const TripDetailPage = () => {
     };
 
     if (loading) {
-        return <div className="loading">Loading trip details...</div>;
+        return <LoadingState message="Loading trip details..." size="lg" />;
     }
 
     if (!trip) {
@@ -881,7 +889,7 @@ const TripDetailPage = () => {
                     </select>
                     <button
                         type="button"
-                        className="ghost-button"
+                        className="btn btn-ghost"
                         onClick={() => setShowCloneToPlanModal(true)}
                         title="Clone this trip to create a new plan"
                     >
@@ -890,7 +898,7 @@ const TripDetailPage = () => {
                     {canManageTrip && (
                         <button
                             type="button"
-                            className="ghost-button danger-button"
+                            className="btn btn-danger"
                             onClick={handleDeleteTrip}
                         >
                             Delete Trip

@@ -283,10 +283,10 @@ const CreateTripModal = ({ isOpen, onClose, onTripCreated }) => {
                     {error && <div className="error-message">{error}</div>}
 
                     <div className="modal-actions">
-                        <button type="button" className="cancel-button" onClick={onClose} disabled={loading}>
+                        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
                             Cancel
                         </button>
-                        <button type="submit" className="submit-button" disabled={loading}>
+                        <button type="submit" className="btn btn-primary" disabled={loading}>
                             {loading ? 'Creating...' : 'Create Trip'}
                         </button>
                     </div>

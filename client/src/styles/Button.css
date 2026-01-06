@@ -1,8 +1,238 @@
+/**
+ * Unified Button System
+ * Reference: UNIFY_THEME_AND_PAGE_DETAIL_DESIGN_DOCUMENT.md Section 5.2
+ * 
+ * All buttons use semantic tokens - theme is context-aware via CSS variables.
+ * Buttons automatically adapt to Trip (green) or Plan (blue) theme based on
+ * the data-theme attribute set by ThemeProvider.
+ */
+
+/* ═══════════════════════════════════════════════════════════
+   BASE BUTTON RESET
+   ═══════════════════════════════════════════════════════════ */
+
 .btn {
-  background: #4f90ff;
-  color: #000;
-  padding: 8px;
-  border: none;
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  border: 1px solid transparent;
+  text-decoration: none;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PRIMARY BUTTON
+   Theme-aware: Green in Trip context, Blue in Plan context
+   ═══════════════════════════════════════════════════════════ */
+
+.btn-primary {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SECONDARY BUTTON
+   ═══════════════════════════════════════════════════════════ */
+
+.btn-secondary {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+  border-color: var(--btn-secondary-border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--btn-secondary-bg-hover);
+}
+
+.btn-secondary.active {
+  background: var(--color-brand-light);
+  border-color: var(--color-brand);
+  color: var(--color-brand);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DANGER BUTTON
+   ═══════════════════════════════════════════════════════════ */
+
+.btn-danger {
+  background: var(--btn-danger-bg);
+  color: var(--btn-danger-text);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--btn-danger-bg-hover);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GHOST BUTTON (Outline variant)
+   ═══════════════════════════════════════════════════════════ */
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+}
+
+.btn-ghost.danger {
+  color: var(--color-danger-500);
+  border-color: var(--color-danger-500);
+}
+
+.btn-ghost.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LINK BUTTON
+   ═══════════════════════════════════════════════════════════ */
+
+.btn-link {
+  background: transparent;
+  border: none;
+  color: var(--color-brand);
+  padding: 0;
+  box-shadow: none;
+}
+
+.btn-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SIZE VARIANTS
+   ═══════════════════════════════════════════════════════════ */
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.btn-lg {
+  padding: 14px 24px;
+  font-size: 16px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ICON BUTTON
+   ═══════════════════════════════════════════════════════════ */
+
+.btn-icon {
+  padding: 10px;
+  width: 40px;
+  height: 40px;
+}
+
+.btn-icon.btn-sm {
+  padding: 6px;
+  width: 32px;
+  height: 32px;
+}
+
+.btn-icon.btn-lg {
+  padding: 14px;
+  width: 48px;
+  height: 48px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DEPRECATED ALIASES - For backward compatibility
+   TODO: Remove after migration complete (Phase 4.5)
+   ═══════════════════════════════════════════════════════════ */
+
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  border: 1px solid transparent;
+  text-decoration: none;
+  font-family: inherit;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.primary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  text-decoration: none;
+  font-family: inherit;
+  background: transparent;
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+.ghost-button:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+}
+
+.ghost-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ghost-button.danger {
+  color: var(--color-danger-500);
+  border-color: var(--color-danger-500);
+}
+
+.ghost-button.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.1);
 }

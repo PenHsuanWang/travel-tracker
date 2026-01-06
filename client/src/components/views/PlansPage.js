@@ -4,8 +4,13 @@
  * 
  * This component follows the same patterns as TripsPage but for the Plan entity.
  * Plans are mutable and represent trips that are being planned.
+ * 
+ * Migrated to use unified components (Phase 4.1):
+ * - PageToolbar, SearchField, FilterControl for toolbar
+ * - LoadingState, EmptyState for states
+ * - useListSelection, useSearchFilter hooks
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -17,6 +22,13 @@ import {
 import CreatePlanModal from '../common/CreatePlanModal';
 import ImportGpxModal from '../common/ImportGpxModal';
 import PlanCard from '../common/PlanCard';
+import { PageToolbar } from '../common/PageToolbar';
+import { SearchField } from '../common/SearchField';
+import { FilterControl } from '../common/FilterControl';
+import { LoadingState } from '../common/LoadingState';
+import { EmptyState } from '../common/EmptyState';
+import { useListSelection } from '../../hooks/useListSelection';
+import { useSearchFilter } from '../../hooks/useSearchFilter';
 import './PlansPage.css';
 
 const SORT_OPTIONS = [
@@ -38,17 +50,35 @@ const PlansPage = () => {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  // State
+  // Core state
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportGpxModal, setShowImportGpxModal] = useState(false);
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Use unified selection hook
+  const selection = useListSelection({ items: plans });
+
+  // Custom filter function for status and sort
+  const customFilter = useCallback((item, filters) => {
+    return true; // Status filter handled by API
+  }, []);
+
+  // Use unified search/filter hook
+  const {
+    searchQuery,
+    setSearchQuery,
+    debouncedQuery,
+    filteredItems: searchedPlans,
+  } = useSearchFilter({
+    items: plans,
+    searchFields: ['name', 'description', 'region'],
+    debounceMs: 300,
+    customFilter,
+  });
 
   // Fetch plans
   const fetchPlans = useCallback(async () => {
@@ -78,20 +108,9 @@ const PlansPage = () => {
     fetchPlans();
   }, [fetchPlans]);
 
-  // Filter and sort plans
-  const filteredPlans = React.useMemo(() => {
-    let result = [...plans];
-
-    // Search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (plan) =>
-          (plan.name && plan.name.toLowerCase().includes(query)) ||
-          (plan.description && plan.description.toLowerCase().includes(query)) ||
-          (plan.region && plan.region.toLowerCase().includes(query))
-      );
-    }
+  // Sort filtered plans
+  const filteredPlans = useMemo(() => {
+    const result = [...searchedPlans];
 
     // Sort
     result.sort((a, b) => {
@@ -114,49 +133,31 @@ const PlansPage = () => {
     });
 
     return result;
-  }, [plans, searchQuery, sortBy]);
+  }, [searchedPlans, sortBy]);
 
-  // Selection handlers
-  const handleSelectToggle = (planId) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(planId)) {
-        next.delete(planId);
-      } else {
-        next.add(planId);
-      }
-      return next;
-    });
-  };
 
-  const handleSelectAll = () => {
-    if (selectedIds.size === filteredPlans.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredPlans.map((p) => p.id)));
-    }
-  };
-
+  // Bulk delete handler using selection hook
   const handleDeleteSelected = async () => {
-    if (selectedIds.size === 0) return;
+    if (selection.selectedCount === 0) return;
 
     const confirmMsg =
-      selectedIds.size === 1
+      selection.selectedCount === 1
         ? 'Delete this plan?'
-        : `Delete ${selectedIds.size} plans?`;
+        : `Delete ${selection.selectedCount} plans?`;
 
     if (!window.confirm(confirmMsg)) return;
 
     try {
-      await Promise.all([...selectedIds].map((id) => deletePlan(id)));
-      setSelectedIds(new Set());
-      setSelectMode(false);
+      await Promise.all([...selection.selectedIds].map((id) => deletePlan(id)));
+      selection.clearSelection();
+      selection.toggleSelectMode();
       fetchPlans();
     } catch (err) {
       console.error('Failed to delete plans:', err);
       setError('Failed to delete plans. Please try again.');
     }
   };
+
 
   const handleDeletePlan = async (planId) => {
     if (!window.confirm('Delete this plan?')) return;
@@ -175,44 +176,47 @@ const PlansPage = () => {
     navigate(`/plans/${newPlan.id}`);
   };
 
-  // Render
+  // Render - Not authenticated
   if (!isAuthenticated) {
     return (
       <div className="plans-page">
-        <div className="plans-empty-state">
-          <h2>Plan Your Adventures</h2>
-          <p>Sign in to start creating trip plans.</p>
-          <Link to="/login" className="btn-primary">
-            Sign In
-          </Link>
-        </div>
+        <EmptyState
+          icon="🗺️"
+          title="Plan Your Adventures"
+          description="Sign in to start creating trip plans."
+          action={
+            <Link to="/login" className="btn btn-primary">
+              Sign In
+            </Link>
+          }
+        />
       </div>
     );
   }
 
   return (
     <div className="plans-page">
-      {/* Toolbar */}
-      <div className="plans-toolbar">
-        <div className="toolbar-row primary">
-          <div className="toolbar-title">
-            <h1>Trip Plans</h1>
-            <p>Create and manage your upcoming adventures</p>
-          </div>
-          <div className="toolbar-actions">
+      {/* Unified Toolbar using PageToolbar compound component */}
+      <PageToolbar>
+        <PageToolbar.Left>
+          <PageToolbar.Title
+            title="Trip Plans"
+            subtitle="Create and manage your upcoming adventures"
+          />
+        </PageToolbar.Left>
+
+        <PageToolbar.Right>
+          <PageToolbar.Actions>
             <button
               type="button"
-              className={`btn-secondary ${selectMode ? 'active' : ''}`}
-              onClick={() => {
-                setSelectMode(!selectMode);
-                setSelectedIds(new Set());
-              }}
+              className={`btn btn-secondary ${selection.selectMode ? 'active' : ''}`}
+              onClick={selection.toggleSelectMode}
             >
-              {selectMode ? 'Cancel' : 'Select'}
+              {selection.selectMode ? 'Cancel' : 'Select'}
             </button>
             <button
               type="button"
-              className="btn-secondary"
+              className="btn btn-secondary"
               onClick={() => setShowImportGpxModal(true)}
               title="Import GPX file to create a plan"
             >
@@ -220,112 +224,99 @@ const PlansPage = () => {
             </button>
             <button
               type="button"
-              className="btn-primary"
+              className="btn btn-primary"
               onClick={() => setShowCreateModal(true)}
             >
               + New Plan
             </button>
-          </div>
-        </div>
+          </PageToolbar.Actions>
+        </PageToolbar.Right>
 
-        <div className="toolbar-row controls">
-          <div className="search-field">
-            <span className="search-icon">🔍</span>
-            <input
-              type="text"
-              placeholder="Search plans..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+        <PageToolbar.SecondaryRow>
+          <SearchField
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search plans..."
+          />
 
-          <div className="control">
-            <label>Status</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+          <FilterControl
+            type="dropdown"
+            label="Status"
+            value={statusFilter}
+            options={STATUS_FILTER_OPTIONS}
+            onChange={setStatusFilter}
+          />
+
+          <FilterControl
+            type="dropdown"
+            label="Sort by"
+            value={sortBy}
+            options={SORT_OPTIONS}
+            onChange={setSortBy}
+          />
+        </PageToolbar.SecondaryRow>
+
+        {/* Bulk actions bar when items selected */}
+        {selection.selectMode && selection.selectedCount > 0 && (
+          <PageToolbar.SecondaryRow className="bulk-actions">
+            <button
+              type="button"
+              className="btn btn-link"
+              onClick={() => selection.selectAll(filteredPlans)}
             >
-              {STATUS_FILTER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="control">
-            <label>Sort by</label>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-              {SORT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {selectMode && selectedIds.size > 0 && (
-          <div className="toolbar-row bulk-actions">
-            <button type="button" className="btn-link" onClick={handleSelectAll}>
-              {selectedIds.size === filteredPlans.length
-                ? 'Deselect all'
-                : 'Select all'}
+              {selection.allSelected ? 'Deselect all' : 'Select all'}
             </button>
             <span className="selection-count">
-              {selectedIds.size} selected
+              {selection.selectedCount} selected
             </span>
             <button
               type="button"
-              className="btn-danger"
+              className="btn btn-danger"
               onClick={handleDeleteSelected}
             >
               Delete selected
             </button>
-          </div>
+          </PageToolbar.SecondaryRow>
         )}
-      </div>
+      </PageToolbar>
 
       {/* Error message */}
       {error && (
         <div className="plans-error">
           <p>{error}</p>
-          <button type="button" onClick={fetchPlans}>
+          <button type="button" className="btn btn-secondary" onClick={fetchPlans}>
             Retry
           </button>
         </div>
       )}
 
-      {/* Loading state */}
-      {loading && (
-        <div className="plans-loading">
-          <div className="spinner" />
-          <p>Loading plans...</p>
-        </div>
-      )}
+      {/* Loading state - using unified component */}
+      {loading && <LoadingState message="Loading plans..." />}
 
-      {/* Empty state */}
+      {/* Empty state - using unified component */}
       {!loading && !error && filteredPlans.length === 0 && (
-        <div className="plans-empty-state">
-          {searchQuery || statusFilter !== 'all' ? (
-            <>
-              <h2>No matching plans</h2>
-              <p>Try adjusting your filters or search query.</p>
-            </>
-          ) : (
-            <>
-              <h2>No plans yet</h2>
-              <p>Start planning your next adventure!</p>
+        searchQuery || statusFilter !== 'all' ? (
+          <EmptyState
+            icon="🔍"
+            title="No matching plans"
+            description="Try adjusting your filters or search query."
+          />
+        ) : (
+          <EmptyState
+            icon="📋"
+            title="No plans yet"
+            description="Start planning your next adventure!"
+            action={
               <button
                 type="button"
-                className="btn-primary"
+                className="btn btn-primary"
                 onClick={() => setShowCreateModal(true)}
               >
                 Create Your First Plan
               </button>
-            </>
-          )}
-        </div>
+            }
+          />
+        )
       )}
 
       {/* Plans grid */}
@@ -335,9 +326,9 @@ const PlansPage = () => {
             <PlanCard
               key={plan.id}
               plan={plan}
-              selectMode={selectMode}
-              selected={selectedIds.has(plan.id)}
-              onSelectToggle={handleSelectToggle}
+              selectMode={selection.selectMode}
+              selected={selection.isSelected(plan.id)}
+              onSelectToggle={selection.toggleItem}
               onDelete={handleDeletePlan}
               currentUserId={user?.id}
             />
