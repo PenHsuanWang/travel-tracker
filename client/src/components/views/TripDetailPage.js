@@ -865,47 +865,48 @@ const TripDetailPage = () => {
 
     return (
         <div className="TripDetailPage">
-            <div className="trip-detail-header">
-                <div className="trip-detail-header__left">
-                    <Link to="/trips" className="back-to-trips">← Back to My Trips</Link>
-                    <div>
-                        <p className="trip-detail-label">Currently viewing</p>
-                        <h1 className="trip-detail-title">{trip.name}</h1>
+            <header className="plan-canvas-header">
+                <div className="plan-header-left">
+                    <Link to="/trips" className="back-link">← Back to My Trips</Link>
+                    <div className="plan-title-block">
+                        <h1 className="plan-title">{trip.name}</h1>
                     </div>
                 </div>
-                <div className="trip-detail-header__right">
-                    <label htmlFor="trip-selector">Quick switch</label>
-                    <select
-                        id="trip-selector"
-                        className="trip-selector"
-                        value={tripId}
-                        onChange={handleTripChange}
-                    >
-                        {(allTrips.length ? allTrips : [trip]).map((listTrip) => (
-                            <option key={listTrip.id} value={listTrip.id}>
-                                {listTrip.name}
-                            </option>
-                        ))}
-                    </select>
+                <div className="plan-header-right header-actions">
+                    <div className="header-selector-wrapper">
+                        <select
+                            className="header-select"
+                            aria-label="Switch trip"
+                            value={tripId}
+                            onChange={handleTripChange}
+                        >
+                            {(allTrips.length ? allTrips : [trip]).map((listTrip) => (
+                                <option key={listTrip.id} value={listTrip.id}>
+                                    {listTrip.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                     <button
                         type="button"
-                        className="btn btn-ghost"
+                        className="header-btn"
                         onClick={() => setShowCloneToPlanModal(true)}
                         title="Clone this trip to create a new plan"
                     >
-                        📋 Clone to Plan
+                        📋 Clone
                     </button>
                     {canManageTrip && (
                         <button
                             type="button"
-                            className="btn btn-danger"
+                            className="header-btn btn-delete"
                             onClick={handleDeleteTrip}
+                            title="Delete Trip"
                         >
-                            Delete Trip
+                            Delete
                         </button>
                     )}
                 </div>
-            </div>
+            </header>
             <div className="MainBlock">
                 <TripSidebar
                     tripId={tripId}

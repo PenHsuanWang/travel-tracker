@@ -8,7 +8,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { PLAN_STATUS_LABELS } from '../../services/planService';
-import { Card, CardHeader, CardBody, CardFooter, CardTitle, CardMeta } from './Card/Card';
+import { Card, CardBody, CardFooter, CardTitle, CardCover } from './Card/Card';
 import StatusBadge from './StatusBadge';
 import './PlanCard.css';
 
@@ -79,54 +79,42 @@ const PlanCard = ({
         </label>
       )}
 
-      {/* Header */}
-      <CardHeader>
-        <div className="plan-icon">📋</div>
-        <StatusBadge status={plan.status} label={PLAN_STATUS_LABELS[plan.status]} />
-      </CardHeader>
+      {/* Cover Area (Placeholder 16:9) */}
+      <CardCover className="cover-area" aspectRatio="16/9">
+        <div className="cover-placeholder" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+          <div className="placeholder-icon">📋</div>
+        </div>
+
+        <div className="cover-overlay">
+          <div className="cover-actions" style={{ justifyContent: 'flex-end' }}>
+            <StatusBadge status={plan.status} label={PLAN_STATUS_LABELS[plan.status]} />
+          </div>
+        </div>
+      </CardCover>
 
       {/* Content */}
       <CardBody>
-        <Link
-          to={`/plans/${plan.id}`}
-          className="plan-name-link"
-          style={{ textDecoration: 'none', color: 'inherit' }}
-          onClick={(e) => selectMode && e.preventDefault()}
-        >
-          <CardTitle>{plan.name || 'Untitled Plan'}</CardTitle>
-        </Link>
-
-        {plan.description && (
-          <p className="plan-description">{plan.description}</p>
-        )}
-
-        <CardMeta>
-          {plan.region && (
-            <div className="plan-meta-item">
-              <span className="region-icon">📍</span>
-              {plan.region}
-            </div>
-          )}
-          <div className="plan-meta-divider" />
-          <div className="plan-meta-item">
-            <span className="dates-icon">📅</span>
+        {/* Title Row: Title + Date */}
+        <div className="plan-title-row">
+          <CardTitle>
+            {!selectMode ? (
+              <Link
+                to={`/plans/${plan.id}`}
+                className="plan-name-link"
+                style={{ textDecoration: 'none', color: 'inherit' }}
+              >
+                {plan.name || 'Untitled Plan'}
+              </Link>
+            ) : (
+              plan.name || 'Untitled Plan'
+            )}
+          </CardTitle>
+          <div className="plan-date">
             {formatDateRange(plan.planned_start_date, plan.planned_end_date)}
-          </div>
-        </CardMeta>
-
-        {/* Stats */}
-        <div className="plan-stats">
-          <div className="stat">
-            <span className="stat-value">{featureCount}</span>
-            <span className="stat-label">{featureCount === 1 ? 'Feature' : 'Features'}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-value">{trackCount}</span>
-            <span className="stat-label">{trackCount === 1 ? 'Track' : 'Tracks'}</span>
           </div>
         </div>
 
-        {/* Owner info */}
+        {/* Owner Info */}
         {plan.owner && (
           <div className="plan-owner">
             <span className="owner-avatar">
@@ -140,6 +128,16 @@ const PlanCard = ({
             {isOwner && <span className="owner-badge">Owner</span>}
           </div>
         )}
+
+        {/* Stats / Meta Pills */}
+        <div className="plan-meta-row">
+          <span className="meta-pill">
+            📍 {featureCount} {featureCount === 1 ? 'Feature' : 'Features'}
+          </span>
+          <span className="meta-pill">
+            🧭 {trackCount} {trackCount === 1 ? 'Track' : 'Tracks'}
+          </span>
+        </div>
       </CardBody>
 
       {/* Actions */}
@@ -149,16 +147,20 @@ const PlanCard = ({
             <Link to={`/plans/${plan.id}`} className="btn btn-primary btn-sm">
               {canEdit ? 'Edit' : 'View'}
             </Link>
+            
+            <div style={{ flex: '1 1 0%' }}></div>
+
             {canEdit && (
               <button
                 type="button"
-                className="btn btn-danger btn-sm"
+                className="btn btn-ghost btn-sm danger"
+                title="Delete Plan"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(plan.id);
                 }}
               >
-                Delete
+                🗑
               </button>
             )}
           </div>

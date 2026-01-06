@@ -1,4 +1,4 @@
-/* client/src/styles/PlanCanvas.css */
+@import './WorkspaceHeader.css';
 
 .plan-canvas {
   display: flex;
@@ -50,40 +50,7 @@
   max-width: 400px;
 }
 
-/* Header */
-.plan-canvas-header {
-  display: grid;
-  grid-template-columns: 220px 1fr 260px; /* left | center | right */
-  align-items: center;
-  padding: 1.25rem 2rem;
-  background: #ffffff;
-  border-bottom: 1px solid #e2e8f0;
-  gap: 1.5rem;
-}
-
-.plan-header-left {
-  display: flex;
-  gap: 1.25rem;
-  align-items: center;
-  min-width: 0;
-}
-
-.back-link {
-  color: #2563eb;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 1rem;
-  white-space: nowrap;
-}
-
-.back-link:hover {
-  text-decoration: underline;
-}
-
-.plan-title-block {
-  display: flex;
-  flex-direction: column;
-}
+/* Header Specifics */
 
 .plan-mode-label {
   margin: 0;
@@ -93,20 +60,7 @@
   color: #6b7280;
 }
 
-.plan-title {
-  margin: 0;
-  font-size: 1.5rem;
-  color: #111827;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+/* Plan Title Overrides/Specifics */
 .plan-title .edit-hint {
   opacity: 0;
   font-size: 14px;
@@ -151,39 +105,11 @@
   background: #e5e7eb;
 }
 
-/* Header Right */
-.plan-header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  justify-content: flex-end;
-  flex-shrink: 0;
-}
-
 .header-center-controls {
   display: flex;
   justify-content: center;
   gap: 8px;
 }
-
-.header-btn {
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.header-btn:hover { background: #e5e7eb; }
-
-.btn-delete {
-  background: #fff1f2;
-  color: #b91c1c;
-  border-color: #fca5a5;
-}
-
-.btn-delete:hover { background: #ffe4e6; }
 
 .status-badge {
   font-size: 11px;
@@ -231,21 +157,6 @@
 
 .btn-toggle-itinerary:hover {
   background: #e5e7eb;
-}
-
-.btn-delete {
-  color: #b91c1c;
-  border: 1px solid #fca5a5;
-  background: #fff1f2;
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-delete:hover {
-  background: #ffe4e6;
 }
 
 /* Content - Phase 2: Three-Column CSS Grid Layout */
