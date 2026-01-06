@@ -27,6 +27,7 @@ import { LoadingState } from '../common/LoadingState';
 import { EmptyState } from '../common/EmptyState';
 import { useListSelection } from '../../hooks/useListSelection';
 import { useSearchFilter } from '../../hooks/useSearchFilter';
+import TripCard from '../common/TripCard';
 import './TripsPage.css';
 
 const SORT_OPTIONS = [
@@ -45,395 +46,11 @@ const defaultFilters = {
     endDate: '',
 };
 
-const formatDate = (value) => {
-    if (!value) return '';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleDateString();
-};
-
-const formatDateRange = (start, end) => {
-    const startText = formatDate(start);
-    const endText = formatDate(end);
-    if (startText && endText) return `${startText} – ${endText}`;
-    return startText || endText || '—';
-};
-
 const normalizeDifficulty = (value) => {
     if (!value) return null;
     const lower = String(value).toLowerCase();
     if (['easy', 'moderate', 'moderate+', 'hard'].includes(lower)) return lower;
     return lower;
-};
-
-const TripCard = ({
-    trip,
-    viewMode,
-    selectMode,
-    selected,
-    onSelectToggle,
-    onOpenCover,
-    onDelete,
-    readOnly,
-    isPinned,
-    onTogglePin,
-    currentUserId,
-}) => {
-    const owner = trip.owner;
-    const isOwner = currentUserId && (trip.owner_id === currentUserId || (owner && owner.id === currentUserId));
-    const canEdit = !readOnly && isOwner;
-    const canPin = !readOnly;
-
-    const coverUrl =
-        trip.cover_image_url ||
-        (trip.cover_photo_id ? getImageVariantUrl(trip.cover_photo_id, 'preview') : null);
-    const hasCover = Boolean(coverUrl);
-    const distanceLabel = trip.distance_km ? `${trip.distance_km} km` : '—';
-    const difficulty = normalizeDifficulty(trip.difficulty);
-    const difficultyLabel = difficulty
-        ? difficulty.charAt(0).toUpperCase() + difficulty.slice(1)
-        : 'Not set';
-    const gpxLabel = trip.has_gpx ? '✓' : '–';
-    const photosLabel =
-        typeof trip.photo_count === 'number' ? trip.photo_count : '—';
-
-    const handleCardClick = () => {
-        if (selectMode) {
-            onSelectToggle(trip.id);
-        }
-    };
-
-    return (
-        <article
-            className={`trip-card ${viewMode === 'list' ? 'list-view' : ''} ${
-                selected ? 'is-selected' : ''
-            }`}
-            onClick={handleCardClick}
-            tabIndex={0}
-            role="group"
-            aria-label={`Trip ${trip.name || trip.title || 'Untitled trip'}`}
-        >
-            {selectMode && (
-                <label
-                    className="trip-checkbox"
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => onSelectToggle(trip.id)}
-                        aria-label={`Select ${trip.name || trip.title || ''}`}
-                    />
-                    <span className="checkbox-visual" aria-hidden />
-                </label>
-            )}
-
-            <div className="cover-area">
-                {hasCover ? (
-                    <img
-                        src={coverUrl}
-                        alt={`${trip.name || 'Trip'} cover`}
-                        className="cover-image"
-                    />
-                ) : (
-                    <div className="cover-placeholder">
-                        <div className="placeholder-icon">⛰</div>
-                        <div className="placeholder-text">Add cover image</div>
-                    </div>
-                )}
-
-                {!readOnly && (
-                    <div className="cover-overlay">
-                        {trip.cover_type && (
-                            <span className="cover-pill">
-                                {trip.cover_type === 'custom' ? 'Custom cover' : 'Auto cover'}
-                            </span>
-                        )}
-                        <div className="cover-actions">
-                            {canEdit && (
-                                <button
-                                    type="button"
-                                    className="ghost-button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onOpenCover(trip);
-                                    }}
-                                >
-                                    {hasCover ? 'Change cover' : 'Add cover image'}
-                                </button>
-                            )}
-                            {canEdit && hasCover && (
-                                <button
-                                    type="button"
-                                    className="ghost-button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onOpenCover(trip);
-                                    }}
-                                >
-                                    Choose from photos
-                                </button>
-                            )}
-                            {canPin && (
-                                <button
-                                    type="button"
-                                    className={`ghost-button ghost-icon ${isPinned ? 'pinned' : ''}`}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onTogglePin(trip.id);
-                                    }}
-                                    title={isPinned ? "Unpin from profile" : "Pin to profile"}
-                                >
-                                    {isPinned ? '★' : '☆'}
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            <div className="trip-body">
-                <div className="trip-title-row">
-                    <div className="trip-title">
-                        {trip.name || trip.title || 'Untitled trip'}
-                    </div>
-                    {owner && (
-                        <div className="trip-owner">
-                            <img 
-                                src={owner.avatar_url ? (owner.avatar_url.startsWith('http') ? owner.avatar_url : getImageUrl(owner.avatar_url)) : '/default-avatar.svg'} 
-                                alt={owner.username} 
-                                className="owner-avatar-small" 
-                                title={`Owner: ${owner.username}`}
-                            />
-                            <span className="owner-name">{owner.username}</span>
-                        </div>
-                    )}
-                    <div className="trip-date">
-                        {formatDateRange(trip.start_date, trip.end_date)}
-                    </div>
-                </div>
-
-                <div className="trip-meta-row">
-                    <span className="meta-pill">
-                        📍 {trip.region || trip.location_name || 'Not set'}
-                    </span>
-                    <span className="meta-pill">
-                        ⛰ {difficultyLabel}
-                    </span>
-                    <span className="meta-pill">🚶 {distanceLabel}</span>
-                </div>
-
-                <div className="trip-status-row">
-                    <span className="status">
-                        🛰 GPX: <strong>{gpxLabel}</strong>
-                    </span>
-                    <span className="status">
-                        📷 Photos: <strong>{photosLabel}</strong>
-                    </span>
-                </div>
-
-                <div className="trip-actions">
-                    <Link
-                        to={`/trips/${trip.id}`}
-                        className="primary-link"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        View Trip
-                    </Link>
-                    <Link
-                        to={`/trips/${trip.id}`}
-                        state={{ focus: 'map' }}
-                        className="ghost-button"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        Open Map
-                    </Link>
-                    {canEdit && (
-                        <button
-                            type="button"
-                            className="ghost-button danger"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onDelete?.(trip.id);
-                            }}
-                        >
-                            Delete
-                        </button>
-                    )}
-                    {canEdit && (
-                        <button
-                            type="button"
-                            className="ghost-button ghost-icon"
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label="More trip actions"
-                        >
-                            ⋯
-                        </button>
-                    )}
-                </div>
-            </div>
-        </article>
-    );
-};
-
-const TripsToolbar = ({
-    searchQuery,
-    onSearchChange,
-    sortOption,
-    onSortChange,
-    filters,
-    onFilterChange,
-    onNewTrip,
-    onImport,
-    selectMode,
-    onToggleSelectMode,
-    viewMode,
-    onViewModeChange,
-    readOnly,
-}) => {
-    return (
-        <div className="trips-toolbar">
-            <div className="toolbar-row primary">
-                <div className="toolbar-title">
-                    <h1>My Trips</h1>
-                    <p>Manage your hiking journal, covers, and bulk actions in one place.</p>
-                </div>
-                <div className="toolbar-actions">
-                    {!readOnly && (
-                        <>
-                            <button type="button" className="ghost-button" onClick={onImport}>
-                                ⬇ Import
-                            </button>
-                            <button
-                                type="button"
-                                className="primary-button"
-                                onClick={onNewTrip}
-                            >
-                                + New Trip
-                            </button>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            <div className="toolbar-row controls">
-                <div className="search-field">
-                    <span aria-hidden className="search-icon">🔍</span>
-                    <input
-                        value={searchQuery}
-                        onChange={(e) => onSearchChange(e.target.value)}
-                        placeholder="Search trips by name, location or notes…"
-                        aria-label="Search trips"
-                    />
-                </div>
-
-                <label className="control">
-                    <span>Sort</span>
-                    <select
-                        value={sortOption}
-                        onChange={(e) => onSortChange(e.target.value)}
-                        aria-label="Sort trips"
-                    >
-                        {SORT_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-
-                <label className="control">
-                    <span>Difficulty</span>
-                    <select
-                        value={filters.difficulty}
-                        onChange={(e) => onFilterChange({ difficulty: e.target.value })}
-                        aria-label="Filter by difficulty"
-                    >
-                        <option value="all">All</option>
-                        <option value="easy">Easy</option>
-                        <option value="moderate">Moderate</option>
-                        <option value="hard">Hard</option>
-                    </select>
-                </label>
-
-                <label className="control">
-                    <span>GPX</span>
-                    <select
-                        value={filters.hasGpx}
-                        onChange={(e) => onFilterChange({ hasGpx: e.target.value })}
-                        aria-label="Filter by GPX"
-                    >
-                        <option value="all">All</option>
-                        <option value="with">Has GPX</option>
-                        <option value="without">No GPX</option>
-                    </select>
-                </label>
-
-                <label className="control">
-                    <span>Photos</span>
-                    <select
-                        value={filters.hasPhotos}
-                        onChange={(e) => onFilterChange({ hasPhotos: e.target.value })}
-                        aria-label="Filter by photos"
-                    >
-                        <option value="all">All</option>
-                        <option value="with">Has photos</option>
-                        <option value="without">No photos</option>
-                    </select>
-                </label>
-
-                <label className="control">
-                    <span>From</span>
-                    <input
-                        type="date"
-                        value={filters.startDate}
-                        onChange={(e) => onFilterChange({ startDate: e.target.value })}
-                        aria-label="Filter start date from"
-                    />
-                </label>
-
-                <label className="control">
-                    <span>To</span>
-                    <input
-                        type="date"
-                        value={filters.endDate}
-                        onChange={(e) => onFilterChange({ endDate: e.target.value })}
-                        aria-label="Filter end date to"
-                    />
-                </label>
-
-                {!readOnly && (
-                    <button
-                        type="button"
-                        className={`toggle-button ${selectMode ? 'active' : ''}`}
-                        onClick={onToggleSelectMode}
-                        aria-pressed={selectMode}
-                    >
-                        ▢ Select
-                    </button>
-                )}
-
-                <div className="view-toggle" role="group" aria-label="Toggle view mode">
-                    <button
-                        type="button"
-                        className={`toggle-button ${viewMode === 'grid' ? 'active' : ''}`}
-                        onClick={() => onViewModeChange('grid')}
-                        aria-pressed={viewMode === 'grid'}
-                    >
-                        ☷ Grid
-                    </button>
-                    <button
-                        type="button"
-                        className={`toggle-button ${viewMode === 'list' ? 'active' : ''}`}
-                        onClick={() => onViewModeChange('list')}
-                        aria-pressed={viewMode === 'list'}
-                    >
-                        ☰ List
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
 };
 
 const BulkActionBar = ({
@@ -452,47 +69,27 @@ const BulkActionBar = ({
                 ✓ {selectedCount} {selectedCount === 1 ? 'trip' : 'trips'} selected
             </div>
             <div className="bulk-actions">
-                <button type="button" className="ghost-button" onClick={onArchive}>
+                <button type="button" className="btn btn-ghost" onClick={onArchive}>
                     Archive
                 </button>
-                <button type="button" className="ghost-button danger" onClick={onDelete}>
+                <button type="button" className="btn btn-ghost danger" onClick={onDelete}>
                     Delete
                 </button>
-                <button type="button" className="ghost-button" onClick={onExport}>
+                <button type="button" className="btn btn-ghost" onClick={onExport}>
                     Export GPX
                 </button>
-                <button type="button" className="ghost-button" onClick={onMerge}>
+                <button type="button" className="btn btn-ghost" onClick={onMerge}>
                     Merge ▾
                 </button>
                 <button
                     type="button"
-                    className="ghost-button"
+                    className="btn btn-ghost"
                     onClick={onExitSelect}
                     aria-label="Exit select mode"
                 >
                     Esc
                 </button>
             </div>
-        </div>
-    );
-};
-
-const EmptyStateCard = ({ onCreate, onImport, readOnly }) => {
-    return (
-        <div className="empty-state">
-            <div className="empty-illustration">🥾</div>
-            <h2>You don’t have any trips yet</h2>
-            <p>Create a trip, upload your GPX track and photos to start your hiking journal.</p>
-            {!readOnly && (
-                <div className="empty-actions">
-                    <button type="button" className="primary-button" onClick={onCreate}>
-                        + Create your first trip
-                    </button>
-                    <button type="button" className="ghost-button" onClick={onImport}>
-                        Import GPX history
-                    </button>
-                </div>
-            )}
         </div>
     );
 };
@@ -945,21 +542,150 @@ const TripsPage = () => {
 
     return (
         <div className="trips-page">
-            <TripsToolbar
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                sortOption={sortOption}
-                onSortChange={setSortOption}
-                filters={filters}
-                onFilterChange={handleFilterChange}
-                onNewTrip={() => setIsModalOpen(true)}
-                onImport={handleImport}
-                selectMode={selection.selectMode}
-                onToggleSelectMode={selection.toggleSelectMode}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                readOnly={readOnly}
-            />
+            <PageToolbar>
+                <PageToolbar.Left>
+                    <PageToolbar.Title title="My Trips" subtitle="Manage your hiking journal, covers, and bulk actions in one place." />
+                </PageToolbar.Left>
+                <PageToolbar.Right>
+                    <PageToolbar.Actions>
+                        {!readOnly && (
+                            <>
+                                <button 
+                                    type="button" 
+                                    className={`btn btn-secondary ${selection.selectMode ? 'active' : ''}`}
+                                    onClick={selection.toggleSelectMode}
+                                >
+                                    {selection.selectMode ? 'Cancel' : 'Select'}
+                                </button>
+                                <button type="button" className="btn btn-secondary" onClick={handleImport}>
+                                    ⬇ Import
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={() => setIsModalOpen(true)}
+                                >
+                                    + New Trip
+                                </button>
+                            </>
+                        )}
+                    </PageToolbar.Actions>
+                </PageToolbar.Right>
+                <PageToolbar.SecondaryRow>
+                    <SearchField 
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                        placeholder="Search trips by name, location or notes…"
+                    />
+                    
+                    <FilterControl 
+                         type="dropdown"
+                         label="Sort"
+                         value={sortOption}
+                         options={SORT_OPTIONS}
+                         onChange={setSortOption}
+                    />
+                    
+                    <FilterControl 
+                        type="dropdown"
+                        label="Difficulty"
+                        value={filters.difficulty}
+                        options={[
+                            { value: 'all', label: 'All' },
+                            { value: 'easy', label: 'Easy' },
+                            { value: 'moderate', label: 'Moderate' },
+                            { value: 'hard', label: 'Hard' },
+                        ]}
+                        onChange={(val) => handleFilterChange({ difficulty: val })}
+                    />
+                    
+                     <FilterControl 
+                        type="dropdown"
+                        label="GPX"
+                        value={filters.hasGpx}
+                        options={[
+                            { value: 'all', label: 'All' },
+                            { value: 'with', label: 'Has GPX' },
+                            { value: 'without', label: 'No GPX' },
+                        ]}
+                        onChange={(val) => handleFilterChange({ hasGpx: val })}
+                    />
+                    
+                    <FilterControl 
+                        type="dropdown"
+                        label="Photos"
+                        value={filters.hasPhotos}
+                        options={[
+                            { value: 'all', label: 'All' },
+                            { value: 'with', label: 'Has photos' },
+                            { value: 'without', label: 'No photos' },
+                        ]}
+                        onChange={(val) => handleFilterChange({ hasPhotos: val })}
+                    />
+                    
+                    {/* Date filters would need a custom date range component or individual inputs, for now standard inputs */}
+                    <div className="filter-group">
+                        <input
+                            type="date"
+                            value={filters.startDate}
+                            onChange={(e) => handleFilterChange({ startDate: e.target.value })}
+                            className="form-input"
+                            aria-label="Filter start date from"
+                            style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--color-border)' }}
+                        />
+                         <input
+                            type="date"
+                            value={filters.endDate}
+                            onChange={(e) => handleFilterChange({ endDate: e.target.value })}
+                            className="form-input"
+                            aria-label="Filter end date to"
+                            style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--color-border)' }}
+                        />
+                    </div>
+
+                    <div className="view-toggle" role="group" aria-label="Toggle view mode" style={{ marginLeft: 'auto' }}>
+                        <button
+                            type="button"
+                            className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-ghost'}`}
+                            onClick={() => setViewMode('grid')}
+                            aria-pressed={viewMode === 'grid'}
+                        >
+                            ☷ Grid
+                        </button>
+                        <button
+                            type="button"
+                            className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-ghost'}`}
+                            onClick={() => setViewMode('list')}
+                            aria-pressed={viewMode === 'list'}
+                        >
+                            ☰ List
+                        </button>
+                    </div>
+                </PageToolbar.SecondaryRow>
+                
+                 {/* Bulk actions bar when items selected */}
+                {selection.selectMode && selection.selectedCount > 0 && (
+                  <PageToolbar.SecondaryRow className="bulk-actions">
+                    <button
+                      type="button"
+                      className="btn btn-link"
+                      onClick={() => selection.selectAll(filteredTrips)}
+                    >
+                      {selection.allSelected ? 'Deselect all' : 'Select all'}
+                    </button>
+                    <span className="selection-count">
+                      {selection.selectedCount} selected
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      onClick={handleBulkDelete}
+                    >
+                      Delete selected
+                    </button>
+                  </PageToolbar.SecondaryRow>
+                )}
+            </PageToolbar>
 
             {busyMessage && <div className="inline-status">{busyMessage}</div>}
 
@@ -1004,20 +730,6 @@ const TripsPage = () => {
                         />
                     ))}
                 </div>
-            )}
-
-            {!readOnly && (
-                <BulkActionBar
-                    selectedCount={selection.selectedCount}
-                    onArchive={handleBulkArchive}
-                    onDelete={handleBulkDelete}
-                    onExport={handleBulkExport}
-                    onMerge={handleMerge}
-                    onExitSelect={() => {
-                        selection.clearSelection();
-                        selection.toggleSelectMode();
-                    }}
-                />
             )}
 
             <CreateTripModal

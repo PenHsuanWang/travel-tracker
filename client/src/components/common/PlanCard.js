@@ -3,10 +3,13 @@
  * PlanCard - Displays a single plan in the plans grid.
  * 
  * Shows plan metadata, status badge, and action buttons.
+ * Uses the unified Card compound component.
  */
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { PLAN_STATUS_LABELS } from '../../services/planService';
+import { Card, CardHeader, CardBody, CardFooter, CardTitle, CardMeta } from './Card/Card';
+import StatusBadge from './StatusBadge';
 import './PlanCard.css';
 
 const formatDate = (value) => {
@@ -25,19 +28,6 @@ const formatDateRange = (start, end) => {
   const endText = formatDate(end);
   if (startText && endText) return `${startText} – ${endText}`;
   return startText || endText || '—';
-};
-
-const getStatusClass = (status) => {
-  switch (status) {
-    case 'draft':
-      return 'status-draft';
-    case 'active':
-      return 'status-active';
-    case 'archived':
-      return 'status-archived';
-    default:
-      return '';
-  }
 };
 
 const PlanCard = ({
@@ -67,10 +57,12 @@ const PlanCard = ({
   };
 
   return (
-    <article
-      className={`plan-card ${selected ? 'is-selected' : ''}`}
+    <Card
+      variant="plan"
+      className="plan-card"
+      selected={selected}
       onClick={handleCardClick}
-      tabIndex={0}
+      hoverable={true}
       role="group"
       aria-label={`Plan ${plan.name || 'Untitled plan'}`}
     >
@@ -83,43 +75,44 @@ const PlanCard = ({
             onChange={() => onSelectToggle(plan.id)}
             aria-label={`Select ${plan.name || ''}`}
           />
-          <span className="checkbox-visual" aria-hidden />
+          <span className="checkbox-visual" aria-hidden="true" />
         </label>
       )}
 
       {/* Header */}
-      <div className="plan-card-header">
+      <CardHeader>
         <div className="plan-icon">📋</div>
-        <span className={`plan-status-badge ${getStatusClass(plan.status)}`}>
-          {PLAN_STATUS_LABELS[plan.status] || plan.status}
-        </span>
-      </div>
+        <StatusBadge status={plan.status} label={PLAN_STATUS_LABELS[plan.status]} />
+      </CardHeader>
 
       {/* Content */}
-      <div className="plan-card-content">
+      <CardBody>
         <Link
           to={`/plans/${plan.id}`}
           className="plan-name-link"
+          style={{ textDecoration: 'none', color: 'inherit' }}
           onClick={(e) => selectMode && e.preventDefault()}
         >
-          <h3 className="plan-name">{plan.name || 'Untitled Plan'}</h3>
+          <CardTitle>{plan.name || 'Untitled Plan'}</CardTitle>
         </Link>
 
         {plan.description && (
           <p className="plan-description">{plan.description}</p>
         )}
 
-        {plan.region && (
-          <div className="plan-region">
-            <span className="region-icon">📍</span>
-            {plan.region}
+        <CardMeta>
+          {plan.region && (
+            <div className="plan-meta-item">
+              <span className="region-icon">📍</span>
+              {plan.region}
+            </div>
+          )}
+          <div className="plan-meta-divider" />
+          <div className="plan-meta-item">
+            <span className="dates-icon">📅</span>
+            {formatDateRange(plan.planned_start_date, plan.planned_end_date)}
           </div>
-        )}
-
-        <div className="plan-dates">
-          <span className="dates-icon">📅</span>
-          {formatDateRange(plan.planned_start_date, plan.planned_end_date)}
-        </div>
+        </CardMeta>
 
         {/* Stats */}
         <div className="plan-stats">
@@ -147,29 +140,31 @@ const PlanCard = ({
             {isOwner && <span className="owner-badge">Owner</span>}
           </div>
         )}
-      </div>
+      </CardBody>
 
       {/* Actions */}
       {!selectMode && (
-        <div className="plan-card-actions">
-          <Link to={`/plans/${plan.id}`} className="btn-card-action primary">
-            {canEdit ? 'Edit' : 'View'}
-          </Link>
-          {canEdit && (
-            <button
-              type="button"
-              className="btn-card-action danger"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(plan.id);
-              }}
-            >
-              Delete
-            </button>
-          )}
-        </div>
+        <CardFooter>
+          <div className="plan-card-actions" style={{ display: 'flex', gap: '8px', width: '100%' }}>
+            <Link to={`/plans/${plan.id}`} className="btn btn-primary btn-sm">
+              {canEdit ? 'Edit' : 'View'}
+            </Link>
+            {canEdit && (
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(plan.id);
+                }}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+        </CardFooter>
       )}
-    </article>
+    </Card>
   );
 };
 
