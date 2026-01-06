@@ -1,3 +1,10 @@
+/**
+ * TripDetailPage - Main viewing page for a trip.
+ * 
+ * Migrated to use unified components (Phase 4.4):
+ * - LoadingState for loading spinner
+ * - Unified button classes
+ */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -6,7 +13,9 @@ import TripSidebar from '../layout/TripSidebar';
 import TimelinePanel from '../panels/TimelinePanel';
 import TripStatsHUD from '../panels/TripStatsHUD';
 import PhotoViewerOverlay from '../common/PhotoViewerOverlay';
-import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile, updateWaypointNote } from '../../services/api';
+import CloneToPlanModal from '../common/CloneToPlanModal';
+import { LoadingState } from '../common/LoadingState';
+import { getTrip, getTrips, deleteTrip, listGpxFiles, listGpxFilesWithMeta, listImageFiles, getImageUrl, getImageVariantUrl, normalizeImageUrl, updatePhotoNote, fetchGpxAnalysis, uploadFile, deleteImage, deleteFile, updateWaypointNote } from '../../services/api';
 import '../../styles/MainBlock.css';
 import '../../styles/TripDetailPage.css';
 
@@ -46,6 +55,8 @@ const deriveNoteTitleValue = (providedTitle, noteValue) => {
     return null;
 };
 
+const hasValidCoords = (lat, lon) => Number.isFinite(lat) && Number.isFinite(lon) && !(lat === 0 && lon === 0);
+
 const normalizePhoto = (item) => {
     if (!item) return null;
     const note = item.note || item.caption || item.notes || null;
@@ -53,15 +64,22 @@ const normalizePhoto = (item) => {
     const capturedDate = parseDateSafe(item.captured_at || item.date_taken || item.created_at);
     const lat = Number(item?.gps?.latitude ?? item?.gps?.lat ?? item.lat);
     const lon = Number(item?.gps?.longitude ?? item?.gps?.lon ?? item.lon);
-    const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+    const hasCoords = hasValidCoords(lat, lon);
+
+    const thumbUrl = normalizeImageUrl(item.thumb_url || item.thumbnail_url || item.thumb_url, 'thumb')
+        || getImageVariantUrl(item.object_key, 'thumb');
+    const previewUrl = normalizeImageUrl(item.preview_url, 'preview')
+        || getImageVariantUrl(item.object_key, 'preview');
+    const originalUrl = normalizeImageUrl(item.original_url, 'original') || getImageUrl(item.object_key, 'original');
 
     return {
         type: 'photo',
         id: item.object_key,
         objectKey: item.object_key,
         fileName: item.original_filename || item.object_key,
-        thumbnailUrl: item.thumb_url || item.thumbnail_url || item.thumb_url || getImageUrl(item.object_key),
-        imageUrl: getImageUrl(item.object_key),
+        thumbnailUrl: thumbUrl,
+        imageUrl: previewUrl,
+        originalUrl,
         capturedAt: capturedDate ? capturedDate.toISOString() : null,
         capturedDate,
         timestamp: capturedDate ? capturedDate.getTime() : 0,
@@ -103,7 +121,7 @@ const normalizeWaypoint = (waypoint, gpxFileName, index, gpxMetadataId = null) =
         capturedSource: 'gpx',
         lat,
         lon,
-        elev: waypoint.elev !== null && waypoint.elev !== undefined ? Number(waypoint.elev) : null,
+        elevation: waypoint.elev !== null && waypoint.elev !== undefined ? Number(waypoint.elev) : null,
         note: rawNote,
         noteTitle: waypointTitle,
     };
@@ -186,6 +204,9 @@ const TripDetailPage = () => {
     const [gpxFile, setGpxFile] = useState(null);
     const [gpxTrack, setGpxTrack] = useState(null); // The analyzed track data
     const [highlightedItemId, setHighlightedItemId] = useState(null);
+    
+    // Clone to Plan modal state
+    const [showCloneToPlanModal, setShowCloneToPlanModal] = useState(false);
 
     const mapRef = useRef(null);
     const navigate = useNavigate();
@@ -484,11 +505,11 @@ const TripDetailPage = () => {
                 object_key: photo.objectKey,
                 source: 'trip-photo-timeline',
             };
-            if (photo.lat !== null && photo.lon !== null) {
+            if (hasValidCoords(photo.lat, photo.lon)) {
                 detail.lat = photo.lat;
                 detail.lng = photo.lon;
+                window.dispatchEvent(new CustomEvent('centerMapOnLocation', { detail }));
             }
-            window.dispatchEvent(new CustomEvent('centerMapOnLocation', { detail }));
         }
     }, [orderedPhotos, timelineMode]);
 
@@ -835,7 +856,7 @@ const TripDetailPage = () => {
     };
 
     if (loading) {
-        return <div className="loading">Loading trip details...</div>;
+        return <LoadingState message="Loading trip details..." size="lg" />;
     }
 
     if (!trip) {
@@ -844,39 +865,48 @@ const TripDetailPage = () => {
 
     return (
         <div className="TripDetailPage">
-            <div className="trip-detail-header">
-                <div className="trip-detail-header__left">
-                    <Link to="/trips" className="back-to-trips">← Back to My Trips</Link>
-                    <div>
-                        <p className="trip-detail-label">Currently viewing</p>
-                        <h1 className="trip-detail-title">{trip.name}</h1>
+            <header className="plan-canvas-header">
+                <div className="plan-header-left">
+                    <Link to="/trips" className="back-link">← Back to My Trips</Link>
+                    <div className="plan-title-block">
+                        <h1 className="plan-title">{trip.name}</h1>
                     </div>
                 </div>
-                <div className="trip-detail-header__right">
-                    <label htmlFor="trip-selector">Quick switch</label>
-                    <select
-                        id="trip-selector"
-                        className="trip-selector"
-                        value={tripId}
-                        onChange={handleTripChange}
+                <div className="plan-header-right header-actions">
+                    <div className="header-selector-wrapper">
+                        <select
+                            className="header-select"
+                            aria-label="Switch trip"
+                            value={tripId}
+                            onChange={handleTripChange}
+                        >
+                            {(allTrips.length ? allTrips : [trip]).map((listTrip) => (
+                                <option key={listTrip.id} value={listTrip.id}>
+                                    {listTrip.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <button
+                        type="button"
+                        className="header-btn"
+                        onClick={() => setShowCloneToPlanModal(true)}
+                        title="Clone this trip to create a new plan"
                     >
-                        {(allTrips.length ? allTrips : [trip]).map((listTrip) => (
-                            <option key={listTrip.id} value={listTrip.id}>
-                                {listTrip.name}
-                            </option>
-                        ))}
-                    </select>
+                        📋 Clone
+                    </button>
                     {canManageTrip && (
                         <button
                             type="button"
-                            className="ghost-button danger-button"
+                            className="header-btn btn-delete"
                             onClick={handleDeleteTrip}
+                            title="Delete Trip"
                         >
-                            Delete Trip
+                            Delete
                         </button>
                     )}
                 </div>
-            </div>
+            </header>
             <div className="MainBlock">
                 <TripSidebar
                     tripId={tripId}
@@ -977,6 +1007,17 @@ const TripDetailPage = () => {
                 onPrev={goToPrevious}
                 onNext={goToNext}
             />
+            
+            {showCloneToPlanModal && (
+                <CloneToPlanModal
+                    tripId={tripId}
+                    tripName={trip?.name}
+                    onClose={() => setShowCloneToPlanModal(false)}
+                    onCreated={(newPlan) => {
+                        console.log('Plan created from trip:', newPlan);
+                    }}
+                />
+            )}
         </div>
     );
 };

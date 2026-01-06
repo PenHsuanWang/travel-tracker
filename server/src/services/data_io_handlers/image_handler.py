@@ -25,12 +25,13 @@ class ImageHandler(BaseHandler):
         minio_adapter = AdapterFactory.create_minio_adapter()
         self.storage_manager.add_adapter('minio', minio_adapter)
 
-    def handle(self, file: UploadFile, trip_id: Optional[str] = None) -> HandlerResult:
+    def handle(self, file: UploadFile, trip_id: Optional[str] = None, plan_id: Optional[str] = None) -> HandlerResult:
         """
         Handle the uploaded image file and extract EXIF metadata.
 
         :param file: The uploaded image file.
         :param trip_id: Optional ID of the trip this file belongs to.
+        :param plan_id: Optional ID of the plan this file belongs to (unused for images).
         :return: HandlerResult containing file info and EXIF data.
         """
         # If trip_id is missing, we assume it's a profile avatar or similar non-trip image

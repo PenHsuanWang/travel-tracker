@@ -8,6 +8,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  overflow-y: auto; /* Allow vertical scrolling */
+  padding: 20px 0; /* Add vertical padding to prevent content from touching edges */
   z-index: 1000;
 }
 

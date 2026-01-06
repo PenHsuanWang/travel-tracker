@@ -1,0 +1,205 @@
+/**
+ * Card Component Styles
+ * Reference: UNIFY_THEME_AND_PAGE_DETAIL_DESIGN_DOCUMENT.md Section 5.3
+ */
+
+/* ═══════════════════════════════════════════════════════════
+   BASE CARD CONTAINER
+   ═══════════════════════════════════════════════════════════ */
+
+.card {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+/* Hoverable variant */
+.card--hoverable:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-border-hover);
+}
+
+/* Clickable cursor */
+.card--clickable {
+  cursor: pointer;
+}
+
+.card--clickable:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* Selected state */
+.card--selected {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 2px var(--color-brand-light);
+}
+
+.card--selected:hover {
+  border-color: var(--color-brand);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CARD SECTIONS
+   ═══════════════════════════════════════════════════════════ */
+
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md);
+  gap: var(--spacing-sm);
+}
+
+.card__body {
+  flex: 1;
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.card__footer {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CARD COVER
+   ═══════════════════════════════════════════════════════════ */
+
+.card__cover {
+  position: relative;
+  background: var(--color-bg-secondary);
+  overflow: hidden;
+}
+
+.card__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s;
+}
+
+.card--hoverable:hover .card__cover img {
+  transform: scale(1.05);
+}
+
+/* Cover overlay for selection indicator */
+.card__cover-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.card--selected .card__cover-overlay {
+  opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CARD CONTENT ELEMENTS
+   ═══════════════════════════════════════════════════════════ */
+
+.card__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: 1.3;
+  
+  /* Truncate with ellipsis */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  flex-wrap: wrap;
+}
+
+.card__meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.card__meta-divider {
+  width: 1px;
+  height: 12px;
+  background: var(--color-border);
+}
+
+.card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   VARIANT: COMPACT
+   ═══════════════════════════════════════════════════════════ */
+
+.card--compact .card__header,
+.card--compact .card__body,
+.card--compact .card__footer {
+  padding: var(--spacing-sm);
+}
+
+.card--compact .card__title {
+  font-size: 14px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   VARIANT: HORIZONTAL (List view)
+   ═══════════════════════════════════════════════════════════ */
+
+.card--horizontal {
+  flex-direction: row;
+}
+
+.card--horizontal .card__cover {
+  width: 200px;
+  flex-shrink: 0;
+}
+
+.card--horizontal .card__body {
+  justify-content: center;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+  .card--horizontal {
+    flex-direction: column;
+  }
+  
+  .card--horizontal .card__cover {
+    width: 100%;
+  }
+}

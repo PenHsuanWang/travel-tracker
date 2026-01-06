@@ -20,28 +20,28 @@ class GPXHandler(BaseHandler):
         minio_adapter = AdapterFactory.create_minio_adapter()
         self.storage_manager.add_adapter('minio', minio_adapter)
 
-    def handle(self, file: UploadFile, trip_id: Optional[str] = None) -> HandlerResult:
+    def handle(self, file: UploadFile, trip_id: Optional[str] = None, plan_id: Optional[str] = None) -> HandlerResult:
         """
         Handle the uploaded GPX file.
 
         :param file: The uploaded GPX file.
         :param trip_id: Optional ID of the trip this file belongs to.
+        :param plan_id: Optional ID of the plan this file belongs to.
         :return: HandlerResult containing file info.
         """
         logger = logging.getLogger(__name__)
-        if not trip_id:
-            raise ValueError("trip_id is required when uploading GPX data so tracks are scoped to a trip")
+        if not trip_id and not plan_id:
+            raise ValueError("trip_id or plan_id is required when uploading GPX data")
         file_data = file.file.read()
         file_name = file.filename
         file_extension = file_name.split('.')[-1].lower()
-        bucket_name = 'gps-data'
-
-        print("gpx handler been invoked")
+        bucket_name = 'plan-assets' if plan_id else 'gps-data'
 
         safe_name = (file_name or "track.gpx").replace("/", "_")
-        object_key = f"{trip_id}/{safe_name}"
+        owner_scope = plan_id or trip_id
+        object_key = f"{owner_scope}/{safe_name}"
 
-        # Save raw GPX file data to MinIO using the 'minio' adapter and the bucket 'gps-data'
+        # Save raw GPX file data to MinIO using the appropriate bucket
         self.storage_manager.save_data(object_key, file_data, adapter_name='minio', bucket=bucket_name)
 
         # Analyze GPX data and persist analysis artifact separately.
@@ -80,6 +80,7 @@ class GPXHandler(BaseHandler):
             mime_type='application/gpx+xml',
             file_extension=file_extension,
             trip_id=trip_id,
+            plan_id=plan_id,
             status='success',
             has_gpx_analysis=(analysis_status == 'success'),
             analysis_object_key=analysis_object_key,

@@ -1,0 +1,81 @@
+/**
+ * LoadingState Styles
+ * Reference: UNIFY_THEME_AND_PAGE_DETAIL_DESIGN_DOCUMENT.md Section 5.8
+ */
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xl);
+  min-height: 200px;
+}
+
+.loading-state__spinner {
+  border: 3px solid var(--color-gray-200);
+  border-top-color: var(--color-brand);
+  border-radius: 50%;
+  animation: loading-state-spin 0.8s linear infinite;
+}
+
+.loading-state__message {
+  margin-top: var(--spacing-md);
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SIZE VARIANTS
+   ═══════════════════════════════════════════════════════════ */
+
+.loading-state--sm .loading-state__spinner {
+  width: 24px;
+  height: 24px;
+  border-width: 2px;
+}
+
+.loading-state--md .loading-state__spinner {
+  width: 40px;
+  height: 40px;
+  border-width: 3px;
+}
+
+.loading-state--lg .loading-state__spinner {
+  width: 56px;
+  height: 56px;
+  border-width: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INLINE VARIANT
+   For use within buttons or small containers
+   ═══════════════════════════════════════════════════════════ */
+
+.loading-state--inline {
+  flex-direction: row;
+  gap: var(--spacing-sm);
+  padding: 0;
+  min-height: auto;
+}
+
+.loading-state--inline .loading-state__spinner {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.loading-state--inline .loading-state__message {
+  margin-top: 0;
+  font-size: 13px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ANIMATION
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes loading-state-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

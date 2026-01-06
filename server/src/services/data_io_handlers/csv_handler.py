@@ -18,11 +18,13 @@ class CSVHandler(BaseHandler):
         minio_adapter = AdapterFactory.create_minio_adapter()
         self.storage_manager.add_adapter('minio', minio_adapter)
 
-    def handle(self, file: UploadFile) -> str:
+    def handle(self, file: UploadFile, trip_id: str = None, plan_id: str = None) -> str:
         """
         Handle the uploaded CSV file.
 
         :param file: The uploaded CSV file.
+        :param trip_id: Optional trip scope (ignored for CSV uploads).
+        :param plan_id: Optional plan scope (ignored for CSV uploads).
         :return: The file path where the CSV file is stored.
         """
         file_data = file.file.read()

@@ -1,0 +1,86 @@
+/**
+ * StatusBadge Styles
+ * Reference: UNIFY_THEME_AND_PAGE_DETAIL_DESIGN_DOCUMENT.md Section 5.4
+ */
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SIZES
+   ═══════════════════════════════════════════════════════════ */
+
+.status-badge--sm {
+  font-size: 10px;
+  padding: 3px 8px;
+}
+
+.status-badge--md {
+  font-size: 12px;
+  padding: 4px 12px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COLOR VARIANTS - Solid
+   ═══════════════════════════════════════════════════════════ */
+
+.status-badge--solid.status-badge--gray {
+  background: var(--color-gray-100);
+  color: var(--color-gray-600);
+}
+
+.status-badge--solid.status-badge--brand {
+  background: var(--color-brand-light);
+  color: var(--color-brand);
+}
+
+.status-badge--solid.status-badge--warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-badge--solid.status-badge--success {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.status-badge--solid.status-badge--danger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COLOR VARIANTS - Outline
+   ═══════════════════════════════════════════════════════════ */
+
+.status-badge--outline {
+  background: transparent;
+  border: 1px solid currentColor;
+}
+
+.status-badge--outline.status-badge--gray {
+  color: var(--color-gray-500);
+}
+
+.status-badge--outline.status-badge--brand {
+  color: var(--color-brand);
+}
+
+.status-badge--outline.status-badge--warning {
+  color: #d97706;
+}
+
+.status-badge--outline.status-badge--success {
+  color: #059669;
+}
+
+.status-badge--outline.status-badge--danger {
+  color: #dc2626;
+}

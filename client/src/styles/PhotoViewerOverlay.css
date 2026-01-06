@@ -64,6 +64,21 @@
   object-fit: contain;
 }
 
+.viewer-actions {
+  margin-top: 8px;
+  text-align: center;
+}
+
+.viewer-actions a {
+  color: #60a5fa;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.viewer-actions a:hover {
+  text-decoration: underline;
+}
+
 .viewer-nav {
   display: flex;
   justify-content: space-between;

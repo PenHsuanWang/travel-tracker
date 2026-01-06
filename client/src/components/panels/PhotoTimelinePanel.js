@@ -265,6 +265,8 @@ function PhotoTimelinePanel({
                         src={item.thumbnailUrl || item.imageUrl}
                         alt={title}
                         loading="lazy"
+                        decoding="async"
+                        style={{ aspectRatio: '4 / 3', objectFit: 'cover' }}
                       />
                     </div>
                   )}

@@ -2,6 +2,7 @@
 
 from fastapi import HTTPException, UploadFile  # type: ignore[import-not-found]
 from src.services.data_io_handlers.handler_factory import HandlerFactory
+from src.services.image_variant_service import ImageVariantService
 from src.utils.dbbutler.storage_manager import StorageManager
 from src.utils.adapter_factory import AdapterFactory
 from src.models.file_metadata import HandlerResult, FileMetadata
@@ -42,6 +43,7 @@ class FileUploadService:
 
         # Trip service is used for downstream updates (e.g., auto-filling trip dates from GPX)
         self.trip_service = TripService()
+        self.image_variant_service = ImageVariantService(self.storage_manager)
 
     # --- GPX date helpers ---
     @staticmethod
@@ -190,17 +192,30 @@ class FileUploadService:
         else:
             result["reason"] = "trip_update_failed"
         return result
+
+    @staticmethod
+    def _is_image_extension(file_extension: Optional[str]) -> bool:
+        if not file_extension:
+            return False
+        return file_extension.lower() in {"jpg", "jpeg", "png", "gif", "webp", "avif"}
     
     @classmethod
-    def save_file(cls, file: UploadFile, uploader_id: Optional[str] = None, trip_id: Optional[str] = None) -> Dict[str, Any]:
+    def save_file(
+        cls,
+        file: UploadFile,
+        uploader_id: Optional[str] = None,
+        trip_id: Optional[str] = None,
+        plan_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Save an uploaded file and persist its metadata.
 
         The method selects a handler based on the file extension, stores the
         file contents via the handler (which typically writes to MinIO), and
-        persists a ``file_metadata`` document in MongoDB. For GPX files
-        associated with a ``trip_id``, the method enforces a single GPX per
-        trip, may auto-fill trip dates from track timestamps, and publishes
-        a ``GPX_PROCESSED`` event when analysis is available.
+        persists a ``file_metadata`` document in MongoDB. For GPX files,
+        callers must supply either ``trip_id`` (trip-scoped GPX) or
+        ``plan_id`` (plan-scoped reference track). Trip uploads enforce a
+        single GPX per trip and may auto-fill trip dates; plan uploads skip
+        trip-side effects and store data in the ``plan-assets`` bucket.
 
         Args:
             file (UploadFile): The uploaded file object received from FastAPI.
@@ -212,16 +227,18 @@ class FileUploadService:
             and any auto-filled trip information.
 
         Raises:
-            ValueError: If a GPX file is uploaded without a ``trip_id``.
+            ValueError: If a GPX file is uploaded without a ``trip_id`` or ``plan_id``.
         """
         service = cls()
         file_extension = file.filename.split('.')[-1].lower()
         handler = HandlerFactory.get_handler(file_extension)
 
-        # Enforce trip scoping for GPX and image uploads to avoid cross-trip leakage
-        # Exception: Avatars (images without trip_id) are allowed
-        if file_extension == "gpx" and not trip_id:
-            raise ValueError("trip_id is required when uploading GPX tracks")
+        # Enforce scoping for GPX uploads (must target a trip or a plan)
+        if file_extension == "gpx" and not (trip_id or plan_id):
+            raise ValueError("trip_id or plan_id is required when uploading GPX tracks")
+
+        if file_extension == "gpx" and trip_id and plan_id:
+            raise ValueError("Provide only one of trip_id or plan_id for GPX uploads")
         
         # Enforce single GPX file per trip: delete existing GPX files before uploading new one
         if file_extension == "gpx" and trip_id:
@@ -241,7 +258,10 @@ class FileUploadService:
             except Exception as e:
                 logging.getLogger(__name__).warning(f"Error checking/deleting existing GPX files: {e}")
         
-        result = handler.handle(file, trip_id=trip_id)
+        if file_extension == "gpx":
+            result = handler.handle(file, trip_id=trip_id, plan_id=plan_id)
+        else:
+            result = handler.handle(file, trip_id=trip_id)
         
         # Handle legacy handlers that return strings
         if isinstance(result, str):
@@ -253,6 +273,25 @@ class FileUploadService:
         
         # Handle new HandlerResult with metadata
         if isinstance(result, HandlerResult):
+            variant_payload = {
+                "status": "not_applicable",
+                "thumb_keys": {},
+                "preview_keys": {},
+                "formats": [],
+                "generated_at": None,
+            }
+
+            if cls._is_image_extension(result.file_extension):
+                try:
+                    variant_payload = service.image_variant_service.generate_variants(
+                        result.object_key,
+                        bucket=result.bucket,
+                    )
+                except Exception as exc:
+                    logging.getLogger(__name__).warning(
+                        "Image variant generation failed for %s: %s", result.object_key, exc
+                    )
+
             # Save metadata to MongoDB
             metadata_id = result.object_key
             metadata = FileMetadata(
@@ -274,13 +313,19 @@ class FileUploadService:
                 created_at=datetime.now(timezone.utc),
                 uploader_id=uploader_id,
                 trip_id=trip_id,
+                plan_id=plan_id,
                 has_gpx_analysis=result.has_gpx_analysis,
                 analysis_object_key=result.analysis_object_key,
                 analysis_bucket=result.analysis_bucket,
                 analysis_status=result.analysis_status,
                 analysis_error=result.analysis_error,
                 track_summary=result.track_summary,
-                status=result.status
+                status=result.status,
+                thumb_keys=variant_payload.get("thumb_keys") or {},
+                preview_keys=variant_payload.get("preview_keys") or {},
+                formats=variant_payload.get("formats") or [],
+                variants_status=variant_payload.get("status"),
+                variants_generated_at=variant_payload.get("generated_at"),
             )
             
             # Save to MongoDB
@@ -312,6 +357,12 @@ class FileUploadService:
                 "analysis_object_key": result.analysis_object_key,
                 "analysis_error": result.analysis_error,
                 "track_summary": result.track_summary,
+                "plan_id": plan_id,
+                "thumb_keys": variant_payload.get("thumb_keys") or {},
+                "preview_keys": variant_payload.get("preview_keys") or {},
+                "variants_status": variant_payload.get("status"),
+                "formats": variant_payload.get("formats") or [],
+                "variants_generated_at": variant_payload.get("generated_at").isoformat() if variant_payload.get("generated_at") else None,
             }
 
             if getattr(result, "file_extension", "") and result.file_extension.lower() == "gpx" and trip_id:

@@ -1,0 +1,583 @@
+/* client/src/components/panels/ItineraryPanel.css */
+
+.itinerary-panel {
+  position: relative;
+  background: #fff;
+  border-left: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  padding: 18px;
+}
+
+/* Resize handle */
+.resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: ew-resize;
+  background: transparent;
+  transition: background 0.2s;
+  z-index: 10;
+}
+
+.resize-handle:hover {
+  background: rgba(37, 99, 235, 0.3);
+}
+
+/* Header */
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.panel-header p {
+  margin: 0;
+  font-size: 12px;
+  color: #475569;
+}
+
+.panel-subtitle { margin-top: 4px; color: #6b7280; font-size: 12px; }
+
+.feature-count {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Content */
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+}
+
+/* Sections */
+.features-section,
+.tracks-section {
+  padding: 0 20px;
+  margin-bottom: 24px;
+}
+
+.day-summary-section {
+  padding: 0 16px;
+  margin-bottom: 16px;
+}
+
+.day-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.day-summary-card {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.day-summary-card {
+  background: #ffffff;
+  border: 1px solid #e6edf3;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(2,6,23,0.03);
+}
+
+.day-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.day-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.day-summary-header input {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 13px;
+}
+
+.day-summary-fields textarea {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  padding: 8px;
+  font-size: 13px;
+  resize: vertical;
+  min-height: 70px;
+  background: #fff;
+}
+
+.day-summary-fields textarea:focus,
+.day-summary-header input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.day-summary-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #374151;
+}
+
+.day-summary-text,
+.day-summary-conditions {
+  margin: 0;
+  font-size: 13px;
+}
+
+.day-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.add-day-btn,
+.save-day-btn {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.add-day-btn:hover,
+.save-day-btn:hover {
+  background: #f3f4f6;
+}
+
+.save-day-btn {
+  background: #2563eb;
+  color: #fff;
+  border-color: #1d4ed8;
+}
+
+.save-day-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.features-section h4,
+.tracks-section h4 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.05em;
+}
+
+.empty-message {
+  margin: 0;
+  font-size: 13px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Features list */
+.features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.features-list > div.dragging {
+  opacity: 0.5;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.feature-item:hover {
+  background: #f3f4f6;
+}
+
+.feature-item.selected {
+  background: #dbeafe;
+  box-shadow: 0 0 0 2px #2563eb;
+}
+
+.feature-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+}
+
+.feature-name {
+  flex: 1;
+  font-size: 14px;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feature-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.feature-item:hover .feature-actions {
+  opacity: 1;
+}
+
+.feature-actions button {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.feature-actions button:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Feature edit mode */
+.feature-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.feature-edit input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.feature-edit input:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.feature-edit button {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.feature-edit button:hover {
+  background: #e5e7eb;
+}
+
+/* Tracks list */
+.tracks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reference-track-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fef3c7;
+  border-radius: 8px;
+}
+
+.track-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.track-name {
+  flex: 1;
+  font-size: 13px;
+  color: #92400e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* UI-03: Track visibility toggle controls */
+.track-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.track-toggle {
+  background: none;
+  border: 1px solid #d97706;
+  color: #d97706;
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+  transition: all 0.15s;
+}
+
+.track-toggle:hover {
+  opacity: 0.8;
+  background: rgba(217, 119, 6, 0.1);
+}
+
+.track-toggle.active {
+  opacity: 1;
+  background: #fef3c7;
+  border-color: #92400e;
+  color: #92400e;
+}
+
+.track-remove {
+  background: none;
+  border: none;
+  color: #d97706;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.reference-track-item:hover .track-remove {
+  opacity: 1;
+}
+
+.track-remove:hover {
+  background: rgba(217, 119, 6, 0.15);
+}
+
+/* ===== Two-Section Layout: Checkpoints + Other Features ===== */
+
+/* Checkpoints Section */
+.checkpoints-section {
+  padding: 0 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 16px;
+}
+
+.checkpoints-section h4 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #2563eb;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.checkpoints-section h4::before {
+  content: '📍';
+}
+
+.checkpoints-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Other Features Section */
+.other-features-section {
+  padding: 0 16px;
+  margin-bottom: 16px;
+}
+
+.other-features-section h4 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.other-features-section h4::before {
+  content: '📌';
+}
+
+/* Section count badges */
+.section-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 6px;
+}
+
+.checkpoints-section .section-count {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+/* Section header row with action button */
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.section-header-row h4 {
+  margin: 0;
+}
+
+/* Add GPX button */
+.add-gpx-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #f59e0b;
+  color: white;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.add-gpx-btn:hover {
+  background: #d97706;
+}
+
+.add-gpx-btn span {
+  white-space: nowrap;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .itinerary-panel {
+    position: fixed;
+    right: 0;
+    top: 60px;
+    bottom: 60px;
+    width: 300px !important;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+    z-index: 400;
+  }
+}
+
+/* Unified Timeline Cards (Route & Area) */
+.timeline-card {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 6px;
+  border: 1px solid rgba(0,0,0,0.05);
+  position: relative;
+}
+
+.timeline-card:hover {
+  filter: brightness(0.97);
+}
+
+.timeline-card.selected {
+  box-shadow: 0 0 0 2px #2563eb;
+  z-index: 1;
+}
+
+/* Route Card Defaults (Fallback for Tailwind) */
+.route-card {
+  background-color: #eff6ff; /* blue-50 */
+  border-left: 4px solid #60a5fa; /* blue-400 */
+}
+
+/* Area Card Defaults (Fallback for Tailwind) */
+.area-card {
+  background-color: #f9fafb; /* gray-50 */
+  border-left: 4px solid #9ca3af; /* gray-400 */
+}
+
+.timeline-card .header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.timeline-card .card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.timeline-card:hover .card-actions {
+  opacity: 1;
+}
+
+.timeline-card .card-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.timeline-card .card-actions button:hover {
+  opacity: 1;
+  background-color: rgba(255,255,255,0.5);
+  border-radius: 4px;
+}

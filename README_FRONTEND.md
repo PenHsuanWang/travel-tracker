@@ -48,6 +48,30 @@ The application's primary navigation is defined in `App.js`, which sets up the f
     -   **Photo Viewer:** Opens `PhotoViewerOverlay` for full-size image viewing with navigation
     -   **Event Communication:** Uses custom events for cross-component updates (imageUploaded, imageDeleted, photoNoteUpdated, centerMapOnLocation, mapImageSelected)
 
+### `/plans` -> `PlansPage.js`
+
+-   **File:** `client/src/components/views/PlansPage.js`
+-   **Purpose:** Dashboard for managing trip plans.
+-   **Functionality:**
+    -   **Plan List:** Displays user's plans with status badges (Draft, Active, Archived).
+    -   **Creation Flows:** Supports creating fresh plans via `CreatePlanModal` or importing GPX via `ImportGpxModal`.
+    -   **Filtering:** Filter by status, search by name/region.
+
+### `/plans/:planId` -> `PlanCanvas.js`
+
+-   **File:** `client/src/components/views/PlanCanvas.js`
+-   **Purpose:** The core editing interface for trip planning, implementing a 3-zone layout.
+-   **Functionality:**
+    -   **Zone A (Operations - Left):**
+        -   **`OperationsPanel`**: Tabbed interface for Team (Roster), Logistics (Transport), and Gear (Checklist).
+        -   **`PlanToolbox`**: Embedded drawing tools for placing markers, routes, and areas.
+    -   **Zone B (Map - Center):**
+        -   **`PlanMapView`**: Interactive map allowing feature creation (drawing), editing, and semantic styling.
+        -   **`PlanStatsHUD`**: Real-time stats showing total distance, elevation, and counts of hazards/camps.
+        - **Zone C (Itinerary - Right):**
+            -   **`ItineraryPanel`**: Manages the **Unified Timeline** (scheduled Markers, Routes, and Areas) and **Reference Features** (unscheduled items). Supports day summaries and context-aware grouping for routes/areas.
+    -   **GPX Ingestion:** Features `GpxImportOptionsModal` to parse uploaded GPX files and apply "Time Shift" strategies (Relative vs Absolute).
+
 ### `/login` -> `LoginPage.js`
 
 -   **File:** `client/src/pages/LoginPage.js`
@@ -172,17 +196,19 @@ These components provide the primary features of the application, mostly within 
         1.  Collapsible panel with "Show Images" / "Hide Images" toggle
         2.  Loads and displays image thumbnails in a responsive grid layout
         3.  Each thumbnail shows:
-            -   Image preview
+            -   Image preview (uses optimized `thumb` variant)
             -   "View on Map" button (if photo has GPS coordinates)
             -   Delete button
         4.  **Hover Interaction:** Displays detailed tooltip with file info, GPS coordinates, and EXIF camera metadata
         5.  **Click Interaction:** Opens full-size image viewer modal with metadata sidebar (gallery interactions dispatch selection metadata; the parent may set `preventViewer: true` so the viewer is not always opened automatically).
-        6.  **Map Synchronization:** 
+        6.  **Performance:** Uses `loading="lazy"` and `decoding="async"` for smooth scrolling. Implements `srcset` to serve optimal image sizes (`thumb` vs `preview`) based on viewport.
+        7.  **Map Synchronization:** 
             -   Clicking thumbnail scrolls to and highlights the photo
             -   "View on Map" centers map on photo location
             -   Clicking map marker scrolls gallery to corresponding thumbnail
-        7.  **Deletion:** Click delete button to remove photo (with confirmation).
+        8.  **Deletion:** Click delete button to remove photo (with confirmation).
             -   **Permission-Based Display:** Delete button only appears if `can_delete` flag is `true` (Owner or Uploader).
+        9.  **Download:** Modal includes a "Download original" link to fetch the full-resolution image.
     -   **Expected Experience:** Professional photo management interface similar to Google Photos or Lightroom, with seamless map integration for geotagged photos
 
 -   **`TimelinePanel.js`** (Replaces `PhotoTimelinePanel.js`):
@@ -193,7 +219,7 @@ These components provide the primary features of the application, mostly within 
             -   Type icon (📷 for photos, 📍 for waypoints)
             -   Timestamp (date and time)
             -   Title (auto-generated or user-edited)
-            -   Thumbnail (for photos)
+            -   Thumbnail (for photos, uses optimized variants)
             -   Note/description field
         3.  **User Interactions:**
             -   **Click photo card:** Typically opens the photo viewer, but `TripDetailPage` now controls whether the viewer opens. Map and popup selections include metadata (`preventViewer` / `forceViewer`) so the parent can suppress or force the viewer.
@@ -208,16 +234,57 @@ These components provide the primary features of the application, mostly within 
         6.  **Markdown Support:** Notes can include formatting like **bold**, *italic*, `code`, links, etc.
     -   **Expected Experience:** Story-like journey view that weaves together photos and location waypoints, allowing users to document their trip as a narrative timeline
 
+### Plan Mode Components (`client/src/components/panels/` & `views/`)
+
+These components are specific to the `/plans/:planId` route.
+
+-   **`PlanToolbox.js`**:
+    -   **Purpose:** Provides drawing tools for the map.
+    -   **Features:** Category-aware tools (Marker, Route, Area). Selecting "Semantic Types" (Water, Camp, Hazard) automatically activates the Marker tool with the appropriate tag.
+
+-   **`OperationsPanel.js`**:
+    -   **Purpose:** Manages the "business" side of the plan.
+    -   **Tabs:**
+        -   **Team:** Roster management (Name, Role, Contact).
+        -   **Gear:** Packing checklists (Personal vs Group gear).
+        -   **Settings:** Plan metadata (Dates, Public visibility).
+
+-   **`ItineraryPanel.js`**:
+    -   **Purpose:** Displays the chronological and logical flow of the plan.
+    -   **Sections:**
+        -   **Timeline:** Chronological view of all scheduled items (Markers, Routes, Areas).
+        -   **Daily Context:** Routes and Areas are grouped at the top of their respective days as context cards.
+        -   **Features List:** Unscheduled reference markers grouped by semantic category (Hazards, Water Sources, Camps, etc.).
+        -   **Reference Tracks:** Toggle visibility of imported GPX baselines.
+
+-   **`PlanStatsHUD.js`**:
+    -   **Purpose:** Real-time statistics overlay for the plan.
+    -   **Features:** Shows total distance, reference track distance, and counts of semantic features (e.g., "3 Hazards").
+
 ### Common Components (`client/src/components/common/`)
 
 This directory contains reusable UI elements shared across the application.
 
+**Foundation Components** (New Design System):
+-   **`Card.js`**: A flexible card container with support for headers, footers, hover effects, and selection states. Used as the base for `TripCard` and `PlanCard`.
+-   **`PageToolbar.js`**: A standardized toolbar layout for top-of-page controls (search, filter, sort, view toggles).
+-   **`FilterControl.js`**: A dropdown menu component for filtering lists (e.g., by difficulty, status).
+-   **`SearchField.js`**: A styled search input with icon and clear button.
+-   **`StatusBadge.js`**: A consistent badge component for displaying status labels (e.g., "Draft", "Active", "Archived").
+-   **`LoadingState.js`**: A centralized loading spinner/skeleton placeholder.
+-   **`EmptyState.js`**: A user-friendly placeholder displayed when lists are empty (e.g., "No trips found").
+
+**Domain Components:**
+-   **`TripCard.js`**: Displays trip summary information in grid/list views.
+-   **`PlanCard.js`**: Displays plan summary information.
 -   **`CreateTripModal.js`**: Modal dialog for creating a new trip. Contains a form capturing trip name, start date, end date, region, and notes. Calls the `createTrip` API to save the new trip record.
 -   **`ManageMembersModal.js`**: Modal dialog for managing trip members. Allows the trip owner to search for users by name and add/remove them from the trip. Displays helper text: "Contributors can upload photos and edit journal notes. Only the Owner can delete the trip or manage members."
 -   **`ActivityHeatmap.js`**: Calendar-style heatmap component that consumes normalized `{ date, value, metadata[] }` entries. Supports highlighting and `onCellClick` callbacks so parent components can jump to related content.
 -   **`TripTimeline.js`** & **`TripTimelineCard.js`**: Compact timeline used on the profile page to summarize recent trips. Accepts hover callbacks for cross-highlighting with the heatmap and exposes `registerRef` hooks so parents can scroll to individual cards.
 -   **`BadgeIcon.js`**: Renders earned achievement icons and tooltips based on `badgeInfoMap`; used on the profile page and ready for reuse elsewhere.
 -   **`PhotoViewerOverlay.js`**: Full-screen overlay that appears when a user clicks on a photo thumbnail. Displays the image in a larger view with:
+    -   **Optimized Loading:** Displays the `preview` variant (max 800px) by default for faster loading.
+    -   **Download Original:** Provides a link to download the full-resolution original file.
     -   Navigation controls (previous/next arrows)
     -   Image counter (e.g., "3 / 24")
     -   Close button
@@ -301,6 +368,7 @@ The application uses a combination of:
 
 ### State Management
 -   **Global Auth State:** `AuthContext.js` provides `user` and `isAuthenticated` state to the entire app via the Context API.
+-   **Theme Context:** `ThemeContext.js` detects the current route (Plan vs Trip) and provides the active theme name. It wraps the application to inject CSS variables (e.g., `--color-brand`) that adapt components to the current context.
 -   **Local Component State:** Most components use React `useState` and `useEffect` hooks
 -   **Props Drilling:** Parent-to-child communication via props
 -   **Event-Based Communication**: Cross-component updates using custom DOM events:
@@ -317,7 +385,7 @@ The application uses a combination of:
     -   Trip CRUD: `getTrips`, `getTrip`, `createTrip`, `updateTrip`, `deleteTrip`
     -   File operations: `uploadFile`, `deleteFile`, `deleteImage`
     -   GPX: `listGpxFiles`, `listGpxFilesWithMeta`, `fetchGpxAnalysis`, `fetchGpxFile`
-    -   Images: `listImageFiles`, `getGeotaggedImages`, `getImageUrl`, `updatePhotoNote`
+    -   Images: `listImageFiles`, `getGeotaggedImages`, `getImageUrl` (supports `variant` param), `getImageVariantUrl` (new), `updatePhotoNote`
     -   GIS: `riversData`, `listRivers`
 
 ### Map Implementation Evolution

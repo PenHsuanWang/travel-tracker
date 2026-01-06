@@ -12,6 +12,7 @@ from src.models.trip import Trip
 from src.auth import get_current_user
 from src.models.user import User
 from src.services.trip_service import TripService
+from src.services.plan_service import PlanService
 
 router = APIRouter()
 
@@ -36,6 +37,7 @@ class UploadResponse(BaseModel):
     analysis_error: Optional[str] = None
     track_summary: Optional[Dict[str, Any]] = None
     trip: Optional[Trip] = None
+    plan_id: Optional[str] = None
     gpx_metadata_extracted: Optional[bool] = None
     gpx_start_datetime: Optional[str] = None
     gpx_end_datetime: Optional[str] = None
@@ -48,6 +50,7 @@ async def upload_file(
     file: UploadFile = File(...),
     uploader_id: Optional[str] = Query(None),
     trip_id: Optional[str] = Query(None),
+    plan_id: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -62,6 +65,9 @@ async def upload_file(
     # Enforce uploader_id to be current_user.id
     uploader_id = current_user.id
     
+    if trip_id and plan_id:
+        raise HTTPException(status_code=400, detail="Provide only one of trip_id or plan_id")
+
     if trip_id:
         trip_service = TripService()
         trip = trip_service.get_trip(trip_id)
@@ -76,8 +82,21 @@ async def upload_file(
         if not (is_owner or is_member):
             raise HTTPException(status_code=403, detail="Not authorized to upload to this trip")
 
+    if plan_id:
+        plan_service = PlanService()
+        plan = plan_service.get_plan(plan_id)
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+
+        is_owner = str(plan.owner_id) == str(current_user.id)
+        member_ids = [str(m) for m in plan.member_ids] if plan.member_ids else []
+        is_member = str(current_user.id) in member_ids
+
+        if not (is_owner or is_member):
+            raise HTTPException(status_code=403, detail="Not authorized to upload to this plan")
+
     try:
-        result = FileUploadController.upload_file(file, uploader_id, trip_id)
+        result = FileUploadController.upload_file(file, uploader_id, trip_id, plan_id)
         
         # Handle legacy response format
         if "file_path" in result and "metadata_id" not in result:
@@ -107,6 +126,7 @@ async def upload_file(
             "analysis_error": result.get("analysis_error"),
             "track_summary": result.get("track_summary"),
             "trip": result.get("trip"),
+            "plan_id": result.get("plan_id"),
             "gpx_metadata_extracted": result.get("gpx_metadata_extracted"),
             "gpx_start_datetime": result.get("gpx_start_datetime"),
             "gpx_end_datetime": result.get("gpx_end_datetime"),
@@ -156,6 +176,7 @@ async def delete_file(filename: str, bucket: str = Query(default="images"), curr
         raise HTTPException(status_code=404, detail="File not found")
 
     trip_id = metadata.get("trip_id")
+    plan_id = metadata.get("plan_id")
     trip = None
     is_owner = False
 
@@ -163,6 +184,12 @@ async def delete_file(filename: str, bucket: str = Query(default="images"), curr
         trip_service = TripService()
         trip = trip_service.get_trip(trip_id)
         if trip and str(trip.owner_id) == str(current_user.id):
+            is_owner = True
+
+    if plan_id and not is_owner:
+        plan_service = PlanService()
+        plan = plan_service.get_plan(plan_id)
+        if plan and str(plan.owner_id) == str(current_user.id):
             is_owner = True
 
     is_uploader = str(metadata.get("uploader_id")) == str(current_user.id)

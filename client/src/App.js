@@ -2,10 +2,13 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
 import TripsPage from './components/views/TripsPage';
 import TripDetailPage from './components/views/TripDetailPage';
+import PlansPage from './components/views/PlansPage';
+import PlanCanvas from './components/views/PlanCanvas';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
@@ -17,13 +20,33 @@ import './styles/App.css';
 function App() {
   return (
     <AuthProvider>
-      <div className="App">
-        <Header />
-        <div className="App-body">
-          <Routes>
+      <ThemeProvider>
+        <div className="App">
+          <Header />
+          <div className="App-body">
+            <Routes>
             <Route path="/" element={<Navigate to="/trips" replace />} />
             <Route path="/trips" element={<TripsPage />} />
             <Route path="/trips/:tripId" element={<TripDetailPage />} />
+            
+            {/* Plan Routes */}
+            <Route 
+              path="/plans" 
+              element={
+                <ProtectedRoute>
+                  <PlansPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/plans/:planId" 
+              element={
+                <ProtectedRoute>
+                  <PlanCanvas />
+                </ProtectedRoute>
+              } 
+            />
+            
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             
@@ -52,6 +75,7 @@ function App() {
         </div>
         <Footer />
       </div>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

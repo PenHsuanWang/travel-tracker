@@ -91,11 +91,11 @@ def exif_to_dict(raw_exif: Any) -> Dict[str, Any]:
     return result
 
 
-def _component_to_float(comp: Any) -> float:
+def _component_to_float(comp: Any) -> Optional[float]:
     """Convert an EXIF GPS component to float.
 
-    comp can be a (num, den) tuple, a Fraction-like object (with numerator/denominator),
-    an int/float, or bytes. Returns a float, or 0.0 on unexpected formats.
+    Returns ``None`` when the component is missing or cannot be parsed. This prevents
+    silent fallback to ``0.0`` which can incorrectly appear as a valid coordinate.
     """
     try:
         # tuple-like rational e.g. (num, den)
@@ -116,31 +116,41 @@ def _component_to_float(comp: Any) -> float:
             try:
                 return float(comp.decode(errors="ignore"))
             except Exception:
-                return 0.0
+                return None
 
         # int/float
         return float(comp)
     except Exception:
-        return 0.0
+        return None
 
 
-def _convert_to_degrees(value: Any) -> float:
+def _convert_to_degrees(value: Any) -> Optional[float]:
     """Convert GPS coordinates stored as D/M/S triplet to decimal degrees.
 
     Accepts an iterable of three components where each component may be a
     rational tuple, Fraction, or numeric. Returns decimal degrees as float.
-    On malformed input returns 0.0.
+    On malformed or missing input returns ``None`` so callers can treat the
+    coordinate as absent instead of defaulting to 0.0 (Null Island).
     """
     try:
         if not value:
-            return 0.0
+            return None
         # Ensure indexable
         deg = _component_to_float(value[0])
         minute = _component_to_float(value[1]) if len(value) > 1 else 0.0
         sec = _component_to_float(value[2]) if len(value) > 2 else 0.0
+
+        if deg is None:
+            return None
+
+        # If minute/sec are None, treat them as 0 but keep the distinction that
+        # the degree must be present to consider the coordinate valid.
+        minute = minute or 0.0
+        sec = sec or 0.0
+
         return deg + (minute / 60.0) + (sec / 3600.0)
     except Exception:
-        return 0.0
+        return None
 
 
 def _normalize_gps_if_needed(gps_raw: Any) -> Optional[Dict[str, Any]]:
@@ -206,6 +216,9 @@ def get_lat_lon_from_exif(exif: Dict[str, Any]) -> Tuple[Optional[float], Option
         lat = _convert_to_degrees(lat_tuple)
         lon = _convert_to_degrees(lon_tuple)
 
+        if lat is None or lon is None:
+            return None, None
+
         # Normalize refs
         if isinstance(lat_ref, (bytes, bytearray)):
             lat_ref = lat_ref.decode(errors="ignore")
@@ -216,6 +229,10 @@ def get_lat_lon_from_exif(exif: Dict[str, Any]) -> Tuple[Optional[float], Option
             lat = -abs(lat)
         if lon_ref and str(lon_ref).upper() in ("W", "WEST"):
             lon = -abs(lon)
+
+        # Treat explicit 0/0 as missing unless clearly intended by source.
+        if lat == 0 and lon == 0:
+            return None, None
 
         return float(lat), float(lon)
     except Exception:

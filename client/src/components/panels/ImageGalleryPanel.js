@@ -1,6 +1,6 @@
 // client/src/components/panels/ImageGalleryPanel.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { listImageFiles, getImageUrl, getFileMetadata, deleteImage } from '../../services/api';
+import { listImageFiles, getImageUrl, getImageVariantUrl, normalizeImageUrl, getFileMetadata, deleteImage } from '../../services/api';
 import '../../styles/ImageGalleryPanel.css';
 
 function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
@@ -55,6 +55,14 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
       setLoading(false);
     }
   }, [tripId]);
+
+  const hasValidGps = (gps) => {
+    if (!gps) return false;
+    const lat = Number(gps.latitude);
+    const lon = Number(gps.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+    return !(lat === 0 && lon === 0);
+  };
 
   // Listen for image upload events
   useEffect(() => {
@@ -115,12 +123,7 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
     const cached = getMetadataForImage(filename);
 
     // Only skip refetch if GPS is already present and valid
-    const hasValidGps =
-      cached?.gps &&
-      Number.isFinite(Number(cached.gps.latitude)) &&
-      Number.isFinite(Number(cached.gps.longitude));
-
-    if (hasValidGps) return cached; // Only skip when GPS is good
+    if (hasValidGps(cached?.gps)) return cached; // Only skip when GPS is good
 
     try {
       const metadata = await getFileMetadata(filename);
@@ -162,7 +165,7 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
     const gps = metadata?.gps;
     const lat = Number(gps?.latitude);
     const lon = Number(gps?.longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    if (!hasValidGps(gps)) {
       alert('This image does not have GPS coordinates to show on the map.');
       return;
     }
@@ -449,11 +452,7 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
               {imageFiles.map((item, idx) => {
                 const filename = item?.object_key || `image-${idx}`;
                 const metadata = getMetadataForImage(filename);
-                const hasValidGps =
-                  metadata?.gps &&
-                  Number.isFinite(Number(metadata.gps.latitude)) &&
-                  Number.isFinite(Number(metadata.gps.longitude));
-                const disableViewButton = Boolean(metadata) && !hasValidGps;
+                const hasValidGpsFlag = hasValidGps(metadata?.gps);
 
                 return (
                   <div
@@ -471,25 +470,37 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
                     onMouseLeave={handleImageLeave}
                     onMouseMove={(e) => setTooltipPosition({ x: e.clientX, y: e.clientY })}
                   >
-                    <img
-                      src={getImageUrl(filename)}
-                      alt={filename}
-                      title={filename}
-                    />
+                    {(() => {
+                      const thumbSrc = normalizeImageUrl(item?.thumb_url, 'thumb') || getImageVariantUrl(filename, 'thumb');
+                      const previewSrc = normalizeImageUrl(item?.preview_url, 'preview') || getImageVariantUrl(filename, 'preview');
+                      return (
+                        <img
+                          src={thumbSrc}
+                          srcSet={`${thumbSrc} 400w, ${previewSrc} 800w`}
+                          sizes="(min-width: 1024px) 200px, 50vw"
+                          alt={filename}
+                          title={filename}
+                          loading="lazy"
+                          decoding="async"
+                          style={{ aspectRatio: '4 / 3', objectFit: 'cover' }}
+                        />
+                      );
+                    })()}
                     <div className="image-name">
                       <span className="image-name-text">
                         {metadata?.original_filename || filename}
                       </span>
-                      <button
-                        className="view-on-map-chip"
-                        onClick={(event) => handleViewOnMap(filename, event, metadata)}
-                        disabled={disableViewButton}
-                        title={disableViewButton ? 'No GPS location available' : 'View this image on the map'}
-                      >
-                        View on map
-                      </button>
+                      {hasValidGpsFlag && (
+                        <button
+                          className="view-on-map-chip"
+                          onClick={(event) => handleViewOnMap(filename, event, metadata)}
+                          title="View this image on the map"
+                        >
+                          View on map
+                        </button>
+                      )}
                     </div>
-                    {metadata?.gps && (
+                    {metadata?.gps && hasValidGpsFlag && (
                       <div className="gps-indicator" title="Has GPS location">📍</div>
                     )}
                     {!readOnly && (
@@ -531,9 +542,24 @@ function ImageGalleryPanel({ tripId, onDataChange, readOnly }) {
             <div className="modal-layout">
               <div className="modal-image">
                 <img
-                  src={getImageUrl(selectedImage)}
+                  src={getImageVariantUrl(selectedImage, 'preview')}
+                  srcSet={`${getImageVariantUrl(selectedImage, 'preview')} 800w, ${getImageUrl(selectedImage, 'original')} 1600w`}
+                  sizes="(min-width: 1024px) 70vw, 90vw"
                   alt={selectedImage}
+                  loading="lazy"
+                  decoding="async"
+                  style={{ maxHeight: '70vh', objectFit: 'contain' }}
                 />
+                <div className="modal-actions">
+                  <a
+                    href={getImageUrl(selectedImage, 'original')}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="download-original"
+                  >
+                    Download original
+                  </a>
+                </div>
               </div>
               <div className="modal-sidebar">
                 {renderImageInfo(selectedImage)}
