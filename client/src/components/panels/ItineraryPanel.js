@@ -131,7 +131,7 @@ const FeatureItem = ({
       selected={selected}
       onClick={() => onSelect(feature.id)}
       onDoubleClick={handleDoubleClick}
-      className="mb-2"
+      className="mb-2 group"
       title="Double-click to navigate on map"
     >
       <CardBody className="p-3 flex items-center justify-between gap-2">
@@ -615,50 +615,53 @@ const ItineraryPanel = ({
                   )}
 
                   <div className="pl-4 border-l-2 border-slate-200 space-y-3">
-                      {/* Day Stats & Summary */}
+                      {/* Day Stats */}
                       {group.dayNum >= 0 && group.dayNum < 900000 && (
                         <>
                           <DailyProfileCard dailyCheckpoints={group.items} />
                           <DailyHazardCard dailyCheckpoints={group.items} />
-                          
-                          {/* Route/Area Cards */}
-                          <div className="space-y-2 mb-3">
-                            {group.items
-                              .filter(item => {
-                                const t = item.geometry?.type?.toLowerCase();
-                                return t === 'linestring' || t === 'multilinestring' || t === 'polygon' || t === 'multipolygon';
-                              })
-                              .map(item => {
-                                const arrival = getArrivalTime(item);
-                                const itemForRender = arrival && !item.properties?.estimated_arrival
-                                  ? { ...item, properties: { ...item.properties, estimated_arrival: arrival } }
-                                  : item;
-                                const commonProps = {
-                                  feature: itemForRender,
-                                  selected: item.id === selectedFeatureId,
-                                  isScheduled: true,
-                                  onSelect: onSelectFeature,
-                                  onUpdate: onUpdateFeature,
-                                  onDelete: onDeleteFeature,
-                                  onNavigate: onCenterFeature,
-                                  onEdit: onEditFeature,
-                                  readOnly,
-                                };
-                                if (item.geometry?.type?.toLowerCase().includes('line')) {
-                                  return <RouteCard key={item.id} {...commonProps} />;
-                                }
-                                return <AreaCard key={item.id} {...commonProps} />;
-                              })
+                        </>
+                      )}
+                      
+                      {/* Route/Area Cards - Always show if present in this group */}
+                      <div className="space-y-2 mb-3">
+                        {group.items
+                          .filter(item => {
+                            const t = item.geometry?.type?.toLowerCase();
+                            return t === 'linestring' || t === 'multilinestring' || t === 'polygon' || t === 'multipolygon';
+                          })
+                          .map(item => {
+                            const arrival = getArrivalTime(item);
+                            const itemForRender = arrival && !item.properties?.estimated_arrival
+                              ? { ...item, properties: { ...item.properties, estimated_arrival: arrival } }
+                              : item;
+                            const commonProps = {
+                              feature: itemForRender,
+                              selected: item.id === selectedFeatureId,
+                              isScheduled: true,
+                              onSelect: onSelectFeature,
+                              onUpdate: onUpdateFeature,
+                              onDelete: onDeleteFeature,
+                              onNavigate: onCenterFeature,
+                              onEdit: onEditFeature,
+                              readOnly,
+                            };
+                            if (item.geometry?.type?.toLowerCase().includes('line')) {
+                              return <RouteCard key={item.id} {...commonProps} />;
                             }
-                          </div>
+                            return <AreaCard key={item.id} {...commonProps} />;
+                          })
+                        }
+                      </div>
 
+                      {/* Day Summary */}
+                      {group.dayNum >= 0 && group.dayNum < 900000 && (
                           <EmbeddedDaySummary
                             dayNumber={group.dayNum}
                             summary={daySummaries.find(d => d.day_number === group.dayNum)}
                             onChange={handleDaySummaryChange}
                             readOnly={readOnly}
                           />
-                        </>
                       )}
 
                       {/* Point Markers */}

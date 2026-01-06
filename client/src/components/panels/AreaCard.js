@@ -7,6 +7,7 @@
 import React, { useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { format } from 'date-fns';
+import { Card, CardBody } from '../common/Card/Card';
 import { formatDurationSimple } from '../../services/planService';
 import { formatArea } from '../../utils/geoUtils';
 import './ItineraryPanel.css';
@@ -41,12 +42,10 @@ const AreaCard = ({
 
   const isHazard = semantic_type === 'hazard';
   const borderColor = isHazard ? 'border-red-500' : 'border-gray-400';
-  const bgColor = isHazard ? 'bg-red-50' : 'bg-gray-50';
-  const textColor = isHazard ? 'text-red-900' : 'text-gray-900';
-  const noteColor = isHazard ? 'text-red-700' : 'text-gray-600';
+  const bgColor = isHazard ? 'bg-red-50' : ''; 
+  const textColor = isHazard ? 'text-red-900' : 'text-slate-900';
+  const noteColor = isHazard ? 'text-red-700' : 'text-slate-600';
 
-  // For Area (non-point) features use date-granularity scheduling.
-  // Display only the scheduled date (no duration shown in card header)
   const startDateStr = estimated_arrival ? format(new Date(estimated_arrival), 'MMM d') : '';
 
   const handleToggleSchedule = useCallback((e) => {
@@ -71,10 +70,6 @@ const AreaCard = ({
       });
     }
   }, [isScheduled, feature.id, feature.properties, onUpdate]);
-
-  const handleDurationChange = (e) => {
-      setDurationValue(parseInt(e.target.value) || 0);
-  };
 
   const handleDateChange = (e) => {
       setDateValue(e.target.value);
@@ -121,97 +116,114 @@ const AreaCard = ({
   }, []);
 
   return (
-    <div 
-      className={`timeline-card area-card border-l-4 ${borderColor} ${bgColor} ${selected ? 'selected' : ''}`}
+    <Card 
+      variant="plan"
+      selected={selected}
+      className={`mb-2 border-l-4 ${borderColor} ${bgColor} group`}
       onClick={() => onSelect(feature.id)}
       onDoubleClick={handleDoubleClick}
     >
-      <div className="header flex justify-between items-start">
-        <div className="flex items-center gap-2 overflow-hidden">
-            <span>{isHazard ? '⚠️' : '⬠'}</span>
-            {isEditingCard ? (
-              <input
-                type="text"
-                className={`font-bold ${textColor} truncate border-b ${isHazard ? 'border-red-300' : 'border-gray-300'} bg-transparent px-1`}
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                autoFocus
-              />
-            ) : (
-              <span className={`font-bold ${textColor} truncate`}>{name || 'Area'}</span>
-            )}
+      <CardBody className="p-3">
+        <div className="flex justify-between items-start w-full gap-2">
+          <div className="flex items-center gap-2 overflow-hidden flex-1">
+              <span className="text-lg">{isHazard ? '⚠️' : '⬠'}</span>
+              {isEditingCard ? (
+                <input
+                  type="text"
+                  className={`font-bold ${textColor} truncate border-b ${isHazard ? 'border-red-300' : 'border-[var(--color-brand)]'} outline-none bg-transparent w-full`}
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  autoFocus
+                />
+              ) : (
+                <span className={`font-bold ${textColor} truncate`}>{name || 'Area'}</span>
+              )}
+          </div>
+          
+          <div className="text-right flex-shrink-0">
+               {isEditingTime ? (
+                 <div className="flex items-center bg-white p-1 rounded shadow border border-slate-200" onClick={e => e.stopPropagation()}>
+                   <input
+                     type="date"
+                     className="text-xs p-1 border rounded"
+                     value={dateValue || (estimated_arrival ? format(new Date(estimated_arrival), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))}
+                     onChange={handleDateChange}
+                   />
+                   <button className="ml-1 text-green-600 font-bold px-1" onClick={saveDateTime}>✓</button>
+                   <button className="text-slate-400 px-1" onClick={() => setIsEditingTime(false)}>✕</button>
+                 </div>
+               ) : (
+                <div 
+                  className={`time-range text-sm font-mono ${textColor} cursor-pointer hover:bg-white/50 rounded px-1`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!readOnly) setIsEditingTime(true);
+                  }}
+                  title="Click to edit date"
+                >
+                  {startDateStr}
+                </div>
+               )}
+          </div>
         </div>
-        
-        <div className="text-right flex-shrink-0">
-             {isEditingTime ? (
-               <div className="flex items-center bg-white p-1 rounded shadow" onClick={e => e.stopPropagation()}>
-                 <input
-                   type="date"
-                   className="text-xs p-1 border rounded"
-                   value={dateValue || (estimated_arrival ? format(new Date(estimated_arrival), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))}
-                   onChange={handleDateChange}
-                 />
-                 <button className="ml-1 text-green-600 font-bold" onClick={saveDateTime}>✓</button>
-               </div>
-             ) : (
-              <div 
-                className={`time-range text-sm font-mono ${textColor} cursor-pointer hover:bg-white/50 rounded px-1`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!readOnly) setIsEditingTime(true);
-                }}
-                title="Click to edit date"
+
+        <div className="text-xs text-slate-500 mt-2">
+          {area_sq_m && <span>📐 {formatArea(area_sq_m)}</span>}
+        </div>
+
+        {isEditingCard && (
+          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+            <textarea
+              className="w-full text-xs border rounded p-2 focus:ring-1 focus:ring-[var(--color-brand)] focus:border-[var(--color-brand)]"
+              placeholder="Description (optional)"
+              value={descInput}
+              onChange={(e) => setDescInput(e.target.value)}
+              rows={2}
+            />
+            <div className="flex justify-end gap-2 mt-2">
+              <button
+                className="px-2 py-1 text-xs bg-[var(--color-brand)] text-white rounded hover:opacity-90"
+                onClick={handleSaveCard}
               >
-                {startDateStr}
-              </div>
-             )}
-        </div>
-      </div>
-
-      <div className="stats text-xs text-gray-600 mt-1">
-        {area_sq_m && <span>📐 {formatArea(area_sq_m)}</span>}
-      </div>
-
-      {isEditingCard && (
-        <div className="mt-2" onClick={(e) => e.stopPropagation()}>
-          <textarea
-            className="w-full text-xs border rounded p-2 bg-white"
-            placeholder="Description (optional)"
-            value={descInput}
-            onChange={(e) => setDescInput(e.target.value)}
-            rows={2}
-          />
-          <div className="flex justify-end gap-2 mt-1">
-            <button
-              className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
-              onClick={handleSaveCard}
-            >
-              Save
-            </button>
-            <button
-              className="px-2 py-1 text-xs bg-gray-400 text-white rounded hover:bg-gray-500"
-              onClick={handleCancelCard}
-            >
-              Cancel
-            </button>
+                Save
+              </button>
+              <button
+                className="px-2 py-1 text-xs bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
+                onClick={handleCancelCard}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {!isEditingCard && (notes || description) && (
-        <div className={`notes text-xs ${noteColor} mt-1`}>
-          📝 {notes || description}
-        </div>
-      )}
-
-      {!readOnly && (
-          <div className="card-actions flex justify-end mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={handleToggleSchedule} title="Remove from schedule" className="text-xs mr-2">📅✕</button>
-              <button onClick={(e) => { e.stopPropagation(); onDelete(feature.id); }} title="Delete" className="text-xs">🗑️</button>
+        {!isEditingCard && (notes || description) && (
+          <div className={`mt-2 text-xs ${noteColor} bg-white/50 border border-transparent p-2 rounded`}>
+            📝 {notes || description}
           </div>
-      )}
-    </div>
+        )}
+
+        {!readOnly && (
+            <div className="flex justify-end mt-2 pt-2 border-t border-slate-200/50 opacity-0 group-hover:opacity-100 transition-opacity gap-2">
+                <button 
+                  onClick={handleToggleSchedule} 
+                  title="Remove from schedule" 
+                  className="p-1 rounded text-xs bg-white/80 border border-slate-200 text-slate-500 hover:text-red-500"
+                >
+                  📅✕
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onDelete(feature.id); }} 
+                  title="Delete" 
+                  className="p-1 rounded text-xs bg-white/80 border border-slate-200 text-slate-500 hover:text-red-500"
+                >
+                  🗑️
+                </button>
+            </div>
+        )}
+      </CardBody>
+    </Card>
   );
 };
 
