@@ -23,6 +23,7 @@ import {
   getCategoryLabel,
   SEMANTIC_TYPE,
 } from '../../services/planService';
+import { getImageUrl } from '../../services/api';
 import { ICON_CONFIG } from '../../utils/mapIcons';
 import './ItineraryPanel.css';
 
@@ -53,11 +54,13 @@ const FeatureItem = ({
   onDelete,
   onDoubleClick,
   readOnly,
+  members,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState('');
   
   const category = feature.properties?.category || 'marker';
+  const creator = members?.find(m => String(m.id) === String(feature.properties?.created_by));
 
   const handleStartEdit = () => {
     if (readOnly) return;
@@ -167,6 +170,15 @@ const FeatureItem = ({
             </div>
           )}
         </div>
+
+        {creator && (
+            <img 
+                src={creator.avatar_url ? (creator.avatar_url.startsWith('http') ? creator.avatar_url : getImageUrl(creator.avatar_url)) : '/default-avatar.svg'} 
+                alt={creator.username}
+                title={`Created by ${creator.username}`}
+                className="w-5 h-5 rounded-full border border-white shadow-sm flex-shrink-0 ml-1"
+            />
+        )}
 
         {!readOnly && !isEditing && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -363,6 +375,7 @@ const ItineraryPanel = ({
   daySummariesDirty,
   savingDaySummaries,
   readOnly,
+  members,
 }) => {
   const [draggedIndex, setDraggedIndex] = useState(null);
 
@@ -693,6 +706,7 @@ const ItineraryPanel = ({
                                 showDeltaTime={index > 0}
                                 previousArrival={index > 0 ? getArrivalTime(filteredItems[index - 1]) : null}
                                 hasSubsequentItems={index < filteredItems.length - 1}
+                                members={members}
                               />
                             );
                           })}
@@ -737,31 +751,32 @@ const ItineraryPanel = ({
                     onNavigate={onCenterFeature}
                     onEdit={onEditFeature}
                     readOnly={readOnly}
+                    members={members}
                   />
                 ))}
               </FeatureGroup>
 
               <FeatureGroup title="WATER" icon={ICON_CONFIG.water.emoji} count={groupedFeatures.water.length}>
                 {groupedFeatures.water.map(feature => (
-                  <MarkerCard key={feature.id} feature={feature} selected={feature.id === selectedFeatureId} isScheduled={false} onSelect={onSelectFeature} onUpdate={onUpdateFeature} onDelete={onDeleteFeature} onNavigate={onCenterFeature} onEdit={onEditFeature} readOnly={readOnly} />
+                  <MarkerCard key={feature.id} feature={feature} selected={feature.id === selectedFeatureId} isScheduled={false} onSelect={onSelectFeature} onUpdate={onUpdateFeature} onDelete={onDeleteFeature} onNavigate={onCenterFeature} onEdit={onEditFeature} readOnly={readOnly} members={members} />
                 ))}
               </FeatureGroup>
 
               <FeatureGroup title="CAMPS" icon={ICON_CONFIG.camp.emoji} count={groupedFeatures.camp.length}>
                 {groupedFeatures.camp.map(feature => (
-                  <MarkerCard key={feature.id} feature={feature} selected={feature.id === selectedFeatureId} isScheduled={false} onSelect={onSelectFeature} onUpdate={onUpdateFeature} onDelete={onDeleteFeature} onNavigate={onCenterFeature} onEdit={onEditFeature} readOnly={readOnly} />
+                  <MarkerCard key={feature.id} feature={feature} selected={feature.id === selectedFeatureId} isScheduled={false} onSelect={onSelectFeature} onUpdate={onUpdateFeature} onDelete={onDeleteFeature} onNavigate={onCenterFeature} onEdit={onEditFeature} readOnly={readOnly} members={members} />
                 ))}
               </FeatureGroup>
 
                <FeatureGroup title="SIGNALS" icon={ICON_CONFIG.signal.emoji} count={groupedFeatures.signal.length}>
                 {groupedFeatures.signal.map(feature => (
-                  <MarkerCard key={feature.id} feature={feature} selected={feature.id === selectedFeatureId} isScheduled={false} onSelect={onSelectFeature} onUpdate={onUpdateFeature} onDelete={onDeleteFeature} onNavigate={onCenterFeature} onEdit={onEditFeature} readOnly={readOnly} />
+                  <MarkerCard key={feature.id} feature={feature} selected={feature.id === selectedFeatureId} isScheduled={false} onSelect={onSelectFeature} onUpdate={onUpdateFeature} onDelete={onDeleteFeature} onNavigate={onCenterFeature} onEdit={onEditFeature} readOnly={readOnly} members={members} />
                 ))}
               </FeatureGroup>
 
                <FeatureGroup title="CHECK-INS" icon={ICON_CONFIG.checkin.emoji} count={groupedFeatures.checkin.length}>
                 {groupedFeatures.checkin.map(feature => (
-                  <MarkerCard key={feature.id} feature={feature} selected={feature.id === selectedFeatureId} isScheduled={false} onSelect={onSelectFeature} onUpdate={onUpdateFeature} onDelete={onDeleteFeature} onNavigate={onCenterFeature} onEdit={onEditFeature} readOnly={readOnly} />
+                  <MarkerCard key={feature.id} feature={feature} selected={feature.id === selectedFeatureId} isScheduled={false} onSelect={onSelectFeature} onUpdate={onUpdateFeature} onDelete={onDeleteFeature} onNavigate={onCenterFeature} onEdit={onEditFeature} readOnly={readOnly} members={members} />
                 ))}
               </FeatureGroup>
 
@@ -779,6 +794,7 @@ const ItineraryPanel = ({
                       onNavigate={onCenterFeature}
                       onEdit={onEditFeature}
                       readOnly={readOnly}
+                      members={members}
                     />
                   ) : (
                     <FeatureItem
@@ -790,6 +806,7 @@ const ItineraryPanel = ({
                       onDelete={onDeleteFeature}
                       onDoubleClick={onFlyToFeature}
                       readOnly={readOnly}
+                      members={members}
                     />
                   )
                 ))}

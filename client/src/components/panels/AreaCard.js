@@ -9,6 +9,7 @@ import PropTypes from 'prop-types';
 import { format } from 'date-fns';
 import { Card, CardBody } from '../common/Card/Card';
 import { formatDurationSimple } from '../../services/planService';
+import { getImageUrl } from '../../services/api';
 import { formatArea } from '../../utils/geoUtils';
 import './ItineraryPanel.css';
 
@@ -22,6 +23,7 @@ const AreaCard = ({
   onNavigate,
   onEdit,
   readOnly,
+  members,
 }) => {
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [durationValue, setDurationValue] = useState(feature.properties?.estimated_duration_minutes || 30);
@@ -29,6 +31,8 @@ const AreaCard = ({
   const [isEditingCard, setIsEditingCard] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [descInput, setDescInput] = useState('');
+
+  const creator = members?.find(m => String(m.id) === String(feature.properties?.created_by));
 
   const {
     name,
@@ -205,7 +209,15 @@ const AreaCard = ({
         )}
 
         {!readOnly && (
-            <div className="flex justify-end mt-2 pt-2 border-t border-slate-200/50 opacity-0 group-hover:opacity-100 transition-opacity gap-2">
+            <div className="flex justify-end mt-2 pt-2 border-t border-slate-200/50 opacity-0 group-hover:opacity-100 transition-opacity gap-2 items-center">
+                {creator && (
+                    <img 
+                        src={creator.avatar_url ? (creator.avatar_url.startsWith('http') ? creator.avatar_url : getImageUrl(creator.avatar_url)) : '/default-avatar.svg'} 
+                        alt={creator.username}
+                        title={`Created by ${creator.username}`}
+                        className="w-4 h-4 rounded-full border border-white shadow-sm mr-auto"
+                    />
+                )}
                 <button 
                   onClick={handleToggleSchedule} 
                   title="Remove from schedule" 

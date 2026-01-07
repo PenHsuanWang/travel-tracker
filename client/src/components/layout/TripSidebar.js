@@ -134,8 +134,9 @@ function TripSidebar({
             <ManageMembersModal
                 isOpen={isMemberModalOpen}
                 onClose={() => setIsMemberModalOpen(false)}
-                trip={trip}
-                onTripUpdated={handleTripUpdated}
+                entity={trip}
+                onEntityUpdated={handleTripUpdated}
+                type="trip"
             />
         </aside>
     );
