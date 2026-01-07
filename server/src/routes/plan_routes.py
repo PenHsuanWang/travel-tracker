@@ -235,10 +235,13 @@ async def update_plan(
     # Convert Pydantic model to dict, excluding None values
     update_dict = update_data.model_dump(exclude_none=True)
     
-    plan = plan_service.update_plan(plan_id, update_dict)
-    if not plan:
-        raise HTTPException(status_code=404, detail="Plan not found")
-    return plan
+    try:
+        plan = plan_service.update_plan(plan_id, update_dict, current_user_id=current_user.id)
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        return plan
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 
 @router.delete("/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -388,7 +391,7 @@ async def add_feature(
     if not (is_owner or is_member):
         raise HTTPException(status_code=403, detail="Not authorized to add features to this plan")
     
-    feature = plan_service.add_feature(plan_id, feature_data.geometry, feature_data.properties)
+    feature = plan_service.add_feature(plan_id, feature_data.geometry, feature_data.properties, user_id=current_user.id)
     if not feature:
         raise HTTPException(status_code=500, detail="Failed to add feature")
     return feature
@@ -420,10 +423,13 @@ async def update_feature(
     if feature_data.properties:
         updates["properties"] = feature_data.properties
     
-    feature = plan_service.update_feature(plan_id, feature_id, updates)
-    if not feature:
-        raise HTTPException(status_code=404, detail="Feature not found")
-    return feature
+    try:
+        feature = plan_service.update_feature(plan_id, feature_id, updates, user_id=current_user.id)
+        if not feature:
+            raise HTTPException(status_code=404, detail="Feature not found")
+        return feature
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 
 @router.delete("/{plan_id}/features/{feature_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -445,10 +451,13 @@ async def delete_feature(
     if not (is_owner or is_member):
         raise HTTPException(status_code=403, detail="Not authorized to delete features from this plan")
     
-    success = plan_service.delete_feature(plan_id, feature_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Feature not found")
-    return None
+    try:
+        success = plan_service.delete_feature(plan_id, feature_id, user_id=current_user.id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Feature not found")
+        return None
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 
 class FeatureCascadeUpdateRequest(BaseModel):

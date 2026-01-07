@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { updateTripMembers, getImageUrl } from '../../services/api';
+import { updatePlanMembers } from '../../services/planService';
 import userService from '../../services/userService';
 import './ManageMembersModal.css';
 
-const ManageMembersModal = ({ isOpen, onClose, trip, onTripUpdated }) => {
+const ManageMembersModal = ({ isOpen, onClose, entity, onEntityUpdated, type = 'trip' }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [selectedMembers, setSelectedMembers] = useState([]);
@@ -11,13 +12,17 @@ const ManageMembersModal = ({ isOpen, onClose, trip, onTripUpdated }) => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
 
+    // Backwards compatibility alias if "trip" prop passed instead of "entity"
+    // (Though we will update caller, good for safety)
+    const targetEntity = entity;
+
     useEffect(() => {
-        if (trip && trip.members) {
-            setSelectedMembers(trip.members);
+        if (targetEntity && targetEntity.members) {
+            setSelectedMembers(targetEntity.members);
         } else {
             setSelectedMembers([]);
         }
-    }, [trip]);
+    }, [targetEntity]);
 
     // Debounce search
     useEffect(() => {
@@ -39,7 +44,7 @@ const ManageMembersModal = ({ isOpen, onClose, trip, onTripUpdated }) => {
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    if (!isOpen || !trip) return null;
+    if (!isOpen || !targetEntity) return null;
 
     const handleAddMember = (user) => {
         if (!selectedMembers.find(m => m.id === user.id)) {
@@ -50,9 +55,6 @@ const ManageMembersModal = ({ isOpen, onClose, trip, onTripUpdated }) => {
     };
 
     const handleRemoveMember = (userId) => {
-        // Don't allow removing the owner if they are in the list (though usually owner is separate)
-        // But if the owner is in the members list, we should probably prevent removal or backend handles it.
-        // Backend `update_members` ensures owner is kept.
         setSelectedMembers(prev => prev.filter(m => m.id !== userId));
     };
 
@@ -61,25 +63,27 @@ const ManageMembersModal = ({ isOpen, onClose, trip, onTripUpdated }) => {
         setError(null);
         try {
             const memberIds = selectedMembers.map(m => m.id).filter(id => id);
-            const updatedTrip = await updateTripMembers(trip.id, memberIds);
             
-            // The updatedTrip from backend might not have full member objects populated immediately 
-            // depending on the return type of updateTrip (it returns Trip, not TripResponse usually).
-            // But our service `update_trip` returns `Trip` object.
-            // We might need to manually construct the payload for the parent or re-fetch.
-            // For now, let's pass the selectedMembers back to update the UI optimistically.
+            let updatedEntity;
+            if (type === 'plan') {
+                updatedEntity = await updatePlanMembers(targetEntity.id, memberIds);
+            } else {
+                updatedEntity = await updateTripMembers(targetEntity.id, memberIds);
+            }
             
-            const optimisticTrip = {
-                ...trip,
+            const optimisticEntity = {
+                ...targetEntity,
                 members: selectedMembers,
                 member_ids: memberIds
             };
             
-            onTripUpdated(optimisticTrip);
+            if (onEntityUpdated) {
+                onEntityUpdated(optimisticEntity);
+            }
             onClose();
         } catch (err) {
             console.error("Failed to update members:", err);
-            setError("Failed to update members. Please try again.");
+            setError(`Failed to update ${type} members. Please try again.`);
         } finally {
             setSaving(false);
         }
@@ -89,7 +93,7 @@ const ManageMembersModal = ({ isOpen, onClose, trip, onTripUpdated }) => {
         <div className="modal-overlay">
             <div className="modal-content manage-members-modal">
                 <div className="modal-header">
-                    <h2>Manage Trip Members</h2>
+                    <h2>Manage {type === 'plan' ? 'Plan' : 'Trip'} Members</h2>
                     <button className="close-button" onClick={onClose}>&times;</button>
                 </div>
 
@@ -124,7 +128,10 @@ const ManageMembersModal = ({ isOpen, onClose, trip, onTripUpdated }) => {
                             )}
                         </div>
                         <p className="helper-text" style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>
-                            Contributors can upload photos and edit journal notes. Only the Owner can delete the trip or manage members.
+                            {type === 'plan' 
+                                ? "Contributors can add markers and edit logistics. Only the Owner can delete the plan or manage members."
+                                : "Contributors can upload photos and edit journal notes. Only the Owner can delete the trip or manage members."
+                            }
                         </p>
                         
                         <div className="selected-members-list">

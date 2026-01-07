@@ -191,6 +191,7 @@ class PlanFeatureProperties(BaseModel):
     manual_day_break: bool = Field(default=False)  # FR-B03: Force new day after this feature
     
     # Audit
+    created_by: Optional[str] = None  # User ID of the creator (Collaborative Planning)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
 
