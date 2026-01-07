@@ -187,15 +187,19 @@ class PlanService:
                     
         return plan_response
     
-    def update_plan(self, plan_id: str, update_data: Dict[str, Any]) -> Optional[Plan]:
+    def update_plan(self, plan_id: str, update_data: Dict[str, Any], current_user_id: Optional[str] = None) -> Optional[Plan]:
         """Update a plan document with allowed fields.
         
         Args:
             plan_id: Plan identifier.
             update_data: Mapping of fields to update.
+            current_user_id: ID of the user performing the update.
             
         Returns:
             Updated plan model or None if not found.
+            
+        Raises:
+            PermissionError: If user is not the owner.
         """
         raw_data = self.storage_manager.load_data(
             'mongodb',
@@ -206,6 +210,10 @@ class PlanService:
             return None
             
         current_plan = Plan(**raw_data)
+        
+        # Permission check: Owner Only for metadata
+        if current_user_id and current_plan.owner_id != current_user_id:
+            raise PermissionError("Only the plan owner can update plan settings.")
         
         # Update allowed fields
         plan_dict = current_plan.model_dump()
@@ -455,13 +463,15 @@ class PlanService:
     # -------------------------------------------------------------------------
     
     def add_feature(self, plan_id: str, geometry: GeoJSONGeometry, 
-                    properties: Optional[Dict[str, Any]] = None) -> Optional[PlanFeature]:
+                    properties: Optional[Dict[str, Any]] = None,
+                    user_id: Optional[str] = None) -> Optional[PlanFeature]:
         """Add a GeoJSON feature to a plan's feature collection.
         
         Args:
             plan_id: Plan identifier.
             geometry: GeoJSON geometry object.
             properties: Optional feature properties.
+            user_id: ID of the user creating the feature.
             
         Returns:
             The created feature, or None if plan not found.
@@ -476,6 +486,8 @@ class PlanService:
         # Build feature
         feature_props = PlanFeatureProperties(**(properties or {}))
         feature_props.created_at = datetime.utcnow()
+        if user_id:
+            feature_props.created_by = user_id
         
         logger.debug(f"add_feature: Created PlanFeatureProperties with category={feature_props.category}")
         
@@ -508,21 +520,45 @@ class PlanService:
         return feature
     
     def update_feature(self, plan_id: str, feature_id: str, 
-                       updates: Dict[str, Any]) -> Optional[PlanFeature]:
+                       updates: Dict[str, Any],
+                       user_id: Optional[str] = None) -> Optional[PlanFeature]:
         """Update a specific feature within a plan.
         
         Args:
             plan_id: Plan identifier.
             feature_id: Feature identifier.
             updates: Dictionary with 'geometry' and/or 'properties' updates.
+            user_id: ID of the user performing the update.
             
         Returns:
             Updated feature or None if not found.
+            
+        Raises:
+            PermissionError: If user is not allowed to edit this feature.
         """
         adapter = self.storage_manager.adapters.get('mongodb')
         if not adapter:
             raise RuntimeError("MongoDB adapter not initialized")
             
+        # 1. Permission Check (Lineage)
+        if user_id:
+            plan = self.get_plan(plan_id)
+            if not plan:
+                return None
+                
+            is_owner = plan.owner_id == user_id
+            
+            # Find the target feature
+            target_feature = next((f for f in plan.features.features if f.id == feature_id), None)
+            if not target_feature:
+                return None
+                
+            # If not owner, check if creator
+            if not is_owner:
+                creator_id = target_feature.properties.created_by
+                if creator_id != user_id:
+                    raise PermissionError("You can only edit features you created.")
+
         collection = adapter.get_collection(self.collection_name)
         
         # Build update expression for nested feature
@@ -557,19 +593,42 @@ class PlanService:
                     
         return None
     
-    def delete_feature(self, plan_id: str, feature_id: str) -> bool:
+    def delete_feature(self, plan_id: str, feature_id: str, user_id: Optional[str] = None) -> bool:
         """Remove a feature from a plan.
         
         Args:
             plan_id: Plan identifier.
             feature_id: Feature identifier.
+            user_id: ID of the user performing the deletion.
             
         Returns:
             True if feature was deleted, False otherwise.
+            
+        Raises:
+            PermissionError: If user is not allowed to delete this feature.
         """
         adapter = self.storage_manager.adapters.get('mongodb')
         if not adapter:
             raise RuntimeError("MongoDB adapter not initialized")
+        
+        # 1. Permission Check (Lineage)
+        if user_id:
+            plan = self.get_plan(plan_id)
+            if not plan:
+                return False
+                
+            is_owner = plan.owner_id == user_id
+            
+            # Find the target feature
+            target_feature = next((f for f in plan.features.features if f.id == feature_id), None)
+            if not target_feature:
+                return False
+                
+            # If not owner, check if creator
+            if not is_owner:
+                creator_id = target_feature.properties.created_by
+                if creator_id != user_id:
+                    raise PermissionError("You can only delete features you created.")
             
         collection = adapter.get_collection(self.collection_name)
         

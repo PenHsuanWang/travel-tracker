@@ -508,6 +508,7 @@ const OperationsPanel = ({
   onSave,
   saving = false,
   readOnly = false,
+  canManagePlan = false,
 }) => {
   const [activeTab, setActiveTab] = useState(TABS.TEAM);
   const [hasChanges, setHasChanges] = useState(false);
@@ -599,7 +600,7 @@ const OperationsPanel = ({
             <SettingsPanel 
               plan={plan} 
               onUpdate={handlePlanUpdate} 
-              readOnly={readOnly} 
+              readOnly={readOnly || !canManagePlan} 
             />
           </div>
         )}
@@ -640,6 +641,7 @@ OperationsPanel.propTypes = {
   onSave: PropTypes.func.isRequired,
   saving: PropTypes.bool,
   readOnly: PropTypes.bool,
+  canManagePlan: PropTypes.bool,
 };
 
 export default OperationsPanel;

@@ -47,6 +47,7 @@ import {
 import { fetchGpxAnalysis } from '../../services/api';
 import { calculateLengthKm, calculateAreaSqM } from '../../utils/geoUtils';
 import GpxImportOptionsModal from '../common/GpxImportOptionsModal';
+import ManageMembersModal from '../common/ManageMembersModal';
 import '../../styles/PlanCanvas.css';
 
 const PlanCanvas = () => {
@@ -81,6 +82,7 @@ const PlanCanvas = () => {
   const [gpxImportModalOpen, setGpxImportModalOpen] = useState(false);
   const [gpxPreviewData, setGpxPreviewData] = useState(null);
   const [uploadingGpx, setUploadingGpx] = useState(false);
+  const [manageMembersModalOpen, setManageMembersModalOpen] = useState(false);
 
   const mapRef = useRef(null);
 
@@ -227,6 +229,17 @@ const PlanCanvas = () => {
   const handleUpdateFeature = useCallback(
     async (featureId, updates) => {
       if (!canEdit || !plan) return;
+
+      // Lineage Check
+      if (!isOwner) {
+        const target = getFeaturesArray(plan).find(f => f.id === featureId);
+        // We only check if created_by is present (backward compatibility)
+        if (target?.properties?.created_by && target.properties.created_by !== userId) {
+          alert("You can only edit features you created.");
+          return;
+        }
+      }
+
       try {
         setSaving(true);
         
@@ -263,6 +276,16 @@ const PlanCanvas = () => {
   const handleUpdateFeatureWithCascade = useCallback(
     async (featureId, updates) => {
       if (!canEdit || !plan) return;
+
+      // Lineage Check
+      if (!isOwner) {
+        const target = getFeaturesArray(plan).find(f => f.id === featureId);
+        if (target?.properties?.created_by && target.properties.created_by !== userId) {
+          alert("You can only edit features you created.");
+          return;
+        }
+      }
+
       try {
         setSaving(true);
         const updatedPlan = await updateFeatureWithCascade(planId, featureId, updates, true);
@@ -279,6 +302,16 @@ const PlanCanvas = () => {
   const handleDeleteFeature = useCallback(
     async (featureId) => {
       if (!canEdit || !plan) return;
+
+      // Lineage Check
+      if (!isOwner) {
+        const target = getFeaturesArray(plan).find(f => f.id === featureId);
+        if (target?.properties?.created_by && target.properties.created_by !== userId) {
+          alert("You can only delete features you created.");
+          return;
+        }
+      }
+
       if (!window.confirm('Delete this feature?')) return;
       try {
         setSaving(true);
@@ -653,13 +686,23 @@ const PlanCanvas = () => {
             </button>
           </div>
           {canManage && (
-            <button
-              className="header-btn btn-delete"
-              onClick={handleDeletePlan}
-              title="Delete plan"
-            >
-              Delete Plan
-            </button>
+            <>
+              <button
+                className="header-btn btn-manage-team"
+                onClick={() => setManageMembersModalOpen(true)}
+                title="Manage Team"
+                style={{ marginRight: '8px' }}
+              >
+                Manage Team
+              </button>
+              <button
+                className="header-btn btn-delete"
+                onClick={handleDeletePlan}
+                title="Delete plan"
+              >
+                Delete Plan
+              </button>
+            </>
           )}
         </div>
       </header>
@@ -712,6 +755,7 @@ const PlanCanvas = () => {
               onSave={handleSaveLogistics}
               saving={saving}
               readOnly={!canEdit}
+              canManagePlan={canManage}
             />
           </div>
         )}
@@ -798,6 +842,7 @@ const PlanCanvas = () => {
             daySummariesDirty={daySummariesDirty}
             savingDaySummaries={saving}
             readOnly={!canEdit}
+            members={plan.members}
           />
         )}
       </div>
@@ -811,6 +856,17 @@ const PlanCanvas = () => {
           planStartDate={plan.planned_start_date}
         />
       )}
+
+      <ManageMembersModal
+        isOpen={manageMembersModalOpen}
+        onClose={() => setManageMembersModalOpen(false)}
+        entity={plan}
+        onEntityUpdated={(updatedPlan) => {
+           setPlan(updatedPlan);
+           // Also update local state for consistency if needed, though plan update should cover it
+        }}
+        type="plan"
+      />
 
     </div>
   );

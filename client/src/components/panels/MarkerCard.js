@@ -8,6 +8,7 @@ import PropTypes from 'prop-types';
 import { format } from 'date-fns';
 import { Card, CardBody } from '../common/Card/Card';
 import { formatCoordinates, formatArrivalTime } from '../../services/planService';
+import { getImageUrl } from '../../services/api';
 import { ICON_CONFIG } from '../../utils/mapIcons';
 
 const MarkerCard = ({
@@ -24,12 +25,15 @@ const MarkerCard = ({
   showDeltaTime,
   previousArrival,
   hasSubsequentItems,
+  members,
 }) => {
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [timeInputValue, setTimeInputValue] = useState('');
   const [isEditingCard, setIsEditingCard] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [noteInput, setNoteInput] = useState('');
+  
+  const creator = members?.find(m => String(m.id) === String(feature.properties?.created_by));
   
   const {
     name,
@@ -244,13 +248,23 @@ const MarkerCard = ({
 
         {/* ROW 3: Footer */}
         <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100 pl-10 w-full">
-          <div 
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-[var(--color-brand)] cursor-pointer transition-colors"
-            onClick={handleNavigate}
-            title="Center map on this location"
-          >
-            <span>📍</span>
-            <span className="font-mono">{coordsDisplay || 'No coordinates'}</span>
+          <div className="flex items-center gap-2">
+            <div 
+                className="flex items-center gap-1 text-xs text-slate-400 hover:text-[var(--color-brand)] cursor-pointer transition-colors"
+                onClick={handleNavigate}
+                title="Center map on this location"
+            >
+                <span>📍</span>
+                <span className="font-mono">{coordsDisplay || 'No coordinates'}</span>
+            </div>
+            {creator && (
+                <img 
+                    src={creator.avatar_url ? (creator.avatar_url.startsWith('http') ? creator.avatar_url : getImageUrl(creator.avatar_url)) : '/default-avatar.svg'} 
+                    alt={creator.username}
+                    title={`Created by ${creator.username}`}
+                    className="w-4 h-4 rounded-full border border-white shadow-sm flex-shrink-0"
+                />
+            )}
           </div>
           
           {/* Actions */}
